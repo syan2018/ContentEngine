@@ -1,0 +1,24 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# ContentEngine Project Structure
+
+This document outlines the recommended project structure for the `ContentEngine.WebApp` Blazor Server application.
+
+*   **`[/ContentEngine/ContentEngine.WebApp/ContentEngine.WebApp.csproj](mdc:/ContentEngine/ContentEngine.WebApp/ContentEngine.WebApp.csproj)`**: The main Blazor Server project file.
+*   **`[/ContentEngine/ContentEngine.WebApp/Program.cs](mdc:/ContentEngine/ContentEngine.WebApp/Program.cs)`**: Application entry point, dependency injection configuration.
+*   **`[/ContentEngine/ContentEngine.WebApp/Components/](mdc:/ContentEngine/ContentEngine.WebApp/Components/)`**: Reusable Blazor UI components, organized by feature area (e.g., `DataPipeline`, `Reasoning`, `Layout`).
+*   **`[/ContentEngine/ContentEngine.WebApp/Pages/](mdc:/ContentEngine/ContentEngine.WebApp/Pages/)`**: Routable Blazor pages.
+*   **`[/ContentEngine/ContentEngine.WebApp/Core/](mdc:/ContentEngine/ContentEngine.WebApp/Core/)`**: Contains the core business logic, separated from the UI.
+    *   **`[/ContentEngine/ContentEngine.WebApp/Core/DataPipeline/](mdc:/ContentEngine/ContentEngine.WebApp/Core/DataPipeline/)`**: Logic for data ingestion, cleaning, and AI structuring.
+    *   **`[/ContentEngine/ContentEngine.WebApp/Core/Reasoning/](mdc:/ContentEngine/ContentEngine.WebApp/Core/Reasoning/)`**: Logic for the inference engine.
+    *   **`[/ContentEngine/ContentEngine.WebApp/Core/Generation/](mdc:/ContentEngine/ContentEngine.WebApp/Core/Generation/)`**: Logic for content generation and export.
+    *   **`[/ContentEngine/ContentEngine.WebApp/Core/Storage/](mdc:/ContentEngine/ContentEngine.WebApp/Core/Storage/)`**: Data access logic (repositories, DbContext).
+    *   **`[/ContentEngine/ContentEngine.WebApp/Core/SharedKernel/](mdc:/ContentEngine/ContentEngine.WebApp/Core/SharedKernel/)`**: Code shared across core modules.
+*   **`[/ContentEngine/ContentEngine.WebApp/BackgroundTasks/](mdc:/ContentEngine/ContentEngine.WebApp/BackgroundTasks/)`**: Implementation for long-running background tasks (e.g., AI processing).
+*   **`[/ContentEngine/ContentEngine.WebApp/wwwroot/](mdc:/ContentEngine/ContentEngine.WebApp/wwwroot/)`**: Static web assets (CSS, JavaScript).
+*   **`[/ContentEngine/Docs/](mdc:/ContentEngine/Docs/)`**: Project documentation and design discussions.
+*   **`[/ContentEngine/README.zh-CN.md](mdc:/ContentEngine/README.zh-CN.md)`**: Main project description (Chinese).
+
