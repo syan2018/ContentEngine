@@ -55,3 +55,12 @@ nunit-*.xml
 
 # 部分过程留档
 Docs/Thought/
+
+# 屏蔽LiteDB文件
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.db-trace
+*.db-trace-journal
+*.db-trace-wal

@@ -1,0 +1,224 @@
+@page "/schemas"
+
+@rendermode InteractiveServer
+@inject ISchemaDefinitionService SchemaService
+@inject NavigationManager NavigationManager
+
+@using ContentEngine.WebApp.Core.DataPipeline.Models
+@using ContentEngine.WebApp.Core.DataPipeline.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
+
+
+
+<PageTitle>Schema Management</PageTitle>
+
+<h1>Schema Management</h1>
+
+@if (schemas == null)
+{
+    <p><em>Loading schemas...</em></p>
+}
+else
+{
+    <h2>Existing Schemas</h2>
+    @if (!schemas.Any())
+    {
+        <p>No schemas defined yet.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Fields Count</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var schema in schemas)
+                {
+                    <tr>
+                        <td>@schema.Name</td>
+                        <td>@schema.Description</td>
+                        <td>@schema.Fields.Count</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" @onclick="() => EditSchema(schema.Id)">Edit</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteSchemaPrompt(schema)">Delete</button>
+                            <button class="btn btn-sm btn-info" @onclick="() => ViewSchemaData(schema.Name)">View Data</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <hr />
+
+    <h2>Create New Schema</h2>
+    <EditForm Model="@newSchema" OnValidSubmit="HandleValidSubmit" FormName="CreateSchemaForm">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label for="schemaName" class="form-label">Schema Name:</label>
+            <InputText id="schemaName" class="form-control" @bind-Value="newSchema.Name" />
+            <ValidationMessage For="() => newSchema.Name" />
+        </div>
+
+        <div class="mb-3">
+            <label for="schemaDesc" class="form-label">Description:</label>
+            <InputTextArea id="schemaDesc" class="form-control" @bind-Value="newSchema.Description" />
+        </div>
+
+        <div class="mb-3">
+             <label class="form-label">Fields:</label>
+             @* Field editor will go here - Simplified for now *@
+             @foreach (var field in newSchema.Fields)
+            {
+                <div class="row mb-2 align-items-center" @key="field">
+                    <div class="col"> <InputText class="form-control form-control-sm" @bind-Value="field.Name" placeholder="Field Name"/> </div>
+                    <div class="col"> <InputSelect class="form-select form-select-sm" @bind-Value="field.Type">
+                            @foreach (FieldType type in Enum.GetValues(typeof(FieldType)))
+                            {
+                                <option value="@type">@type</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="col-auto">
+                         <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveField(field)">Remove</button>
+                    </div>
+                    @* Add IsRequired, ReferenceSchemaName later *@
+                </div>
+            }
+             <button type="button" class="btn btn-sm btn-outline-success mt-2" @onclick="AddField">+ Add Field</button>
+        </div>
+
+        <button type="submit" class="btn btn-success">Create Schema</button>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-2">@errorMessage</div>
+        }
+    </EditForm>
+}
+
+@code {
+    private List<SchemaDefinition>? schemas;
+    private SchemaDefinition newSchema = new() { Fields = new List<FieldDefinition>() };
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSchemas();
+        ResetNewSchemaForm();
+    }
+
+    private void ResetNewSchemaForm()
+    {
+        newSchema = new SchemaDefinition() { Fields = new List<FieldDefinition>() };
+        if (!newSchema.Fields.Any())
+        {
+             newSchema.Fields.Add(new FieldDefinition());
+        }
+        StateHasChanged();
+    }
+
+    private async Task LoadSchemas()
+    {
+        try
+        {
+            schemas = await SchemaService.GetAllSchemasAsync();
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading schemas: {ex.Message}";
+            schemas = new List<SchemaDefinition>();
+        }
+    }
+
+    private void AddField()
+    {
+        newSchema.Fields.Add(new FieldDefinition());
+    }
+
+     private void RemoveField(FieldDefinition fieldToRemove)
+    {
+        newSchema.Fields.Remove(fieldToRemove);
+        if (!newSchema.Fields.Any())
+        {
+            
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        errorMessage = null;
+        try
+        {
+            newSchema.Fields.RemoveAll(f => string.IsNullOrWhiteSpace(f.Name));
+
+            if (!newSchema.Fields.Any())
+            {
+                errorMessage = "Schema must have at least one field defined.";
+                newSchema.Fields.Add(new FieldDefinition());
+                return;
+            }
+
+            var duplicateFields = newSchema.Fields
+                                        .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                                        .Where(g => g.Count() > 1)
+                                        .Select(g => g.Key);
+            if (duplicateFields.Any())
+            {
+                 errorMessage = $"Duplicate field names found: {string.Join(", ", duplicateFields)}";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(newSchema.Name))
+            {
+                errorMessage = "Schema Name is required.";
+                return;
+            }
+
+
+            await SchemaService.CreateSchemaAsync(newSchema);
+            await LoadSchemas();
+            ResetNewSchemaForm();
+
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error creating schema: {ex.Message}";
+            if (!newSchema.Fields.Any())
+            {
+                 newSchema.Fields.Add(new FieldDefinition());
+            }
+        }
+    }
+
+    private void EditSchema(int schemaId)
+    {
+        NavigationManager.NavigateTo($"/schemas/edit/{schemaId}");
+    }
+
+    private async Task DeleteSchemaPrompt(SchemaDefinition schemaToDelete)
+    {
+        try
+        {
+            await SchemaService.DeleteSchemaAsync(schemaToDelete.Id);
+            await LoadSchemas();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting schema: {ex.Message}";
+        }
+    }
+
+    private void ViewSchemaData(string schemaName)
+    {
+        NavigationManager.NavigateTo($"/data/{schemaName}");
+    }
+} 
