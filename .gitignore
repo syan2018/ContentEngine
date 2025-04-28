@@ -64,3 +64,8 @@ Docs/Thought/
 *.db-trace
 *.db-trace-journal
 *.db-trace-wal
+
+
+.vs
+.idea
+.vscode

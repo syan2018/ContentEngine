@@ -1,0 +1,95 @@
+@using ContentEngine.WebApp.Core.DataPipeline.Models
+@using System.Globalization
+
+@if (Schema == null)
+{
+    <p><em>Schema definition is required.</em></p>
+    return; // Exit if no schema provided
+}
+
+@foreach (var field in Schema.Fields)
+{
+    <div class="mb-3" @key="field.Name"> @* Use field name as key for stability *@
+        <label class="form-label">@field.Name (@field.Type)
+            @if (field.IsRequired) { <span class="text-danger">*</span> }
+        </label>
+        @switch (field.Type)
+        {
+            case FieldType.Text:
+            case FieldType.Reference: // Treat Reference as Text input for now
+                <input type="text" class="form-control" 
+                       value="@FormDataText![field.Name]" 
+                       @onchange="(ChangeEventArgs e) => { FormDataText![field.Name] = e.Value?.ToString(); NotifyFieldChanged(); }" 
+                       placeholder="@(field.Type == FieldType.Reference ? "Enter Reference ID (ObjectId string)" : "")" />
+                break;
+            case FieldType.Number:
+                 <input type="number" step="any" class="form-control" 
+                       value="@FormDataNumber![field.Name]" 
+                       @onchange="(ChangeEventArgs e) => { HandleNumberChange(field.Name, e.Value?.ToString()); NotifyFieldChanged(); }" />
+                break;
+            case FieldType.Boolean:
+                 <input type="checkbox" class="form-check-input" 
+                       checked="@FormDataBool![field.Name]" 
+                       @onchange="(ChangeEventArgs e) => { FormDataBool![field.Name] = (bool)(e.Value ?? false); NotifyFieldChanged(); }" />
+                break;
+            case FieldType.Date:
+                 <input type="date" class="form-control" 
+                       value="@FormDataDate![field.Name]?.ToString("yyyy-MM-dd")" 
+                       @onchange="(ChangeEventArgs e) => { HandleDateChange(field.Name, e.Value?.ToString()); NotifyFieldChanged(); }" />
+                break;
+        }
+        @* TODO: Display validation message for this field *@
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public SchemaDefinition? Schema { get; set; }
+    [Parameter, EditorRequired] public Dictionary<string, string?>? FormDataText { get; set; }
+    [Parameter, EditorRequired] public Dictionary<string, double?>? FormDataNumber { get; set; }
+    [Parameter, EditorRequired] public Dictionary<string, bool>? FormDataBool { get; set; }
+    [Parameter, EditorRequired] public Dictionary<string, DateTime?>? FormDataDate { get; set; }
+
+    // Event callback to notify parent about changes
+    [Parameter] public EventCallback OnFieldChanged { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Ensure dictionaries are not null
+        ArgumentNullException.ThrowIfNull(FormDataText);
+        ArgumentNullException.ThrowIfNull(FormDataNumber);
+        ArgumentNullException.ThrowIfNull(FormDataBool);
+        ArgumentNullException.ThrowIfNull(FormDataDate);
+    }
+
+    private void HandleNumberChange(string fieldName, string? value)
+    {
+        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
+        {
+            FormDataNumber![fieldName] = number;
+        }
+        else
+        {
+            FormDataNumber![fieldName] = null; // Or handle error
+        }
+    }
+
+    private void HandleDateChange(string fieldName, string? value)
+    {
+        if (DateTime.TryParse(value, out var date))
+        {
+            FormDataDate![fieldName] = date;
+        }
+        else
+        {
+            FormDataDate![fieldName] = null; // Or handle error
+        }
+    }
+
+    private async Task NotifyFieldChanged()
+    {
+        if (OnFieldChanged.HasDelegate)
+        {
+            await OnFieldChanged.InvokeAsync();
+        }
+    }
+} 
