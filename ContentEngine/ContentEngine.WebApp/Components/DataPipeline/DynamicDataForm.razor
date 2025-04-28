@@ -1,88 +1,115 @@
 @using ContentEngine.WebApp.Core.DataPipeline.Models
 @using System.Globalization
 
-@if (Schema == null)
+@if (Schema == null || FormData == null)
 {
-    <p><em>Schema definition is required.</em></p>
-    return; // Exit if no schema provided
+    <p><em>Schema definition and FormData are required.</em></p>
+    return; // Exit if parameters not provided
 }
 
 @foreach (var field in Schema.Fields)
 {
-    <div class="mb-3" @key="field.Name"> @* Use field name as key for stability *@
+    <div class="mb-3" @key="field.Name">
         <label class="form-label">@field.Name (@field.Type)
             @if (field.IsRequired) { <span class="text-danger">*</span> }
         </label>
         @switch (field.Type)
         {
             case FieldType.Text:
-            case FieldType.Reference: // Treat Reference as Text input for now
+            case FieldType.Reference:
                 <input type="text" class="form-control" 
-                       value="@FormDataText![field.Name]" 
-                       @onchange="(ChangeEventArgs e) => { FormDataText![field.Name] = e.Value?.ToString(); NotifyFieldChanged(); }" 
+                       value="@GetStringValue(field.Name)" 
+                       @onchange="(ChangeEventArgs e) => { UpdateFormData(field.Name, field.Type, e.Value?.ToString()); }" 
                        placeholder="@(field.Type == FieldType.Reference ? "Enter Reference ID (ObjectId string)" : "")" />
                 break;
             case FieldType.Number:
                  <input type="number" step="any" class="form-control" 
-                       value="@FormDataNumber![field.Name]" 
-                       @onchange="(ChangeEventArgs e) => { HandleNumberChange(field.Name, e.Value?.ToString()); NotifyFieldChanged(); }" />
+                       value="@GetNumberValue(field.Name)" 
+                       @onchange="(ChangeEventArgs e) => { UpdateFormData(field.Name, field.Type, e.Value?.ToString()); }" />
                 break;
             case FieldType.Boolean:
                  <input type="checkbox" class="form-check-input" 
-                       checked="@FormDataBool![field.Name]" 
-                       @onchange="(ChangeEventArgs e) => { FormDataBool![field.Name] = (bool)(e.Value ?? false); NotifyFieldChanged(); }" />
+                       checked="@GetBoolValue(field.Name)" 
+                       @onchange="(ChangeEventArgs e) => { UpdateFormData(field.Name, field.Type, e.Value); }" /> // Checkbox passes bool directly
                 break;
             case FieldType.Date:
                  <input type="date" class="form-control" 
-                       value="@FormDataDate![field.Name]?.ToString("yyyy-MM-dd")" 
-                       @onchange="(ChangeEventArgs e) => { HandleDateChange(field.Name, e.Value?.ToString()); NotifyFieldChanged(); }" />
+                       value="@GetDateValue(field.Name)?.ToString("yyyy-MM-dd")" 
+                       @onchange="(ChangeEventArgs e) => { UpdateFormData(field.Name, field.Type, e.Value?.ToString()); }" />
                 break;
         }
-        @* TODO: Display validation message for this field *@
     </div>
 }
 
 @code {
     [Parameter, EditorRequired] public SchemaDefinition? Schema { get; set; }
-    [Parameter, EditorRequired] public Dictionary<string, string?>? FormDataText { get; set; }
-    [Parameter, EditorRequired] public Dictionary<string, double?>? FormDataNumber { get; set; }
-    [Parameter, EditorRequired] public Dictionary<string, bool>? FormDataBool { get; set; }
-    [Parameter, EditorRequired] public Dictionary<string, DateTime?>? FormDataDate { get; set; }
+    [Parameter, EditorRequired] public Dictionary<string, object?>? FormData { get; set; }
 
     // Event callback to notify parent about changes
     [Parameter] public EventCallback OnFieldChanged { get; set; }
 
     protected override void OnParametersSet()
     {
-        // Ensure dictionaries are not null
-        ArgumentNullException.ThrowIfNull(FormDataText);
-        ArgumentNullException.ThrowIfNull(FormDataNumber);
-        ArgumentNullException.ThrowIfNull(FormDataBool);
-        ArgumentNullException.ThrowIfNull(FormDataDate);
+        ArgumentNullException.ThrowIfNull(Schema);
+        ArgumentNullException.ThrowIfNull(FormData);
     }
 
-    private void HandleNumberChange(string fieldName, string? value)
-    {
-        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
-        {
-            FormDataNumber![fieldName] = number;
-        }
-        else
-        {
-            FormDataNumber![fieldName] = null; // Or handle error
-        }
-    }
+    // Helper methods to get typed values for binding (with casting)
+    private string? GetStringValue(string fieldName) => FormData!.TryGetValue(fieldName, out var val) ? val as string : null;
+    private double? GetNumberValue(string fieldName) => FormData!.TryGetValue(fieldName, out var val) ? val as double? : null;
+    private bool GetBoolValue(string fieldName) => FormData!.TryGetValue(fieldName, out var val) && val is bool b ? b : false;
+    private DateTime? GetDateValue(string fieldName) => FormData!.TryGetValue(fieldName, out var val) ? val as DateTime? : null;
 
-    private void HandleDateChange(string fieldName, string? value)
+    // Centralized method to update the FormData dictionary from input changes
+    private void UpdateFormData(string fieldName, FieldType fieldType, object? value)
     {
-        if (DateTime.TryParse(value, out var date))
+        object? parsedValue = null;
+        string? stringValue = value?.ToString(); // Common case for most inputs except checkbox
+
+        try
         {
-            FormDataDate![fieldName] = date;
+             switch (fieldType)
+            {
+                case FieldType.Text:
+                case FieldType.Reference:
+                    parsedValue = stringValue;
+                    break;
+                case FieldType.Number:
+                    if (double.TryParse(stringValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
+                        parsedValue = number;
+                    else if (!string.IsNullOrEmpty(stringValue)) // Handle invalid input - maybe log? keep null?
+                         parsedValue = null; // Keep existing value or set to null?
+                    // Only update if TryParse succeeds or input is empty
+                     if (double.TryParse(stringValue, NumberStyles.Any, CultureInfo.InvariantCulture, out number))
+                        parsedValue = number;
+                    else if (string.IsNullOrEmpty(stringValue))
+                        parsedValue = null; // Allow clearing the field
+                    else return; // Keep the old value if parsing fails and input isn't empty
+                    break;
+                case FieldType.Boolean:
+                     parsedValue = value is bool b ? b : false; // Checkbox provides bool directly
+                    break;
+                case FieldType.Date:
+                    if (DateTime.TryParse(stringValue, out var date))
+                        parsedValue = date;
+                    else if (!string.IsNullOrEmpty(stringValue)) // Handle invalid input
+                        parsedValue = null; // Or keep existing? Maybe provide feedback?
+                     if (DateTime.TryParse(stringValue, out date))
+                        parsedValue = date;
+                    else if (string.IsNullOrEmpty(stringValue))
+                         parsedValue = null;
+                    else return; // Keep old value
+                    break;
+            }
+            FormData![fieldName] = parsedValue; // Update the dictionary
+            NotifyFieldChanged(); // Notify the parent component
         }
-        else
-        {
-            FormDataDate![fieldName] = null; // Or handle error
+        catch (Exception ex)
+        { 
+            // Log parsing/update errors if necessary
+            Console.WriteLine($"Error updating form data for {fieldName}: {ex.Message}");
         }
+       
     }
 
     private async Task NotifyFieldChanged()

@@ -7,11 +7,12 @@
 
 @using ContentEngine.WebApp.Core.DataPipeline.Models
 @using ContentEngine.WebApp.Core.DataPipeline.Services
-@using ContentEngine.WebApp.Components.DataPipeline // Import the new component's namespace
+@using ContentEngine.WebApp.Components.DataPipeline
+@using ContentEngine.WebApp.Core.Utils
 @using LiteDB
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Web
-@using System.Globalization // For parsing/formatting
+@using System.Globalization
 
 <PageTitle>Data for @SchemaName</PageTitle>
 
@@ -38,12 +39,9 @@ else
     {
         <h3>@(isEditing ? "Edit Entry" : "Add New Entry")</h3>
         <EditForm EditContext="@editContext" OnValidSubmit="HandleDataSubmit" FormName="DataEntryForm">
-            @* Use the new DynamicDataForm component *@
+            @* Use the DynamicDataForm component with single dictionary *@
             <DynamicDataForm Schema="@schemaDefinition"
-                             FormDataText="@formDataText"
-                             FormDataNumber="@formDataNumber"
-                             FormDataBool="@formDataBool"
-                             FormDataDate="@formDataDate"
+                             FormData="@formData"
                              OnFieldChanged="HandleFormFieldChanged" />
 
             @* Display general error messages here *@
@@ -80,11 +78,11 @@ else
             <tbody>
                 @foreach (var entry in dataEntries)
                 {
-                    <tr @key="GetEntryKey(entry)">
+                    <tr @key="BsonFormUtils.GetEntryKey(entry)">
                         @* Dynamic Data Cells *@
                         @foreach (var field in schemaDefinition.Fields)
                         {
-                            <td>@GetDisplayValue(entry, field.Name)</td>
+                            <td>@BsonFormUtils.GetDisplayValue(entry, field.Name)</td>
                         }
                         <td>
                             <button class="btn btn-sm btn-primary" @onclick="() => ShowEditEntryForm(entry)">Edit</button>
@@ -118,25 +116,17 @@ else
     private SchemaDefinition? schemaDefinition;
     private List<BsonDocument> dataEntries = new();
 
-    // Use separate dictionaries per expected type for cleaner binding
-    private Dictionary<string, string?> formDataText = new();
-    private Dictionary<string, double?> formDataNumber = new();
-    private Dictionary<string, bool> formDataBool = new(); // Non-nullable bool for checkbox
-    private Dictionary<string, DateTime?> formDataDate = new();
+    // Use a single dictionary for form data again
+    private Dictionary<string, object?> formData = new();
 
     private EditContext? editContext;
     private BsonValue? currentEditId = null;
-    // Placeholder object for EditContext Model
-    private object formModelPlaceholder = new();
-    // Track form validity separately
+    private object formModelPlaceholder = new(); // Keep for EditContext
     private bool isFormValid = false;
-
     private bool isLoading = true;
     private bool isEditing = false;
     private bool showEditForm = false;
     private string? errorMessage;
-
-    // Pagination state
     private int currentPage = 1;
     private int pageSize = 10; // Items per page
     private long totalEntries = 0;
@@ -151,7 +141,7 @@ else
     {
         isLoading = true;
         errorMessage = null;
-        ClearFormData(); // Clear form data dictionaries
+        ClearFormData(); // Clear the single dictionary
         try
         {
             schemaDefinition = await SchemaService.GetSchemaByNameAsync(SchemaName);
@@ -184,106 +174,35 @@ else
 
     private void ClearFormData()
     {
-        formDataText.Clear();
-        formDataNumber.Clear();
-        formDataBool.Clear();
-        formDataDate.Clear();
-        editContext = null; // Also clear edit context when clearing data
+        formData.Clear();
+        if (editContext != null)
+        {
+            // Don't unsubscribe here, let CancelEdit handle it fully
+            // editContext.OnFieldChanged -= HandleFormFieldChanged;
+            editContext = null;
+        }
+        isFormValid = false;
     }
 
     private void PopulateFormDataFromBson(BsonDocument doc)
     {
         if (schemaDefinition == null) return;
-        ClearFormData();
-
-        foreach (var field in schemaDefinition.Fields)
-        {
-            BsonValue bsonValue = doc.ContainsKey(field.Name) ? doc[field.Name] : BsonValue.Null;
-
-            switch (field.Type)
-            {
-                case FieldType.Text:
-                    formDataText[field.Name] = bsonValue.AsString;
-                    break;
-                case FieldType.Number:
-                    formDataNumber[field.Name] = bsonValue.IsNumber ? bsonValue.AsDouble : (double?)null;
-                    break;
-                case FieldType.Boolean:
-                    formDataBool[field.Name] = bsonValue.IsBoolean ? bsonValue.AsBoolean : false; // Default to false
-                    break;
-                case FieldType.Date:
-                    formDataDate[field.Name] = bsonValue.IsDateTime ? bsonValue.AsDateTime : (DateTime?)null;
-                    break;
-                case FieldType.Reference:
-                    formDataText[field.Name] = bsonValue.IsObjectId ? bsonValue.AsObjectId.ToString() : bsonValue.AsString; // Store ObjectId as string
-                    break;
-            }
-        }
-    }
-
-    private BsonDocument ConvertFormDataToBson()
-    {
-        if (schemaDefinition == null) throw new InvalidOperationException("Schema definition is not loaded.");
-        var doc = new BsonDocument();
-
-        foreach (var field in schemaDefinition.Fields)
-        {
-            BsonValue bsonValue = BsonValue.Null;
-            try
-            {
-                 switch (field.Type)
-                {
-                    case FieldType.Text:
-                        if (formDataText.TryGetValue(field.Name, out var textValue) && !string.IsNullOrEmpty(textValue))
-                            bsonValue = new BsonValue(textValue);
-                        break;
-                    case FieldType.Number:
-                        if (formDataNumber.TryGetValue(field.Name, out var numValue) && numValue.HasValue)
-                            bsonValue = new BsonValue(numValue.Value);
-                        break;
-                    case FieldType.Boolean:
-                        if (formDataBool.TryGetValue(field.Name, out var boolValue))
-                            bsonValue = new BsonValue(boolValue);
-                        break;
-                    case FieldType.Date:
-                         if (formDataDate.TryGetValue(field.Name, out var dateValue) && dateValue.HasValue)
-                            bsonValue = new BsonValue(dateValue.Value);
-                        break;
-                     case FieldType.Reference:
-                        if (formDataText.TryGetValue(field.Name, out var refString) && !string.IsNullOrEmpty(refString))
-                        {
-                            try { bsonValue = new BsonValue(new ObjectId(refString)); }
-                            catch (FormatException) { throw new FormatException($"Invalid ObjectId format for field '{field.Name}': '{refString}'. Expected a 24-digit hex string."); }
-                        }
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                 if (ex is FormatException) throw;
-                 throw new InvalidOperationException($"Unexpected error converting field '{field.Name}'. {ex.Message}", ex);
-            }
-
-            if (!bsonValue.IsNull)
-            {
-                doc[field.Name] = bsonValue;
-            }
-        }
-        return doc;
+        // Use the utility function to convert BsonDocument to the formData dictionary
+        formData = BsonFormUtils.ConvertBsonToFormData(doc, schemaDefinition);
     }
 
     // Method to handle the event callback from DynamicDataForm
     private void HandleFormFieldChanged()
     {
-        // Re-validate whenever a field changes in the child component
         ValidateFormData();
-        // Trigger UI update for button state etc.
         InvokeAsync(StateHasChanged);
     }
 
     private void SetupEditContext()
     {
+        // Pass the placeholder object to EditContext, not the dictionary
         editContext = new EditContext(formModelPlaceholder);
+        // No need to subscribe to OnFieldChanged here, DynamicDataForm handles it
         ValidateFormData(); // Perform initial validation
     }
 
@@ -311,14 +230,9 @@ else
     private void CancelEdit()
     {
         showEditForm = false;
-        ClearFormData();
+        ClearFormData(); // Clears dict and EditContext
         currentEditId = null;
         isEditing = false;
-        if (editContext != null)
-        {
-            editContext = null;
-        }
-        isFormValid = false;
     }
 
     private async Task HandleDataSubmit()
@@ -326,26 +240,17 @@ else
         if (schemaDefinition == null || editContext == null) return;
         errorMessage = null;
 
-        // Ensure form is valid before attempting conversion/save
         if (!ValidateFormData()) // Use our custom validation
         {
-            errorMessage = "Please correct the errors in the form."; // Generic message
+             // errorMessage is set within ValidateFormData
             return;
         }
 
         try
-        {
-            var dataToSave = ConvertFormDataToBson();
-
-            // Perform basic validation AFTER conversion attempt
-            foreach (var field in schemaDefinition.Fields.Where(f => f.IsRequired))
-            {
-                if (!dataToSave.ContainsKey(field.Name) || dataToSave[field.Name].IsNull)
-                {
-                    errorMessage = $"Field '{field.Name}' is required and cannot be empty.";
-                    return;
-                }
-            }
+        { 
+            // Use the utility function to convert the formData dictionary back to BsonDocument
+            var dataToSave = BsonFormUtils.ConvertFormDataToBson(formData, schemaDefinition);
+            // Validation is now mostly done in ValidateFormData before this point
 
             if (isEditing && currentEditId != null)
             {
@@ -356,18 +261,13 @@ else
             {
                 await DataService.CreateDataAsync(SchemaName, dataToSave);
             }
-
             CancelEdit();
             await LoadSchemaAndData();
         }
         catch (FormatException fex)
-        {
-             errorMessage = $"Error saving data: {fex.Message}";
-        }
+        { errorMessage = $"Error saving data: {fex.Message}"; }
         catch (Exception ex)
-        {
-            errorMessage = $"Error saving data: {ex.Message}";
-        }
+        { errorMessage = $"Error saving data: {ex.Message}"; }
     }
 
     private async Task DeleteEntryPrompt(BsonDocument entryToDelete)
@@ -394,65 +294,47 @@ else
         }
     }
 
-    // Helper to get display value from BsonDocument
-    private string GetDisplayValue(BsonDocument doc, string fieldName)
-    {
-        if (doc.TryGetValue(fieldName, out var value))
-        {
-            if (value.IsDateTime) return value.AsDateTime.ToString("g"); // Format dates nicely
-            if (value.IsObjectId) return value.AsObjectId.ToString(); // Show ObjectId
-            if (value.IsNull) return "(null)";
-            // Display numbers without unnecessary decimals if they are round
-            if (value.IsDouble && value.AsDouble == Math.Floor(value.AsDouble)) return value.AsDouble.ToString("F0");
-            if (value.IsDecimal && value.AsDecimal == Math.Floor(value.AsDecimal)) return value.AsDecimal.ToString("F0");
-            return value.RawValue?.ToString() ?? "(error)";
-        }
-        return "(not found)";
-    }
-
-    // *** Add new helper method for @key ***
-    private string GetEntryKey(BsonDocument entry)
-    {
-        // Ensure _id exists and return its string representation
-        // Provide a fallback or throw if _id is missing, though it shouldn't be for LiteDB documents
-        return entry.TryGetValue("_id", out var idValue) ? idValue.ToString() : Guid.NewGuid().ToString(); 
-    }
-
-    // ValidateFormData needs to check the separate dictionaries
+    // Modified to use single dictionary for validation
     private bool ValidateFormData()
     {
         if (schemaDefinition == null) return false;
         isFormValid = true; // Assume valid
 
-        // Required field checks (using separate dictionaries)
-        foreach (var field in schemaDefinition.Fields.Where(f => f.IsRequired))
+        foreach (var field in schemaDefinition.Fields)
         {
-            bool fieldIsEmpty = field.Type switch
+            bool isRequired = field.IsRequired;
+            object? value = formData.TryGetValue(field.Name, out var v) ? v : null;
+            bool isEmpty = false;
+
+            // Check if required field is empty/null/whitespace
+            if (isRequired)
             {
-                FieldType.Text => !formDataText.TryGetValue(field.Name, out var tv) || string.IsNullOrWhiteSpace(tv),
-                FieldType.Number => !formDataNumber.TryGetValue(field.Name, out var nv) || !nv.HasValue,
-                FieldType.Boolean => !formDataBool.ContainsKey(field.Name), // Presence implies value
-                FieldType.Date => !formDataDate.TryGetValue(field.Name, out var dv) || !dv.HasValue,
-                FieldType.Reference => !formDataText.TryGetValue(field.Name, out var rv) || string.IsNullOrWhiteSpace(rv),
-                _ => true
-            };
-            if (fieldIsEmpty) { isFormValid = false; break; }
-        }
-        
-        // Reference ObjectId format check (using formDataText)
-        if(isFormValid) // Only check format if required checks passed
-        {
-            foreach(var field in schemaDefinition.Fields.Where(f => f.Type == FieldType.Reference))
-            {
-                 if (formDataText.TryGetValue(field.Name, out var refString) && !string.IsNullOrEmpty(refString))
-                 {
-                     try { new ObjectId(refString); } 
-                     catch (FormatException) { isFormValid = false; errorMessage = $"Field '{field.Name}' has an invalid ObjectId format."; break; }
-                 }
+                isEmpty = value == null || (value is string s && string.IsNullOrWhiteSpace(s));
+                if (isEmpty)
+                {
+                    isFormValid = false;
+                    errorMessage = $"Field '{field.Name}' is required.";
+                    break; // Stop validation on first required error
+                }
             }
+
+            // Check Reference format if not empty
+            if (field.Type == FieldType.Reference && value is string refString && !string.IsNullOrWhiteSpace(refString))
+            {
+                try { new ObjectId(refString); }
+                catch (FormatException)
+                {
+                    isFormValid = false;
+                    errorMessage = $"Field '{field.Name}' has an invalid ObjectId format.";
+                    break; // Stop validation on first format error
+                }
+            }
+             // TODO: Add other field-specific validations (number ranges, etc.)
         }
         
-        // Note: No automatic UI update here, HandleFormFieldChanged calls StateHasChanged
+        if (isFormValid) errorMessage = null; // Clear error if passes
+
+        // Don't need InvokeAsync here, HandleFormFieldChanged does it
         return isFormValid;
     }
 } 
