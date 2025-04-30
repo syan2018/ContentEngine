@@ -8,6 +8,7 @@ namespace ConfigurableAIProvider.Configuration;
 
 /// <summary>
 /// Represents the configuration for a specific AI Agent, loaded from YAML.
+/// Specifies which pre-defined models and plugins the agent uses.
 /// </summary>
 public class AgentConfig
 {
@@ -16,27 +17,18 @@ public class AgentConfig
         .IgnoreUnmatchedProperties() // Be more tolerant
         .Build();
 
+    /// <summary>
+    /// Maps a logical name used within the agent (e.g., "primaryChat") 
+    /// to a model definition ID specified in the central models.yaml file (e.g., "azure-gpt4o-mini-std").
+    /// </summary>
     [YamlMember(Alias = "models")]
-    public Dictionary<string, ModelConfig>? Models { get; set; }
+    public Dictionary<string, string>? Models { get; set; }
 
     [YamlMember(Alias = "plugins")]
     public List<string>? Plugins { get; set; }
 
     [YamlMember(Alias = "logLevel")]
     public LogLevel? LogLevel { get; set; }
-
-    // --- Nested Model Configuration ---
-    public class ModelConfig
-    {
-        [YamlMember(Alias = "connection")]
-        public string? Connection { get; set; } // Name of the connection in connections.yaml
-
-        [YamlMember(Alias = "modelId")]
-        public string? ModelId { get; set; }
-
-        [YamlMember(Alias = "endpointType")]
-        public EndpointType? EndpointType { get; set; }
-    }
 
     // --- Static Loading Methods ---
 
@@ -67,23 +59,24 @@ public class AgentConfig
         var envConfigFile = Path.Combine(directory, $"agent.{environment}.yaml");
         var envConfig = File.Exists(envConfigFile) ? FromFile(envConfigFile) : null;
 
-        // Basic merge: Environment config overrides default config properties.
-        // For dictionaries like Models, we might want a deeper merge, but simple override is often sufficient.
-        // For lists like Plugins, environment replaces default.
         if (envConfig != null)
         {
             if (envConfig.LogLevel.HasValue)
                 defaultConfig.LogLevel = envConfig.LogLevel;
 
-            if (envConfig.Models != null) // Overwrite models if specified in env file
-                defaultConfig.Models = envConfig.Models;
+            // Simple dictionary merge/overwrite for models
+            if (envConfig.Models != null) 
+            {
+                if (defaultConfig.Models == null) defaultConfig.Models = new Dictionary<string, string>();
+                foreach (var kvp in envConfig.Models)
+                {
+                    defaultConfig.Models[kvp.Key] = kvp.Value;
+                }
+            }
 
-            if (envConfig.Plugins != null) // Overwrite plugins if specified in env file
+            if (envConfig.Plugins != null) // Overwrite plugins list
                 defaultConfig.Plugins = envConfig.Plugins;
-            
-            // Add more specific merging logic here if needed (e.g., deep merge dictionaries)
         }
-
 
         return defaultConfig;
     }

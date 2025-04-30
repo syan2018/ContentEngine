@@ -19,41 +19,52 @@ public class AzureOpenAIServiceConfigurator : IAIServiceConfigurator
 
     public ServiceType HandledServiceType => ServiceType.AzureOpenAI;
 
-    public void ConfigureService(IKernelBuilder builder, AgentConfig.ModelConfig modelConfig, ConnectionConfig connectionConfig)
+    public void ConfigureService(IKernelBuilder builder, ModelDefinition modelDefinition, ConnectionConfig connectionConfig)
     {
-        // Ensure required fields are present
-        if (string.IsNullOrWhiteSpace(connectionConfig.Endpoint) || string.IsNullOrWhiteSpace(connectionConfig.ApiKey) || string.IsNullOrWhiteSpace(modelConfig.ModelId))
+        // Use properties from modelDefinition
+        if (string.IsNullOrWhiteSpace(connectionConfig.Endpoint) || string.IsNullOrWhiteSpace(connectionConfig.ApiKey) || string.IsNullOrWhiteSpace(modelDefinition.ModelId))
         {
-            _logger.LogError("Cannot configure Azure OpenAI service. Endpoint, ApiKey, or ModelId is missing for connection '{ConnectionName}', model '{ModelId}'.",
-                             modelConfig.Connection, modelConfig.ModelId ?? "[Not Specified]");
+            _logger.LogError("Cannot configure Azure OpenAI service. Endpoint, ApiKey, or ModelId is missing for connection '{ConnectionName}', model definition ID corresponding to '{ModelId}'.",
+                             modelDefinition.Connection, modelDefinition.ModelId ?? "[Not Specified]");
             return; // Skip configuration if essential info is missing
         }
 
         try
         {
-            switch (modelConfig.EndpointType)
+            // Use modelDefinition.EndpointType and modelDefinition.ModelId
+            switch (modelDefinition.EndpointType)
             {
                 case EndpointType.ChatCompletion:
                     builder.AddAzureOpenAIChatCompletion(
-                        deploymentName: modelConfig.ModelId!, // Null check done above
+                        deploymentName: modelDefinition.ModelId!, // Null check done above
                         endpoint: connectionConfig.Endpoint!,
                         apiKey: connectionConfig.ApiKey!
-                        // serviceId: modelConfig.Connection // Optional: Use connection name as serviceId? Consider if needed.
+                        // serviceId: modelDefinition.Connection // Optional: Use connection name as serviceId? Consider if needed.
                     );
-                    _logger.LogDebug("Added Azure OpenAI Chat Completion: Deployment={Deployment}, Endpoint={Endpoint}", modelConfig.ModelId, connectionConfig.Endpoint);
+                    _logger.LogDebug("Added Azure OpenAI Chat Completion: Deployment={Deployment}, Endpoint={Endpoint}", modelDefinition.ModelId, connectionConfig.Endpoint);
                     break;
+                case EndpointType.TextEmbedding: // Corrected embedding logic
+#pragma warning disable SKEXP0010 // Suppress preview warning for AddAzureOpenAITextEmbeddingGeneration
+                    builder.AddAzureOpenAITextEmbeddingGeneration(
+                        deploymentName: modelDefinition.ModelId!,
+                        endpoint: connectionConfig.Endpoint!,
+                        apiKey: connectionConfig.ApiKey!
+                    );
+#pragma warning restore SKEXP0010
+                     _logger.LogDebug("Added Azure OpenAI Text Embedding: Deployment={Deployment}, Endpoint={Endpoint}", modelDefinition.ModelId, connectionConfig.Endpoint);
+                     break;
                 case EndpointType.TextCompletion:
-                    _logger.LogWarning("Azure OpenAI Text Completion endpoint type specified for model '{ModelId}' but not added by configurator. Use Chat Completion or Embedding.", modelConfig.ModelId);
+                    _logger.LogWarning("Azure OpenAI Text Completion endpoint type specified for model '{ModelId}' but not added by configurator. Use Chat Completion or Embedding.", modelDefinition.ModelId);
                     break;
                 default:
                     _logger.LogWarning("Unsupported Azure OpenAI endpoint type '{EndpointType}' for model '{ModelId}'.",
-                                     modelConfig.EndpointType, modelConfig.ModelId);
+                                     modelDefinition.EndpointType, modelDefinition.ModelId);
                     break;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to add Azure OpenAI service for model '{ModelId}' using connection '{ConnectionName}'.", modelConfig.ModelId, modelConfig.Connection);
+            _logger.LogError(ex, "Failed to add Azure OpenAI service for model '{ModelId}' using connection '{ConnectionName}'.", modelDefinition.ModelId, modelDefinition.Connection);
             // Optionally re-throw or handle specific exceptions if needed
         }
     }

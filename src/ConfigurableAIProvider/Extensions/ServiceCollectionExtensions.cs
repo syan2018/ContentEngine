@@ -8,7 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-
+using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel;
 
 namespace ConfigurableAIProvider.Extensions;
 
@@ -34,6 +35,7 @@ public static class ServiceCollectionExtensions
         // --- Register Core Services ---
         services.TryAddSingleton<IConnectionProvider, ConnectionProvider>();
         services.TryAddSingleton<IAgentConfigLoader, AgentConfigLoader>();
+        services.TryAddSingleton<IModelProvider, ModelProvider>();
         services.TryAddScoped<IAIKernelFactory, DefaultAIKernelFactory>();
 
         // --- Register AI Service Configurators ---

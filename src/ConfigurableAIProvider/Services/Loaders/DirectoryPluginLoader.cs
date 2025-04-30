@@ -7,7 +7,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace ConfigurableAIProvider.Services;
+namespace ConfigurableAIProvider.Services.Loaders;
 
 /// <summary>
 /// Loads Semantic Kernel plugins from a specified directory structure.

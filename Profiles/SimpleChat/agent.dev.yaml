@@ -3,8 +3,7 @@
 
 # Example: Use a different model ID during development
 models:
-  chat: 
-    modelId: "gpt-35-turbo-dev" # Maybe a cheaper/faster dev deployment
+  chat: azure-gpt35-dev # Maybe a cheaper/faster dev deployment
 
 # Example: Maybe disable a plugin during development
 # plugins:

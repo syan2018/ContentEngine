@@ -4,11 +4,6 @@ using ConfigurableAIProvider.Services.Providers;   // Added
 using ConfigurableAIProvider.Services.Configurators; // Added
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
-using System;
-using System.Collections.Generic;
-using System.IO; // Required for Path operations
-using System.Linq; // Required for LINQ methods like Any
-using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options; // Still needed for GlobalPluginsDirectory from ConfigurableAIOptions
 
@@ -18,36 +13,26 @@ namespace ConfigurableAIProvider.Services;
 /// Default implementation of IAIKernelFactory that builds Kernels based on Agent configurations 
 /// using pluggable service configurators.
 /// </summary>
-public class DefaultAIKernelFactory : IAIKernelFactory
+public class DefaultAIKernelFactory(
+    IAgentConfigLoader agentConfigLoader,
+    IConnectionProvider connectionProvider,
+    IModelProvider modelProvider,
+    IEnumerable<IAIServiceConfigurator> serviceConfigurators, // Changed
+    ILoggerFactory loggerFactory, // Inject ILoggerFactory
+    IOptions<ConfigurableAIOptions> providerOptions, // Inject provider options
+    ILogger<DefaultAIKernelFactory> logger)
+    : IAIKernelFactory
 {
-    private readonly IAgentConfigLoader _agentConfigLoader;
-    private readonly IConnectionProvider _connectionProvider;
-    private readonly IEnumerable<IAIServiceConfigurator> _serviceConfigurators; // Changed
-    private readonly ILoggerFactory _loggerFactory; // Use ILoggerFactory to create Kernel logger
-    private readonly ILogger<DefaultAIKernelFactory> _logger;
-    private readonly ConfigurableAIOptions _providerOptions; // Keep options for global plugin path etc.
+
+    // Use ILoggerFactory to create Kernel logger
+    private readonly ConfigurableAIOptions _providerOptions = providerOptions.Value; // Keep options for global plugin path etc.
 
 
     // Remove IOptions<AIServiceOptions> and IPluginLoader dependencies
-    public DefaultAIKernelFactory(
-        IAgentConfigLoader agentConfigLoader,
-        IConnectionProvider connectionProvider,
-        IEnumerable<IAIServiceConfigurator> serviceConfigurators, // Changed
-        ILoggerFactory loggerFactory, // Inject ILoggerFactory
-        IOptions<ConfigurableAIOptions> providerOptions, // Inject provider options
-        ILogger<DefaultAIKernelFactory> logger)
-    {
-        _agentConfigLoader = agentConfigLoader;
-        _connectionProvider = connectionProvider;
-        _serviceConfigurators = serviceConfigurators; // Changed
-        _loggerFactory = loggerFactory;
-        _providerOptions = providerOptions.Value;
-        _logger = logger;
-    }
 
     public async Task<Kernel> BuildKernelAsync(string agentName)
     {
-        _logger.LogInformation("Building Kernel for agent: {AgentName}", agentName);
+        logger.LogInformation("Building Kernel for agent: {AgentName}", agentName);
 
         AgentConfig agentConfig = await LoadAgentConfigurationAsync(agentName);
 
@@ -61,7 +46,7 @@ public class DefaultAIKernelFactory : IAIKernelFactory
 
         await LoadPluginsAsync(kernel, agentConfig, agentName);
         
-        _logger.LogInformation("Successfully built Kernel for agent: {AgentName}", agentName);
+        logger.LogInformation("Successfully built Kernel for agent: {AgentName}", agentName);
         return kernel;
     }
 
@@ -71,11 +56,11 @@ public class DefaultAIKernelFactory : IAIKernelFactory
     {
         try
         {
-            return await _agentConfigLoader.LoadConfigAsync(agentName);
+            return await agentConfigLoader.LoadConfigAsync(agentName);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load configuration for agent: {AgentName}", agentName);
+            logger.LogError(ex, "Failed to load configuration for agent: {AgentName}", agentName);
             throw; // Re-throw exceptions related to config loading
         }
     }
@@ -85,14 +70,14 @@ public class DefaultAIKernelFactory : IAIKernelFactory
          if (agentConfig.LogLevel.HasValue)
          {
              // Note: As mentioned before, SK's builder logging config might change.
-             _logger.LogWarning("LogLevel from agent.yaml is currently informational and may not directly control Kernel's internal logging level through KernelBuilder. Kernel will use the globally configured logger factory.");
+             logger.LogWarning("LogLevel from agent.yaml is currently informational and may not directly control Kernel's internal logging level through KernelBuilder. Kernel will use the globally configured logger factory.");
              // You might need more specific configuration depending on the SK version and logging setup.
              // builder.Services.AddSingleton<ILoggerFactory>(_loggerFactory); // Example if needed
          }
          else
          {
               // Use the host application's logging by default
-              builder.Services.AddSingleton<ILoggerFactory>(_loggerFactory); 
+              builder.Services.AddSingleton<ILoggerFactory>(loggerFactory); 
          }
     }
 
@@ -100,50 +85,62 @@ public class DefaultAIKernelFactory : IAIKernelFactory
     {
         if (agentConfig.Models == null || !agentConfig.Models.Any())
         { 
-            _logger.LogWarning("No models configured for agent '{AgentName}'. Kernel will be built without AI services.", agentName);
+            logger.LogWarning("No models specified for agent '{AgentName}'. Kernel will be built without AI services.", agentName);
             return;
         }
 
         foreach (var modelEntry in agentConfig.Models)
         {
-            var modelName = modelEntry.Key;
-            var modelConfig = modelEntry.Value;
+            var logicalModelName = modelEntry.Key;
+            var modelDefinitionId = modelEntry.Value;
 
-            if (string.IsNullOrWhiteSpace(modelConfig.Connection) || string.IsNullOrWhiteSpace(modelConfig.ModelId))
+            if (string.IsNullOrWhiteSpace(modelDefinitionId))
             {
-                _logger.LogWarning("Skipping model '{ModelName}' for agent '{AgentName}' due to missing connection name or model ID.", modelName, agentName);
+                logger.LogWarning("Skipping logical model '{LogicalModelName}' for agent '{AgentName}' due to missing model definition ID reference.", logicalModelName, agentName);
                 continue;
             }
 
             try
             {
-                ConnectionConfig connectionConfig = await _connectionProvider.GetResolvedConnectionAsync(modelConfig.Connection);
+                // 1. Get the full Model Definition from the ID
+                ModelDefinition modelDefinition = await modelProvider.GetModelDefinitionAsync(modelDefinitionId);
+
+                // 2. Get the resolved Connection Configuration
+                if (string.IsNullOrWhiteSpace(modelDefinition.Connection))
+                {
+                     logger.LogWarning("Skipping model definition '{ModelDefinitionId}' referenced by agent '{AgentName}' (logical name '{LogicalModelName}') because it's missing a 'connection' property.", 
+                                      modelDefinitionId, agentName, logicalModelName);
+                    continue;
+                }
+                ConnectionConfig connectionConfig = await connectionProvider.GetResolvedConnectionAsync(modelDefinition.Connection);
                 
-                // Find the appropriate configurator for this service type
-                var configurator = _serviceConfigurators.FirstOrDefault(c => c.HandledServiceType == connectionConfig.ServiceType);
+                // 3. Find the appropriate configurator based on the *connection's* service type
+                var configurator = serviceConfigurators.FirstOrDefault(c => c.HandledServiceType == connectionConfig.ServiceType);
 
                 if (configurator != null)
                 {
-                     _logger.LogDebug("Using {ConfiguratorType} to configure AI service for model '{ModelName}' (ID: {ModelId}) using connection '{ConnectionName}' for agent '{AgentName}'.",
-                                     configurator.GetType().Name, modelName, modelConfig.ModelId, modelConfig.Connection, agentName);
-                    configurator.ConfigureService(builder, modelConfig, connectionConfig);
+                    // 4. Configure the service using the ModelDefinition and ConnectionConfig
+                    logger.LogDebug("Using {ConfiguratorType} to configure AI service for logical model '{LogicalModelName}' (Definition ID: '{ModelDefinitionId}', Actual Model ID: {ActualModelId}) using connection '{ConnectionName}' for agent '{AgentName}'.",
+                                    configurator.GetType().Name, logicalModelName, modelDefinitionId, modelDefinition.ModelId, modelDefinition.Connection, agentName);
+                    configurator.ConfigureService(builder, modelDefinition, connectionConfig);
                 }
                 else
                 {
-                    _logger.LogWarning("No service configurator found for ServiceType '{ServiceType}' used by connection '{ConnectionName}'. Skipping model '{ModelName}'.",
-                                     connectionConfig.ServiceType, modelConfig.Connection, modelName);
+                    logger.LogWarning("No service configurator found for ServiceType '{ServiceType}' used by connection '{ConnectionName}' (referenced by model definition '{ModelDefinitionId}'). Skipping logical model '{LogicalModelName}'.",
+                                     connectionConfig.ServiceType, modelDefinition.Connection, modelDefinitionId, logicalModelName);
                 }
             }
             catch (KeyNotFoundException knfex)
             {
-                _logger.LogError(knfex, "Connection '{ConnectionName}' required by model '{ModelName}' not found for agent '{AgentName}'. Skipping this model.",
-                                 modelConfig.Connection, modelName, agentName);
+                // Handle cases where ModelDefinition ID or Connection Name isn't found
+                logger.LogError(knfex, "Configuration lookup failed for logical model '{LogicalModelName}' (referenced ID '{ModelDefinitionId}') in agent '{AgentName}'. Check models.yaml and connections.yaml. Skipping this model.",
+                                 logicalModelName, modelDefinitionId, agentName);
             }
             catch (Exception ex)
             {
-                // Catch errors during connection resolution or service configuration
-                _logger.LogError(ex, "Failed to configure AI service for model '{ModelName}' (Connection: {ConnectionName}) for agent '{AgentName}'. Skipping this model.",
-                                 modelName, modelConfig.Connection, agentName);
+                // Catch other errors during resolution or configuration
+                logger.LogError(ex, "Failed to configure AI service for logical model '{LogicalModelName}' (Definition ID: {ModelDefinitionId}) for agent '{AgentName}'. Skipping this model.",
+                                 logicalModelName, modelDefinitionId, agentName);
             }
         }
     }
@@ -152,7 +149,7 @@ public class DefaultAIKernelFactory : IAIKernelFactory
     {
         if (agentConfig.Plugins == null || !agentConfig.Plugins.Any())
         {
-            _logger.LogInformation("No plugins specified for agent '{AgentName}'.", agentName);
+            logger.LogInformation("No plugins specified for agent '{AgentName}'.", agentName);
             return Task.CompletedTask;
         }
 
@@ -161,7 +158,7 @@ public class DefaultAIKernelFactory : IAIKernelFactory
             ? Path.GetFullPath(_providerOptions.GlobalPluginsDirectory, AppContext.BaseDirectory)
             : null;
 
-        _logger.LogInformation("Loading plugins for agent '{AgentName}'. Agent Dir: {AgentDir}, Global Plugin Dir: {GlobalDir}",
+        logger.LogInformation("Loading plugins for agent '{AgentName}'. Agent Dir: {AgentDir}, Global Plugin Dir: {GlobalDir}",
                              agentName, agentDirectory, globalPluginsDirectory ?? "N/A");
 
         foreach (var pluginReference in agentConfig.Plugins)
@@ -175,30 +172,18 @@ public class DefaultAIKernelFactory : IAIKernelFactory
                  if (resolvedPath != null && Directory.Exists(resolvedPath)) // Only handle prompt directories for now
                  {
                     string pluginName = Path.GetFileName(resolvedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                    _logger.LogDebug("Importing plugin '{PluginName}' from directory: {Path}", pluginName, resolvedPath);
+                    logger.LogDebug("Importing plugin '{PluginName}' from directory: {Path}", pluginName, resolvedPath);
                     kernel.ImportPluginFromPromptDirectory(resolvedPath, pluginName);
                  }
-                 // TODO: Add support for OpenAPI plugins (.yaml/.json) or Native plugins (by Type name) here if needed
-                 // else if (resolvedPath != null && File.Exists(resolvedPath) && (resolvedPath.EndsWith(".yaml") || resolvedPath.EndsWith(".json")))
-                 // {
-                 //     string pluginName = Path.GetFileNameWithoutExtension(resolvedPath);
-                 //     _logger.LogDebug("Importing OpenAPI plugin '{PluginName}' from file: {Path}", pluginName, resolvedPath);
-                 //     // Note: OpenAPI import might require different parameters or async handling
-                 //     // await kernel.ImportPluginFromOpenApiAsync(...);
-                 // }
-                 // else
-                 // {
-                 //     _logger.LogWarning("Could not find plugin directory or supported file for reference '{PluginReference}' for agent '{AgentName}'. Looked in: {ResolvedPath}", pluginReference, agentName, resolvedPath ?? pluginReference);
-                 // }
                  else
                  {
-                      _logger.LogWarning("Could not find plugin directory for reference '{PluginReference}' for agent '{AgentName}'. Looked in agent dir ('{AgentDir}') and global dir ('{GlobalDir}'). Prompt directory plugins are currently supported.", 
+                      logger.LogWarning("Could not find plugin directory for reference '{PluginReference}' for agent '{AgentName}'. Looked in agent dir ('{AgentDir}') and global dir ('{GlobalDir}'). Prompt directory plugins are currently supported.", 
                                        pluginReference, agentName, agentDirectory, globalPluginsDirectory ?? "N/A");
                  }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to load plugin reference '{PluginReference}' for agent '{AgentName}'.", pluginReference, agentName);
+                logger.LogError(ex, "Failed to load plugin reference '{PluginReference}' for agent '{AgentName}'.", pluginReference, agentName);
                 // Continue trying to load other plugins
             }
         }
@@ -212,7 +197,7 @@ public class DefaultAIKernelFactory : IAIKernelFactory
         // Assumes pluginReference is a directory name or relative path to a directory.
 
         // Clean the reference (e.g., remove leading './')
-        var cleanedReference = pluginReference.TrimStart('.', Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var cleanedReference = pluginReference.TrimStart('.').TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         string potentialAgentRelativePath = Path.Combine(agentDirectory, cleanedReference);
         if (Directory.Exists(potentialAgentRelativePath))

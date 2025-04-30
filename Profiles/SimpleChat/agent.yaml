@@ -1,0 +1,16 @@
+# Agents/SimpleChat/agent.yaml
+models:
+  # Logical name 'chat' maps to a predefined model ID from models.yaml
+  chat: azure-gpt4o-mini-std 
+
+  # Optional: Add an embedding model reference 
+  # embedder: azure-embedding-ada 
+
+plugins:
+  # Reference a plugin assumed to be in the 'GlobalPluginsDirectory' ('SemanticPlugins')
+  - FunPlugin             
+  # Reference a plugin specific to this agent, located in 'Agents/SimpleChat/Plugins/ChatHelper'
+  - ./Plugins/ChatHelper  
+
+# Optional: Override default log level for this specific agent
+logLevel: Information 

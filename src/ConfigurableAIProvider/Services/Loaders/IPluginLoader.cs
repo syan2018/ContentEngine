@@ -1,7 +1,7 @@
 using Microsoft.SemanticKernel;
 using System.Threading.Tasks;
 
-namespace ConfigurableAIProvider.Services;
+namespace ConfigurableAIProvider.Services.Loaders;
 
 /// <summary>
 /// Interface for loading plugins into a Kernel instance.

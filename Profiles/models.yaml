@@ -1,0 +1,36 @@
+# Agents/models.yaml
+models:
+  # --- Azure OpenAI Presets ---
+  azure-gpt4o-mini-std:
+    connection: primaryAzure   # Refers to key in connections.yaml
+    modelId: "gpt-4o-mini"     # Deployment name / Model ID
+    endpointType: ChatCompletion
+    # Optional default parameters (informational for now)
+    parameters: 
+      temperature: 0.7
+      maxTokens: 2000
+
+  azure-gpt35-dev:
+    connection: primaryAzure
+    modelId: "gpt-35-turbo-dev"
+    endpointType: ChatCompletion
+    parameters:
+      temperature: 0.8
+
+  azure-embedding-ada:
+    connection: primaryAzure
+    modelId: "text-embedding-ada-002" # Example embedding model name
+    endpointType: TextEmbedding
+
+  # --- OpenAI Presets ---
+  openai-gpt4-precise:
+    connection: personalOpenAI
+    modelId: "gpt-4"
+    endpointType: ChatCompletion
+    parameters:
+      temperature: 0.2
+
+  openai-embedding-ada:
+     connection: personalOpenAI
+     modelId: "text-embedding-ada-002"
+     endpointType: TextEmbedding 

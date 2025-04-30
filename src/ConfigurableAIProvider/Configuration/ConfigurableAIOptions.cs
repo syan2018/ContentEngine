@@ -27,6 +27,14 @@ public class ConfigurableAIOptions
     public string ConnectionsFilePath { get; set; } = Path.Combine("Agents", "connections.yaml");
 
     /// <summary>
+    /// The path to the central model definitions configuration file.
+    /// Can be relative (to application base directory) or absolute.
+    /// Defaults to "Agents/models.yaml".
+    /// </summary>
+    [Required(AllowEmptyStrings = false)]
+    public string ModelsFilePath { get; set; } = Path.Combine("Agents", "models.yaml");
+
+    /// <summary>
     /// The optional root directory path for globally shared plugins.
     /// If set, plugins referenced in agent.yaml might be resolved against this path.
     /// </summary>

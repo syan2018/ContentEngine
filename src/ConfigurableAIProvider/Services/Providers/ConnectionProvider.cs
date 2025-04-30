@@ -101,7 +101,7 @@ public class ConnectionProvider : IConnectionProvider
                  _logger.LogError("API Key for connection '{ConnectionName}' could not be resolved from placeholder.", connectionName);
                  throw new InvalidOperationException($"API Key for connection '{connectionName}' could not be resolved.");
             }
-             if (string.IsNullOrWhiteSpace(newResolvedConfig.Endpoint) && newResolvedConfig.ServiceType == ServiceType.AzureOpenAI && rawConfig.Endpoint != null) // Only warn/error if Endpoint was expected
+            if (string.IsNullOrWhiteSpace(newResolvedConfig.Endpoint) && newResolvedConfig.ServiceType == ServiceType.AzureOpenAI && rawConfig.Endpoint != null) // Only warn/error if Endpoint was expected
             {
                 _logger.LogError("Endpoint for Azure connection '{ConnectionName}' could not be resolved from placeholder.", connectionName);
                  throw new InvalidOperationException($"Endpoint for Azure connection '{connectionName}' could not be resolved.");
