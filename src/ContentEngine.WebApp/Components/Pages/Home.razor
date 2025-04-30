@@ -43,7 +43,7 @@ Welcome to your new app.
             }
 
             // Use a more specific prompt to increase chances of getting the exact desired output
-            var result = await kernel.InvokePromptAsync("Please respond with only the text 'Hello World!'");
+            var result = await kernel.InvokePromptAsync("Hello World!");
             aiResponse = result.GetValue<string>();
         }
         catch (Exception ex)

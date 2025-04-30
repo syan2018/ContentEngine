@@ -75,9 +75,5 @@ public class OpenAIServiceConfigurator(ILogger<OpenAIServiceConfigurator> logger
              // Log general errors during SK service addition
              logger.LogError(ex, "Failed to add OpenAI service for model '{ModelId}' using connection '{ConnectionName}'.", modelDefinition.ModelId, modelDefinition.Connection);
         }
-        finally // Ensure HttpClient is disposed if created directly
-        {
-             httpClient?.Dispose();
-        }
     }
 } 

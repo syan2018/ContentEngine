@@ -1,7 +1,7 @@
 # Agents/SimpleChat/agent.yaml
 models:
   # Logical name 'chat' maps to a predefined model ID from models.yaml
-  chat: ollama-qwen3-8b 
+  chat: gemini-2.5-flash
 
   # Optional: Add an embedding model reference 
   # embedder: azure-embedding-ada 

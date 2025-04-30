@@ -13,8 +13,8 @@ using System.Threading.Tasks;
 namespace ConfigurableAIProvider.Services.Providers;
 
 /// <summary>
-/// Loads connection configurations from a YAML file (relative to base directory) and resolves placeholders.
-/// Caches loaded configurations.
+/// Loads connection configurations from YAML files (base and environment-specific) relative to the base directory,
+/// merges them, and resolves placeholders. Caches loaded configurations.
 /// </summary>
 public class ConnectionProvider : IConnectionProvider
 {
@@ -33,42 +33,103 @@ public class ConnectionProvider : IConnectionProvider
 
     private async Task EnsureInitializedAsync()
     {
-        if (_loadedConfig != null) return; // Already initialized
+        if (_loadedConfig != null) return;
 
         await _initSemaphore.WaitAsync();
         try
         {
-            if (_loadedConfig != null) return; // Double-check lock
+            if (_loadedConfig != null) return;
 
-            string configFilePath = Path.Combine(AppContext.BaseDirectory, _options.ConnectionsFilePath);
-            configFilePath = Path.GetFullPath(configFilePath); // Normalize path
+            string baseConfigFilePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, _options.ConnectionsFilePath));
+            _logger.LogInformation("Loading base connections configuration from: {FilePath}", baseConfigFilePath);
 
-            _logger.LogInformation("Loading connections configuration from: {FilePath}", configFilePath);
-
-            if (!File.Exists(configFilePath))
+            if (!File.Exists(baseConfigFilePath))
             {
-                _logger.LogError("Connections configuration file not found at {FilePath}", configFilePath);
-                throw new FileNotFoundException("Connections configuration file not found.", configFilePath);
+                _logger.LogError("Base connections configuration file not found at {FilePath}", baseConfigFilePath);
+                throw new FileNotFoundException("Base connections configuration file not found.", baseConfigFilePath);
             }
 
-            try
+            // Load base configuration
+            ConnectionsConfig baseConfig = LoadConnectionsFromFile(baseConfigFilePath, "base");
+
+            // Load environment-specific configuration if it exists
+            string configFileName = Path.GetFileNameWithoutExtension(_options.ConnectionsFilePath);
+            string configFileExtension = Path.GetExtension(_options.ConnectionsFilePath);
+            string envFileName = $"{configFileName}.{_options.Environment}{configFileExtension}";
+            string envConfigFilePath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(baseConfigFilePath) ?? AppContext.BaseDirectory, envFileName));
+
+            ConnectionsConfig mergedConfig = baseConfig; // Start with base config
+
+            if (File.Exists(envConfigFilePath))
             {
-                _loadedConfig = ConnectionsConfig.FromFile(configFilePath);
-                _logger.LogInformation("Successfully loaded connections configuration.");
-                // Optionally load environment override file here (e.g., connections.dev.yaml) and merge
-                // string envFilePath = Path.Combine(Path.GetDirectoryName(configFilePath), $"connections.{_options.Environment}.yaml");
-                // ... load and merge logic ...
+                _logger.LogInformation("Found environment-specific connections configuration: {FilePath}", envConfigFilePath);
+                ConnectionsConfig envConfig = LoadConnectionsFromFile(envConfigFilePath, $"environment ('{_options.Environment}')");
+                
+                // Merge environment config into base config
+                mergedConfig = MergeConnections(baseConfig, envConfig);
+                _logger.LogInformation("Successfully merged environment-specific connections configuration.");
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError(ex, "Failed to load or parse connections configuration file: {FilePath}", configFilePath);
-                throw; // Re-throw after logging
+                _logger.LogDebug("No environment-specific connections configuration file found at {FilePath}. Using base configuration only.", envConfigFilePath);
             }
+
+            _loadedConfig = mergedConfig; // Store the final merged config
         }
         finally
         {
             _initSemaphore.Release();
         }
+    }
+    
+    private ConnectionsConfig LoadConnectionsFromFile(string filePath, string typeDescription)
+    {
+        try
+        {
+            return ConnectionsConfig.FromFile(filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load or parse {TypeDescription} connections configuration file: {FilePath}", typeDescription, filePath);
+            throw; 
+        }
+    }
+
+    private ConnectionsConfig MergeConnections(ConnectionsConfig baseConfig, ConnectionsConfig overrideConfig)
+    {
+        // Start with a shallow copy of the base config's connections or an empty dictionary
+        var mergedConnections = new Dictionary<string, ConnectionConfig>(baseConfig.Connections ?? new Dictionary<string, ConnectionConfig>());
+
+        if (overrideConfig.Connections != null)
+        {
+            foreach (var kvp in overrideConfig.Connections)
+            {
+                string key = kvp.Key;
+                ConnectionConfig overrideConnection = kvp.Value;
+
+                if (mergedConnections.TryGetValue(key, out ConnectionConfig? baseConnection))
+                {
+                    // Key exists in both: Update existing base connection with non-null values from override
+                    // Note: This is a shallow merge of properties within ConnectionConfig.
+                    // You might want a deeper merge if ConnectionConfig becomes more complex.
+                     baseConnection.ServiceType = overrideConnection.ServiceType; // Override ServiceType 
+                     if (overrideConnection.Endpoint != null) baseConnection.Endpoint = overrideConnection.Endpoint;
+                     if (overrideConnection.BaseUrl != null) baseConnection.BaseUrl = overrideConnection.BaseUrl;
+                     if (overrideConnection.ApiKey != null) baseConnection.ApiKey = overrideConnection.ApiKey;
+                     if (overrideConnection.OrgId != null) baseConnection.OrgId = overrideConnection.OrgId;
+                    // Add other properties here if needed
+                    _logger.LogDebug("Merging connection '{ConnectionName}': Overriding properties from environment config.", key);
+                }
+                else
+                {
+                    // Key only in override: Add it to the merged dictionary
+                    mergedConnections.Add(key, overrideConnection);
+                     _logger.LogDebug("Merging connection '{ConnectionName}': Adding new connection from environment config.", key);
+                }
+            }
+        }
+
+        return new ConnectionsConfig { Connections = mergedConnections };
     }
 
     public async Task<ConnectionConfig> GetResolvedConnectionAsync(string connectionName)

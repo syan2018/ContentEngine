@@ -44,7 +44,7 @@ models:
     endpointType: ChatCompletion
 
   # --- AI Hub Mix Model ---
-  gemini-2.5-flash-preview:
+  gemini-2.5-flash:
     connection: aiHubMix # References the AI Hub Mix connection
     modelId: "gemini-2.5-flash-preview-04-17-nothink" # AI Hub Mix uses specific model strings
     endpointType: ChatCompletion

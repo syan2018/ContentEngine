@@ -71,3 +71,6 @@ Refs/
 .idea
 .vscode
 .github
+
+# Ignore environment-specific configuration files in Profiles
+/Profiles/*.dev.yaml
