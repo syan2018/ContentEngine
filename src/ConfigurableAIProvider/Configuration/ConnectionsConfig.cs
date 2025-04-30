@@ -51,7 +51,10 @@ public class ConnectionConfig
     public ServiceType ServiceType { get; set; } // Changed to non-nullable, should always be present
 
     [YamlMember(Alias = "endpoint")]
-    public string? Endpoint { get; set; } // Nullable for services like OpenAI that don't need a specific endpoint URL
+    public string? Endpoint { get; set; } // Primarily used by Azure, keep for potential other future types
+
+    [YamlMember(Alias = "baseUrl")]
+    public string? BaseUrl { get; set; } // Added: For OpenAI-compatible endpoints
 
     [YamlMember(Alias = "apiKey")]
     public string? ApiKey { get; set; } // Nullable, might be loaded from env var

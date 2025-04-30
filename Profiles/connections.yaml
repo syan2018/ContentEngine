@@ -1,15 +1,35 @@
 # Agents/connections.yaml
 connections:
   # === Azure OpenAI ===
-  primaryAzure: # Logical name for this connection
+  primaryAzure: 
     serviceType: AzureOpenAI
-    # Use placeholders for secrets - these MUST match environment variable names
     endpoint: "{{AZURE_OPENAI_ENDPOINT}}" 
     apiKey: "{{AZURE_OPENAI_API_KEY}}"
-    # apiVersion: "2024-02-15-preview" # Optional: Specify API version if needed
 
-  # === OpenAI ===
-  personalOpenAI: # Another logical name
+  # === Standard OpenAI ===
+  personalOpenAI: 
     serviceType: OpenAI
     apiKey: "{{OPENAI_API_KEY}}"
-    orgId: "{{OPENAI_ORG_ID}}" # Optional: Only if you have/need an organization ID 
+    orgId: "{{OPENAI_ORG_ID}}" # Optional
+
+  # === OpenAI-Compatible Endpoint (e.g., Local Ollama) ===
+  localOllama:
+    serviceType: OpenAI # IMPORTANT: Still use OpenAI type for compatible APIs
+    baseUrl: "http://localhost:11434/v1" # Default Ollama API endpoint
+    # apiKey is often required by the client library, even if the local service doesn't validate it.
+    # Put a placeholder or a dummy value like "ollama".
+    apiKey: "ollama" 
+    # OrgId typically not needed for local models
+
+  # === OpenAI-Compatible Endpoint (e.g., OpenRouter) ===
+  openRouter:
+    serviceType: OpenAI
+    baseUrl: "https://openrouter.ai/api/v1"
+    apiKey: "{{OPENROUTER_API_KEY}}" # Get key from OpenRouter account
+    # OrgId not needed
+
+  # === Another Cloud Example (AI Hub Mix - Hypothetical) ===
+  aiHubMix:
+    serviceType: OpenAI 
+    baseUrl: "https://aihubmix.com/v1"
+    apiKey: "{{AIHUBMIX_KEY}}" 

@@ -2,24 +2,20 @@
 models:
   # --- Azure OpenAI Presets ---
   azure-gpt4o-mini-std:
-    connection: primaryAzure   # Refers to key in connections.yaml
-    modelId: "gpt-4o-mini"     # Deployment name / Model ID
+    connection: primaryAzure   
+    modelId: "gpt-4o-mini"     
     endpointType: ChatCompletion
-    # Optional default parameters (informational for now)
-    parameters: 
-      temperature: 0.7
-      maxTokens: 2000
+    parameters: { temperature: 0.7, maxTokens: 2000 } # Compact syntax
 
   azure-gpt35-dev:
     connection: primaryAzure
     modelId: "gpt-35-turbo-dev"
     endpointType: ChatCompletion
-    parameters:
-      temperature: 0.8
+    parameters: { temperature: 0.8 }
 
   azure-embedding-ada:
     connection: primaryAzure
-    modelId: "text-embedding-ada-002" # Example embedding model name
+    modelId: "text-embedding-ada-002" 
     endpointType: TextEmbedding
 
   # --- OpenAI Presets ---
@@ -27,10 +23,29 @@ models:
     connection: personalOpenAI
     modelId: "gpt-4"
     endpointType: ChatCompletion
-    parameters:
-      temperature: 0.2
+    parameters: { temperature: 0.2 }
 
   openai-embedding-ada:
      connection: personalOpenAI
      modelId: "text-embedding-ada-002"
      endpointType: TextEmbedding 
+
+  # --- Local Ollama Model --- 
+  ollama-llama3-chat:
+    connection: localOllama # References the connection with baseUrl
+    modelId: "llama3"        # The actual model name served by Ollama
+    endpointType: ChatCompletion
+    # Parameters might be ignored by local endpoint or need specific format
+
+  # --- OpenRouter Model --- 
+  openrouter-mistral-7b:
+    connection: openRouter # References the OpenRouter connection
+    modelId: "mistralai/mistral-7b-instruct" # OpenRouter uses specific model strings
+    endpointType: ChatCompletion
+
+  # --- AI Hub Mix Model ---
+  gemini-2.5-flash-preview:
+    connection: aiHubMix # References the AI Hub Mix connection
+    modelId: "gemini-2.5-flash-preview-04-17-nothink" # AI Hub Mix uses specific model strings
+    endpointType: ChatCompletion
+
