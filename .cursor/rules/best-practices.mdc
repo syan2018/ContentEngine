@@ -1,0 +1,57 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# ContentEngine 项目最佳实践指南
+
+本指南旨在为使用 .NET、Blazor Server 和 LiteDB 开发 ContentEngine 提供核心实践建议。
+
+## 1. 项目结构
+
+保持清晰的目录结构以分离关注点：
+
+*   **`Components/` & `Pages/`**: 存放 Blazor UI 组件和页面。组件应小而聚焦。
+*   **`Core/`**: 存放与 UI 无关的核心业务逻辑。
+    *   **`Models/`**: 存放数据结构（如 `SchemaDefinition`）。
+    *   **`Services/`**: 存放业务逻辑服务接口和实现（如 `SchemaDefinitionService`）。
+    *   **`Storage/`**: 存放数据访问逻辑（如 `LiteDbContext`）。
+    *   **`Utils/`**: 存放共享的静态工具类（如 `BsonFormUtils`）。
+
+## 2. Blazor 组件设计 (MVVM 思路)
+
+*   将 `.razor` 文件视为 **View** (HTML 标记) + **ViewModel** (`@code` 块)。
+*   `@code` 块负责：管理 UI 状态、处理用户交互、通过 `@inject` 调用服务。
+*   保持 `@code` 块逻辑**简洁聚焦**。如果过于复杂，优先考虑提取逻辑到**子组件**、**服务**或**工具类**。
+
+## 3. 服务层设计
+
+*   **面向接口编程**: 为服务定义接口 (如 `ISchemaDefinitionService`)。
+*   **依赖注入**: 在 `Program.cs` 中注册服务，并在需要的地方注入。
+*   **异步优先**: 数据访问等 I/O 操作应使用 `async`/`await`。
+*   **单一职责**: 每个服务应有明确的职责范围。
+
+## 4. 数据处理 (LiteDB)
+
+*   **`LiteDbContext`**: 通过单例 `LiteDbContext` 访问数据库。
+*   **`BsonDocument`**: 使用 `BsonDocument` 存储用户定义的、动态结构的数据实例。
+*   **`BsonFormUtils`**: 使用此工具类进行 `BsonDocument` 与表单数据（字典）之间的转换和显示格式化。
+*   **集合**: Schema 定义存储在 `_schemas` 集合，数据实例存储在以 Schema 名称命名的集合中。
+
+## 5. 异步编程
+
+*   对所有 I/O 操作（如数据库访问）坚持使用 `async`/`await`。
+*   使用 Blazor 的异步生命周期方法（`OnInitializedAsync` 等）。
+
+## 6. 错误处理与验证
+
+*   在服务层可以抛出特定异常。
+*   在 UI 层（`@code`块）捕获异常，并向用户显示**友好的错误提示**。记录详细日志供调试。
+*   在保存数据前，执行**数据验证**（如必填项检查）。
+
+## 7. 代码风格
+
+*   遵循标准 C# 命名规范。
+*   保持代码整洁，命名清晰。
+*   为公共成员添加 `///` XML 文档注释。
+
