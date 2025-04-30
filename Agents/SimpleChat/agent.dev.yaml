@@ -1,0 +1,14 @@
+# Agents/SimpleChat/agent.dev.yaml
+# Environment-specific overrides for 'dev'
+
+# Example: Use a different model ID during development
+models:
+  chat: 
+    modelId: "gpt-35-turbo-dev" # Maybe a cheaper/faster dev deployment
+
+# Example: Maybe disable a plugin during development
+# plugins:
+#  - ./Plugins/ChatHelper 
+
+# Example: Increase log level for debugging in dev
+logLevel: Debug 

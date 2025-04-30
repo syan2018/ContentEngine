@@ -1,0 +1,15 @@
+# Agents/connections.yaml
+connections:
+  # === Azure OpenAI ===
+  primaryAzure: # Logical name for this connection
+    serviceType: AzureOpenAI
+    # Use placeholders for secrets - these MUST match environment variable names
+    endpoint: "{{AZURE_OPENAI_ENDPOINT}}" 
+    apiKey: "{{AZURE_OPENAI_API_KEY}}"
+    # apiVersion: "2024-02-15-preview" # Optional: Specify API version if needed
+
+  # === OpenAI ===
+  personalOpenAI: # Another logical name
+    serviceType: OpenAI
+    apiKey: "{{OPENAI_API_KEY}}"
+    orgId: "{{OPENAI_ORG_ID}}" # Optional: Only if you have/need an organization ID 

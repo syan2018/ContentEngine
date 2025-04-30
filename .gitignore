@@ -55,6 +55,7 @@ nunit-*.xml
 
 # 部分过程留档
 Docs/Thought/
+Refs/
 
 # 屏蔽LiteDB文件
 *.db

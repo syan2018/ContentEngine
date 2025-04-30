@@ -1,6 +1,4 @@
-var builder = WebApplication.CreateBuilder(args);
-var app = builder.Build();
+// This file is intentionally left empty or commented out as this project is a class library.
+// The main application consuming this library will have its own Program.cs.
 
-app.MapGet("/", () => "Hello World!");
-
-app.Run();
+//Console.WriteLine("Hello, World!");

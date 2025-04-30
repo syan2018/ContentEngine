@@ -1,0 +1,22 @@
+# Agents/SimpleChat/agent.yaml
+models:
+  # Logical name 'chat' for the primary chat model in this agent
+  chat: 
+    connection: primaryAzure       # Use the 'primaryAzure' connection defined in connections.yaml
+    modelId: "gpt-4o-mini"         # The specific deployment name or model ID on Azure
+    endpointType: ChatCompletion # This model is for chat
+
+  # Optional: Another model for a different task, maybe embeddings
+  # embeddings:
+  #   connection: primaryAzure
+  #   modelId: "text-embedding-ada-002" 
+  #   endpointType: TextEmbedding
+
+plugins:
+  # Reference a plugin assumed to be in the 'GlobalPluginsDirectory' ('SemanticPlugins')
+  - FunPlugin             
+  # Reference a plugin specific to this agent, located in 'Agents/SimpleChat/Plugins/ChatHelper'
+  - ./Plugins/ChatHelper  
+
+# Optional: Override default log level for this specific agent
+logLevel: Information 
