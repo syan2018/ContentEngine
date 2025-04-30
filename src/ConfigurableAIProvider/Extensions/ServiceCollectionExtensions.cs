@@ -41,6 +41,7 @@ public static class ServiceCollectionExtensions
         // --- Register AI Service Configurators ---
         services.TryAddTransient<IAIServiceConfigurator, AzureOpenAIServiceConfigurator>();
         services.TryAddTransient<IAIServiceConfigurator, OpenAIServiceConfigurator>();
+        services.TryAddTransient<IAIServiceConfigurator, OllamaServiceConfigurator>();
 
         // --- Ensure Necessary Logging is Available ---
         services.TryAddSingleton<ILoggerFactory, NullLoggerFactory>();

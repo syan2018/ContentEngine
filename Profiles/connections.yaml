@@ -13,13 +13,9 @@ connections:
     orgId: "{{OPENAI_ORG_ID}}" # Optional
 
   # === OpenAI-Compatible Endpoint (e.g., Local Ollama) ===
-  localOllama:
-    serviceType: OpenAI # IMPORTANT: Still use OpenAI type for compatible APIs
+  Ollama:
+    serviceType: Ollama
     baseUrl: "http://localhost:11434/v1" # Default Ollama API endpoint
-    # apiKey is often required by the client library, even if the local service doesn't validate it.
-    # Put a placeholder or a dummy value like "ollama".
-    apiKey: "ollama" 
-    # OrgId typically not needed for local models
 
   # === OpenAI-Compatible Endpoint (e.g., OpenRouter) ===
   openRouter:

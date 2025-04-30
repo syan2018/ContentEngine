@@ -31,9 +31,9 @@ models:
      endpointType: TextEmbedding 
 
   # --- Local Ollama Model --- 
-  ollama-llama3-chat:
-    connection: localOllama # References the connection with baseUrl
-    modelId: "llama3"        # The actual model name served by Ollama
+  ollama-qwen3-8b:
+    connection: Ollama # References the connection with baseUrl
+    modelId: "qwen3:8b"        # The actual model name served by Ollama
     endpointType: ChatCompletion
     # Parameters might be ignored by local endpoint or need specific format
 

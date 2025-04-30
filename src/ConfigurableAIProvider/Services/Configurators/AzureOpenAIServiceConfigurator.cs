@@ -8,15 +8,8 @@ namespace ConfigurableAIProvider.Services.Configurators;
 /// <summary>
 /// Configures Azure OpenAI services for the KernelBuilder.
 /// </summary>
-public class AzureOpenAIServiceConfigurator : IAIServiceConfigurator
+public class AzureOpenAIServiceConfigurator(ILogger<AzureOpenAIServiceConfigurator> logger) : IAIServiceConfigurator
 {
-    private readonly ILogger<AzureOpenAIServiceConfigurator> _logger;
-
-    public AzureOpenAIServiceConfigurator(ILogger<AzureOpenAIServiceConfigurator> logger)
-    {
-        _logger = logger;
-    }
-
     public ServiceType HandledServiceType => ServiceType.AzureOpenAI;
 
     public void ConfigureService(IKernelBuilder builder, ModelDefinition modelDefinition, ConnectionConfig connectionConfig)
@@ -24,7 +17,7 @@ public class AzureOpenAIServiceConfigurator : IAIServiceConfigurator
         // Use properties from modelDefinition
         if (string.IsNullOrWhiteSpace(connectionConfig.Endpoint) || string.IsNullOrWhiteSpace(connectionConfig.ApiKey) || string.IsNullOrWhiteSpace(modelDefinition.ModelId))
         {
-            _logger.LogError("Cannot configure Azure OpenAI service. Endpoint, ApiKey, or ModelId is missing for connection '{ConnectionName}', model definition ID corresponding to '{ModelId}'.",
+            logger.LogError("Cannot configure Azure OpenAI service. Endpoint, ApiKey, or ModelId is missing for connection '{ConnectionName}', model definition ID corresponding to '{ModelId}'.",
                              modelDefinition.Connection, modelDefinition.ModelId ?? "[Not Specified]");
             return; // Skip configuration if essential info is missing
         }
@@ -41,7 +34,7 @@ public class AzureOpenAIServiceConfigurator : IAIServiceConfigurator
                         apiKey: connectionConfig.ApiKey!
                         // serviceId: modelDefinition.Connection // Optional: Use connection name as serviceId? Consider if needed.
                     );
-                    _logger.LogDebug("Added Azure OpenAI Chat Completion: Deployment={Deployment}, Endpoint={Endpoint}", modelDefinition.ModelId, connectionConfig.Endpoint);
+                    logger.LogDebug("Added Azure OpenAI Chat Completion: Deployment={Deployment}, Endpoint={Endpoint}", modelDefinition.ModelId, connectionConfig.Endpoint);
                     break;
                 case EndpointType.TextEmbedding: // Corrected embedding logic
 #pragma warning disable SKEXP0010 // Suppress preview warning for AddAzureOpenAITextEmbeddingGeneration
@@ -51,20 +44,20 @@ public class AzureOpenAIServiceConfigurator : IAIServiceConfigurator
                         apiKey: connectionConfig.ApiKey!
                     );
 #pragma warning restore SKEXP0010
-                     _logger.LogDebug("Added Azure OpenAI Text Embedding: Deployment={Deployment}, Endpoint={Endpoint}", modelDefinition.ModelId, connectionConfig.Endpoint);
+                     logger.LogDebug("Added Azure OpenAI Text Embedding: Deployment={Deployment}, Endpoint={Endpoint}", modelDefinition.ModelId, connectionConfig.Endpoint);
                      break;
                 case EndpointType.TextCompletion:
-                    _logger.LogWarning("Azure OpenAI Text Completion endpoint type specified for model '{ModelId}' but not added by configurator. Use Chat Completion or Embedding.", modelDefinition.ModelId);
+                    logger.LogWarning("Azure OpenAI Text Completion endpoint type specified for model '{ModelId}' but not added by configurator. Use Chat Completion or Embedding.", modelDefinition.ModelId);
                     break;
                 default:
-                    _logger.LogWarning("Unsupported Azure OpenAI endpoint type '{EndpointType}' for model '{ModelId}'.",
+                    logger.LogWarning("Unsupported Azure OpenAI endpoint type '{EndpointType}' for model '{ModelId}'.",
                                      modelDefinition.EndpointType, modelDefinition.ModelId);
                     break;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to add Azure OpenAI service for model '{ModelId}' using connection '{ConnectionName}'.", modelDefinition.ModelId, modelDefinition.Connection);
+            logger.LogError(ex, "Failed to add Azure OpenAI service for model '{ModelId}' using connection '{ConnectionName}'.", modelDefinition.ModelId, modelDefinition.Connection);
             // Optionally re-throw or handle specific exceptions if needed
         }
     }
