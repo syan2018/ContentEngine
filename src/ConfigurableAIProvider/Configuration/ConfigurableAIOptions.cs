@@ -16,7 +16,7 @@ public class ConfigurableAIOptions
     /// Defaults to "Agents".
     /// </summary>
     [Required(AllowEmptyStrings = false)]
-    public string AgentsDirectory { get; set; } = "Agents";
+    public string AgentsDirectory { get; set; } = "Profiles/Agents";
 
     /// <summary>
     /// The path to the central connections configuration file.
@@ -24,7 +24,7 @@ public class ConfigurableAIOptions
     /// Defaults to "Agents/connections.yaml".
     /// </summary>
     [Required(AllowEmptyStrings = false)]
-    public string ConnectionsFilePath { get; set; } = Path.Combine("Agents", "connections.yaml");
+    public string ConnectionsFilePath { get; set; } = Path.Combine("Profiles", "connections.yaml");
 
     /// <summary>
     /// The path to the central model definitions configuration file.
@@ -32,7 +32,7 @@ public class ConfigurableAIOptions
     /// Defaults to "Agents/models.yaml".
     /// </summary>
     [Required(AllowEmptyStrings = false)]
-    public string ModelsFilePath { get; set; } = Path.Combine("Agents", "models.yaml");
+    public string ModelsFilePath { get; set; } = Path.Combine("Profiles", "models.yaml");
 
     /// <summary>
     /// The optional root directory path for globally shared plugins.

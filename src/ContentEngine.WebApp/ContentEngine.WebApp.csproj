@@ -8,6 +8,18 @@
 
   <ItemGroup>
     <PackageReference Include="LiteDB" Version="5.0.21" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.48.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ConfigurableAIProvider\ConfigurableAIProvider.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\Profiles\**\*.*">
+      <Link>Profiles\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

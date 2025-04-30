@@ -38,10 +38,16 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IModelProvider, ModelProvider>();
         services.TryAddScoped<IAIKernelFactory, DefaultAIKernelFactory>();
 
-        // --- Register AI Service Configurators ---
-        services.TryAddTransient<IAIServiceConfigurator, AzureOpenAIServiceConfigurator>();
-        services.TryAddTransient<IAIServiceConfigurator, OpenAIServiceConfigurator>();
-        services.TryAddTransient<IAIServiceConfigurator, OllamaServiceConfigurator>();
+        // --- Register AI Service Configurators (Use TryAddEnumerable) ---
+        // This ensures all configurators are added to the collection injected via IEnumerable<IAIServiceConfigurator>
+        services.TryAddEnumerable(new[]
+        {
+            // Register each configurator implementation
+            ServiceDescriptor.Singleton<IAIServiceConfigurator, AzureOpenAIServiceConfigurator>(),
+            ServiceDescriptor.Singleton<IAIServiceConfigurator, OpenAIServiceConfigurator>(),
+            ServiceDescriptor.Singleton<IAIServiceConfigurator, OllamaServiceConfigurator>()
+            // Add other configurators here if needed
+        });
 
         // --- Ensure Necessary Logging is Available ---
         services.TryAddSingleton<ILoggerFactory, NullLoggerFactory>();

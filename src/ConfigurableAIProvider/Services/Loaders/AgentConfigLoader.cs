@@ -10,7 +10,7 @@ using System.Collections.Concurrent;
 namespace ConfigurableAIProvider.Services.Loaders;
 
 /// <summary>
-/// Loads and caches agent configurations from subdirectories.
+/// Loads and caches agent configurations from subdirectories relative to the application's base directory.
 /// </summary>
 public class AgentConfigLoader : IAgentConfigLoader
 {
@@ -40,15 +40,15 @@ public class AgentConfigLoader : IAgentConfigLoader
             return Task.FromResult(cachedConfig);
         }
 
+        // _options.AgentsDirectory should be relative to the base directory (e.g., "Profiles/Agents")
         string agentDirectoryPath = Path.Combine(AppContext.BaseDirectory, _options.AgentsDirectory, agentName);
         agentDirectoryPath = Path.GetFullPath(agentDirectoryPath); // Normalize path
 
          _logger.LogInformation("Loading configuration for agent '{AgentName}' from directory: {DirectoryPath}", agentName, agentDirectoryPath);
 
-
         if (!Directory.Exists(agentDirectoryPath))
         {
-             _logger.LogError("Agent configuration directory not found for agent '{AgentName}': {DirectoryPath}", agentName, agentDirectoryPath);
+             _logger.LogError("Agent configuration directory not found for agent '{AgentName}'. Looked in: {DirectoryPath}", agentName, agentDirectoryPath);
             throw new DirectoryNotFoundException($"Agent configuration directory not found for agent '{agentName}'. Looked in: {agentDirectoryPath}");
         }
 

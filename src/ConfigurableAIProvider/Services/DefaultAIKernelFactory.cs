@@ -153,13 +153,18 @@ public class DefaultAIKernelFactory(
             return Task.CompletedTask;
         }
 
-        string agentDirectory = Path.GetFullPath(Path.Combine(_providerOptions.AgentsDirectory, agentName), AppContext.BaseDirectory);
-        string? globalPluginsDirectory = !string.IsNullOrWhiteSpace(_providerOptions.GlobalPluginsDirectory)
-            ? Path.GetFullPath(_providerOptions.GlobalPluginsDirectory, AppContext.BaseDirectory)
-            : null;
+        // --- Correct Path Logic using AppContext.BaseDirectory and Config Options --- 
+        // Agent-specific plugins are expected within the agent's config directory in the output.
+        string agentOutputDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, _providerOptions.AgentsDirectory, agentName));
 
-        logger.LogInformation("Loading plugins for agent '{AgentName}'. Agent Dir: {AgentDir}, Global Plugin Dir: {GlobalDir}",
-                             agentName, agentDirectory, globalPluginsDirectory ?? "N/A");
+        // Global plugins are relative to the output base directory.
+        string? globalPluginsOutputDirectory = !string.IsNullOrWhiteSpace(_providerOptions.GlobalPluginsDirectory)
+            ? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, _providerOptions.GlobalPluginsDirectory)) // Combine with BaseDirectory
+            : null;
+        // --- End Corrected Path Logic ---
+
+        logger.LogInformation("Loading plugins for agent '{AgentName}'. Agent Plugin Base Dir: {AgentDir}, Global Plugin Base Dir: {GlobalDir}",
+                             agentName, agentOutputDirectory, globalPluginsOutputDirectory ?? "N/A");
 
         foreach (var pluginReference in agentConfig.Plugins)
         {
@@ -167,24 +172,25 @@ public class DefaultAIKernelFactory(
 
             try
             {
-                string? resolvedPath = ResolvePluginPath(pluginReference, agentDirectory, globalPluginsDirectory);
+                // Use the output directories for resolution
+                string? resolvedPath = ResolvePluginPath(pluginReference, agentOutputDirectory, globalPluginsOutputDirectory);
 
                  if (resolvedPath != null && Directory.Exists(resolvedPath)) // Only handle prompt directories for now
                  {
                     string pluginName = Path.GetFileName(resolvedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
                     logger.LogDebug("Importing plugin '{PluginName}' from directory: {Path}", pluginName, resolvedPath);
+                    // Ensure plugin names are unique if loading from multiple sources or with same names
                     kernel.ImportPluginFromPromptDirectory(resolvedPath, pluginName);
                  }
                  else
                  {
-                      logger.LogWarning("Could not find plugin directory for reference '{PluginReference}' for agent '{AgentName}'. Looked in agent dir ('{AgentDir}') and global dir ('{GlobalDir}'). Prompt directory plugins are currently supported.", 
-                                       pluginReference, agentName, agentDirectory, globalPluginsDirectory ?? "N/A");
+                      logger.LogWarning("Could not find plugin directory for reference '{PluginReference}' for agent '{AgentName}'. Looked in agent base dir ('{AgentDir}') and global base dir ('{GlobalDir}'). Prompt directory plugins are currently supported.", 
+                                       pluginReference, agentName, agentOutputDirectory, globalPluginsOutputDirectory ?? "N/A");
                  }
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to load plugin reference '{PluginReference}' for agent '{AgentName}'.", pluginReference, agentName);
-                // Continue trying to load other plugins
             }
         }
 
@@ -193,18 +199,17 @@ public class DefaultAIKernelFactory(
 
     private string? ResolvePluginPath(string pluginReference, string agentDirectory, string? globalPluginsDirectory)
     {
-        // Simplistic resolution: Check agent-relative first, then global-relative.
-        // Assumes pluginReference is a directory name or relative path to a directory.
-
-        // Clean the reference (e.g., remove leading './')
+        // Clean the reference
         var cleanedReference = pluginReference.TrimStart('.').TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-        string potentialAgentRelativePath = Path.Combine(agentDirectory, cleanedReference);
+        // Check agent-relative path (relative to the specific agent's output directory)
+        string potentialAgentRelativePath = Path.Combine(agentDirectory, "Plugins", cleanedReference); // Assume plugins are in AgentDir/Plugins/PluginName
         if (Directory.Exists(potentialAgentRelativePath))
         {
             return Path.GetFullPath(potentialAgentRelativePath);
         }
 
+        // Check global path (relative to the global plugins output directory)
         if (globalPluginsDirectory != null)
         {
              string potentialGlobalRelativePath = Path.Combine(globalPluginsDirectory, cleanedReference);
@@ -213,7 +218,15 @@ public class DefaultAIKernelFactory(
                  return Path.GetFullPath(potentialGlobalRelativePath);
              }
         }
+        
+        // Fallback: Check directly under agent directory (if Plugins subdir doesn't exist or wasn't specified)
+        potentialAgentRelativePath = Path.Combine(agentDirectory, cleanedReference); 
+        if (Directory.Exists(potentialAgentRelativePath))
+        {
+             logger.LogDebug("Plugin reference '{PluginReference}' resolved directly under agent directory '{AgentDirectory}' (not in a 'Plugins' subdirectory).", cleanedReference, agentDirectory);
+            return Path.GetFullPath(potentialAgentRelativePath);
+        }
 
-        return null; // Path not found as a directory in either location
+        return null; // Path not found
     }
 } 

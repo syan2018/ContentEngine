@@ -1,7 +1,64 @@
 ﻿@page "/"
+@using Microsoft.SemanticKernel
+@using ConfigurableAIProvider.Services
+@inject IAIKernelFactory AiKernelFactory
+@attribute [StreamRendering(true)]
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Hello, AI world!</h1>
+
+@if (isLoading)
+{
+    <p><em>Loading AI response...</em></p>
+}
+else if (!string.IsNullOrEmpty(errorMessage))
+{
+    <p style="color: red;">Error: @errorMessage</p>
+}
+else
+{
+    <p>AI Response: <strong>@aiResponse</strong></p>
+}
 
 Welcome to your new app.
+
+@code {
+    private bool isLoading = true;
+    private string? aiResponse;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        Kernel? kernel = null; // Initialize kernel as nullable
+        try
+        {
+            // Assuming 'SimpleChat' agent is configured to use 'ollama-qwen3-8b'
+            kernel = await AiKernelFactory.BuildKernelAsync("SimpleChat");
+
+            if (kernel == null)
+            {
+                throw new InvalidOperationException("Failed to create the AI Kernel for agent 'SimpleChat'.");
+            }
+
+            // Use a more specific prompt to increase chances of getting the exact desired output
+            var result = await kernel.InvokePromptAsync("Please respond with only the text 'Hello World!'");
+            aiResponse = result.GetValue<string>();
+        }
+        catch (Exception ex)
+        {
+            // Log the full exception details for debugging
+            Console.Error.WriteLine($"Error invoking AI Kernel: {ex}"); 
+            errorMessage = $"Failed to get AI response: {ex.Message}"; // Show a simpler message to the user
+        }
+        finally
+        {
+            isLoading = false;
+            // Kernel disposal is usually handled by the DI container if the factory provides transient or scoped instances.
+            // If the factory provides a singleton or you manage lifecycle manually, ensure proper disposal.
+            // (kernel as IDisposable)?.Dispose(); // Example if manual disposal is needed
+        }
+        // No need to call StateHasChanged() here as Blazor handles it after OnInitializedAsync
+    }
+}
