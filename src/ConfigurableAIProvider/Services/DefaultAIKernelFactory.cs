@@ -1,4 +1,7 @@
 using ConfigurableAIProvider.Configuration;
+using ConfigurableAIProvider.Services.Loaders;     // Added
+using ConfigurableAIProvider.Services.Providers;   // Added
+using ConfigurableAIProvider.Services.Configurators; // Added
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using System;
@@ -12,12 +15,14 @@ using Microsoft.Extensions.Options; // Still needed for GlobalPluginsDirectory f
 namespace ConfigurableAIProvider.Services;
 
 /// <summary>
-/// Default implementation of IAIKernelFactory that builds Kernels based on Agent configurations.
+/// Default implementation of IAIKernelFactory that builds Kernels based on Agent configurations 
+/// using pluggable service configurators.
 /// </summary>
 public class DefaultAIKernelFactory : IAIKernelFactory
 {
     private readonly IAgentConfigLoader _agentConfigLoader;
     private readonly IConnectionProvider _connectionProvider;
+    private readonly IEnumerable<IAIServiceConfigurator> _serviceConfigurators; // Changed
     private readonly ILoggerFactory _loggerFactory; // Use ILoggerFactory to create Kernel logger
     private readonly ILogger<DefaultAIKernelFactory> _logger;
     private readonly ConfigurableAIOptions _providerOptions; // Keep options for global plugin path etc.
@@ -27,12 +32,14 @@ public class DefaultAIKernelFactory : IAIKernelFactory
     public DefaultAIKernelFactory(
         IAgentConfigLoader agentConfigLoader,
         IConnectionProvider connectionProvider,
+        IEnumerable<IAIServiceConfigurator> serviceConfigurators, // Changed
         ILoggerFactory loggerFactory, // Inject ILoggerFactory
         IOptions<ConfigurableAIOptions> providerOptions, // Inject provider options
         ILogger<DefaultAIKernelFactory> logger)
     {
         _agentConfigLoader = agentConfigLoader;
         _connectionProvider = connectionProvider;
+        _serviceConfigurators = serviceConfigurators; // Changed
         _loggerFactory = loggerFactory;
         _providerOptions = providerOptions.Value;
         _logger = logger;
@@ -42,218 +49,186 @@ public class DefaultAIKernelFactory : IAIKernelFactory
     {
         _logger.LogInformation("Building Kernel for agent: {AgentName}", agentName);
 
-        AgentConfig agentConfig;
+        AgentConfig agentConfig = await LoadAgentConfigurationAsync(agentName);
+
+        var builder = Kernel.CreateBuilder();
+
+        ConfigureKernelLogging(builder, agentConfig);
+
+        await ConfigureAiServicesAsync(builder, agentConfig, agentName);
+
+        var kernel = builder.Build();
+
+        await LoadPluginsAsync(kernel, agentConfig, agentName);
+        
+        _logger.LogInformation("Successfully built Kernel for agent: {AgentName}", agentName);
+        return kernel;
+    }
+
+    // --- Private Helper Methods ---
+
+    private async Task<AgentConfig> LoadAgentConfigurationAsync(string agentName)
+    {
         try
         {
-            agentConfig = await _agentConfigLoader.LoadConfigAsync(agentName);
+            return await _agentConfigLoader.LoadConfigAsync(agentName);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load configuration for agent: {AgentName}", agentName);
             throw; // Re-throw exceptions related to config loading
         }
+    }
 
-        var builder = Kernel.CreateBuilder();
-
-        // Configure logging for the Kernel itself using the injected factory
+    private void ConfigureKernelLogging(IKernelBuilder builder, AgentConfig agentConfig)
+    {
          if (agentConfig.LogLevel.HasValue)
          {
-             // TODO: SK logging configuration changed. Need to adapt.
-             // The old builder.Services.AddLogging(...) might not be the primary way.
-             // Kernels now often accept an ILoggerFactory in their constructor or builder methods.
-             // Let's add the logger factory directly if possible.
-             // builder.Services.AddSingleton<ILoggerFactory>(_loggerFactory); // This might be needed depending on SK version
-             _logger.LogWarning("Semantic Kernel logging configuration has changed. LogLevel from agent.yaml might not be directly applied via KernelBuilder in recent versions. Kernel will use the globally configured logger factory.");
+             // Note: As mentioned before, SK's builder logging config might change.
+             _logger.LogWarning("LogLevel from agent.yaml is currently informational and may not directly control Kernel's internal logging level through KernelBuilder. Kernel will use the globally configured logger factory.");
+             // You might need more specific configuration depending on the SK version and logging setup.
+             // builder.Services.AddSingleton<ILoggerFactory>(_loggerFactory); // Example if needed
          }
          else
          {
-              builder.Services.AddSingleton<ILoggerFactory>(_loggerFactory); // Use host app's logging by default
+              // Use the host application's logging by default
+              builder.Services.AddSingleton<ILoggerFactory>(_loggerFactory); 
          }
+    }
 
-
-        // Configure AI Services (Models)
-        if (agentConfig.Models != null && agentConfig.Models.Any())
-        {
-            foreach (var modelEntry in agentConfig.Models)
-            {
-                var modelName = modelEntry.Key; // Logical name within the agent config
-                var modelConfig = modelEntry.Value;
-
-                if (string.IsNullOrWhiteSpace(modelConfig.Connection) || string.IsNullOrWhiteSpace(modelConfig.ModelId))
-                {
-                    _logger.LogWarning("Skipping model '{ModelName}' for agent '{AgentName}' due to missing connection name or model ID.", modelName, agentName);
-                    continue;
-                }
-
-                try
-                {
-                    ConnectionConfig connectionConfig = await _connectionProvider.GetResolvedConnectionAsync(modelConfig.Connection);
-
-                    _logger.LogDebug("Adding AI service for model '{ModelName}' (ID: {ModelId}) using connection '{ConnectionName}' for agent '{AgentName}'.",
-                                     modelName, modelConfig.ModelId, modelConfig.Connection, agentName);
-
-                    switch (connectionConfig.ServiceType)
-                    {
-                        case ServiceType.AzureOpenAI:
-                            AddAzureOpenAIService(builder, modelConfig, connectionConfig);
-                            break;
-                        case ServiceType.OpenAI:
-                            AddOpenAIService(builder, modelConfig, connectionConfig);
-                            break;
-                        default:
-                            _logger.LogWarning("Unsupported service type '{ServiceType}' configured for connection '{ConnectionName}'.",
-                                             connectionConfig.ServiceType, modelConfig.Connection);
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to configure AI service for model '{ModelName}' (Connection: {ConnectionName}) for agent '{AgentName}'. Skipping this model.",
-                                     modelName, modelConfig.Connection, agentName);
-                    // Continue trying to build with other models/plugins
-                }
-            }
-        }
-        else
-        {
+    private async Task ConfigureAiServicesAsync(IKernelBuilder builder, AgentConfig agentConfig, string agentName)
+    {
+        if (agentConfig.Models == null || !agentConfig.Models.Any())
+        { 
             _logger.LogWarning("No models configured for agent '{AgentName}'. Kernel will be built without AI services.", agentName);
-        }
-
-        var kernel = builder.Build();
-
-        // Load Plugins
-        if (agentConfig.Plugins != null && agentConfig.Plugins.Any())
-        {
-            string agentDirectory = Path.GetFullPath(Path.Combine(_providerOptions.AgentsDirectory, agentName), AppContext.BaseDirectory);
-            string? globalPluginsDirectory = !string.IsNullOrWhiteSpace(_providerOptions.GlobalPluginsDirectory)
-                ? Path.GetFullPath(_providerOptions.GlobalPluginsDirectory, AppContext.BaseDirectory)
-                : null;
-
-
-            _logger.LogInformation("Loading plugins for agent '{AgentName}'. Agent Dir: {AgentDir}, Global Plugin Dir: {GlobalDir}",
-                                 agentName, agentDirectory, globalPluginsDirectory ?? "N/A");
-
-
-            foreach (var pluginReference in agentConfig.Plugins)
-            {
-                if (string.IsNullOrWhiteSpace(pluginReference)) continue;
-
-                try
-                {
-                    // Determine plugin path:
-                    // 1. Try relative to agent directory
-                    // 2. Try relative to global plugins directory (if configured)
-                    // 3. Treat as potentially just a plugin name (if loading native plugins or from assembly in future)
-
-                    string potentialAgentRelativePath = Path.GetFullPath(Path.Combine(agentDirectory, pluginReference));
-                    string potentialGlobalRelativePath = globalPluginsDirectory != null ? Path.GetFullPath(Path.Combine(globalPluginsDirectory, pluginReference)) : null;
-
-                    string pluginPathToLoad;
-                    string pluginName;
-
-
-                     if (Directory.Exists(potentialAgentRelativePath)) // Assume directory-based prompt plugin relative to agent
-                     {
-                        pluginPathToLoad = potentialAgentRelativePath;
-                        pluginName = Path.GetFileName(pluginPathToLoad.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                         _logger.LogDebug("Attempting to load plugin '{PluginName}' from agent-relative directory: {Path}", pluginName, pluginPathToLoad);
-                        kernel.ImportPluginFromPromptDirectory(pluginPathToLoad, pluginName);
-                     }
-                     else if (potentialGlobalRelativePath != null && Directory.Exists(potentialGlobalRelativePath)) // Assume directory-based prompt plugin relative to global dir
-                     {
-                        pluginPathToLoad = potentialGlobalRelativePath;
-                        pluginName = Path.GetFileName(pluginPathToLoad.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                        _logger.LogDebug("Attempting to load plugin '{PluginName}' from global directory: {Path}", pluginName, pluginPathToLoad);
-                        kernel.ImportPluginFromPromptDirectory(pluginPathToLoad, pluginName);
-                     }
-                     // TODO: Add support for OpenAPI plugins (.yaml/.json) or Native plugins (by Type name) here if needed
-                     // else if (File.Exists(...) && (pluginReference.EndsWith(".yaml") || pluginReference.EndsWith(".json"))) { ... ImportPluginFromOpenApi ... }
-                     // else { ... try loading native plugin by name ... kernel.ImportPluginFromType<T>(pluginReference) ... }
-                     else
-                     {
-                         _logger.LogWarning("Could not find plugin directory or supported file for reference '{PluginReference}' for agent '{AgentName}'. Looked in agent dir and global dir (if configured).", pluginReference, agentName);
-                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to load plugin reference '{PluginReference}' for agent '{AgentName}'.", pluginReference, agentName);
-                    // Continue trying to load other plugins
-                }
-            }
-        }
-         else
-        {
-             _logger.LogInformation("No plugins specified for agent '{AgentName}'.", agentName);
-        }
-
-        _logger.LogInformation("Successfully built Kernel for agent: {AgentName}", agentName);
-        return kernel;
-    }
-
-
-    // --- Helper methods for adding services ---
-
-    private void AddAzureOpenAIService(IKernelBuilder builder, AgentConfig.ModelConfig modelConfig, ConnectionConfig connectionConfig)
-    {
-        // Ensure required fields are present (already partially validated in ConnectionProvider)
-         if (string.IsNullOrWhiteSpace(connectionConfig.Endpoint) || string.IsNullOrWhiteSpace(connectionConfig.ApiKey))
-         {
-             _logger.LogError("Cannot add Azure OpenAI service for model '{ModelId}'. Endpoint or ApiKey is missing after resolution for connection '{ConnectionName}'.",
-                              modelConfig.ModelId, modelConfig.Connection);
-             return;
-         }
-
-
-        switch (modelConfig.EndpointType)
-        {
-            case EndpointType.ChatCompletion:
-                builder.AddAzureOpenAIChatCompletion(
-                    deploymentName: modelConfig.ModelId!, // Should not be null here based on prior checks
-                    endpoint: connectionConfig.Endpoint,
-                    apiKey: connectionConfig.ApiKey
-                    // serviceId: modelConfig.Connection // Optional: use connection name as serviceId?
-                );
-                 _logger.LogDebug("Added Azure OpenAI Chat Completion: Deployment={Deployment}, Endpoint={Endpoint}", modelConfig.ModelId, connectionConfig.Endpoint);
-                break;
-            case EndpointType.TextCompletion:
-                 // Add Text Completion if needed - often superseded by Chat
-                _logger.LogWarning("Azure OpenAI Text Completion endpoint type specified but not implemented in factory. Use Chat Completion or Embedding.");
-                 break;
-            default:
-                _logger.LogWarning("Unsupported Azure OpenAI endpoint type '{EndpointType}' for model '{ModelId}'.",
-                                 modelConfig.EndpointType, modelConfig.ModelId);
-                break;
-        }
-    }
-
-    private void AddOpenAIService(IKernelBuilder builder, AgentConfig.ModelConfig modelConfig, ConnectionConfig connectionConfig)
-    {
-        if (string.IsNullOrWhiteSpace(connectionConfig.ApiKey))
-        {
-            _logger.LogError("Cannot add OpenAI service for model '{ModelId}'. ApiKey is missing after resolution for connection '{ConnectionName}'.",
-                             modelConfig.ModelId, modelConfig.Connection);
             return;
         }
 
-        switch (modelConfig.EndpointType)
+        foreach (var modelEntry in agentConfig.Models)
         {
-            case EndpointType.ChatCompletion:
-                builder.AddOpenAIChatCompletion(
-                    modelId: modelConfig.ModelId!,
-                    apiKey: connectionConfig.ApiKey,
-                    orgId: connectionConfig.OrgId // Optional
-                    // serviceId: modelConfig.Connection
-                );
-                _logger.LogDebug("Added OpenAI Chat Completion: ModelId={ModelId}", modelConfig.ModelId);
-                break;
-             case EndpointType.TextCompletion:
-                 // Add Text Completion if needed
-                _logger.LogWarning("OpenAI Text Completion endpoint type specified but not implemented in factory. Use Chat Completion or Embedding.");
-                 break;
-            default:
-                _logger.LogWarning("Unsupported OpenAI endpoint type '{EndpointType}' for model '{ModelId}'.",
-                                 modelConfig.EndpointType, modelConfig.ModelId);
-                break;
+            var modelName = modelEntry.Key;
+            var modelConfig = modelEntry.Value;
+
+            if (string.IsNullOrWhiteSpace(modelConfig.Connection) || string.IsNullOrWhiteSpace(modelConfig.ModelId))
+            {
+                _logger.LogWarning("Skipping model '{ModelName}' for agent '{AgentName}' due to missing connection name or model ID.", modelName, agentName);
+                continue;
+            }
+
+            try
+            {
+                ConnectionConfig connectionConfig = await _connectionProvider.GetResolvedConnectionAsync(modelConfig.Connection);
+                
+                // Find the appropriate configurator for this service type
+                var configurator = _serviceConfigurators.FirstOrDefault(c => c.HandledServiceType == connectionConfig.ServiceType);
+
+                if (configurator != null)
+                {
+                     _logger.LogDebug("Using {ConfiguratorType} to configure AI service for model '{ModelName}' (ID: {ModelId}) using connection '{ConnectionName}' for agent '{AgentName}'.",
+                                     configurator.GetType().Name, modelName, modelConfig.ModelId, modelConfig.Connection, agentName);
+                    configurator.ConfigureService(builder, modelConfig, connectionConfig);
+                }
+                else
+                {
+                    _logger.LogWarning("No service configurator found for ServiceType '{ServiceType}' used by connection '{ConnectionName}'. Skipping model '{ModelName}'.",
+                                     connectionConfig.ServiceType, modelConfig.Connection, modelName);
+                }
+            }
+            catch (KeyNotFoundException knfex)
+            {
+                _logger.LogError(knfex, "Connection '{ConnectionName}' required by model '{ModelName}' not found for agent '{AgentName}'. Skipping this model.",
+                                 modelConfig.Connection, modelName, agentName);
+            }
+            catch (Exception ex)
+            {
+                // Catch errors during connection resolution or service configuration
+                _logger.LogError(ex, "Failed to configure AI service for model '{ModelName}' (Connection: {ConnectionName}) for agent '{AgentName}'. Skipping this model.",
+                                 modelName, modelConfig.Connection, agentName);
+            }
         }
+    }
+
+    private Task LoadPluginsAsync(Kernel kernel, AgentConfig agentConfig, string agentName)
+    {
+        if (agentConfig.Plugins == null || !agentConfig.Plugins.Any())
+        {
+            _logger.LogInformation("No plugins specified for agent '{AgentName}'.", agentName);
+            return Task.CompletedTask;
+        }
+
+        string agentDirectory = Path.GetFullPath(Path.Combine(_providerOptions.AgentsDirectory, agentName), AppContext.BaseDirectory);
+        string? globalPluginsDirectory = !string.IsNullOrWhiteSpace(_providerOptions.GlobalPluginsDirectory)
+            ? Path.GetFullPath(_providerOptions.GlobalPluginsDirectory, AppContext.BaseDirectory)
+            : null;
+
+        _logger.LogInformation("Loading plugins for agent '{AgentName}'. Agent Dir: {AgentDir}, Global Plugin Dir: {GlobalDir}",
+                             agentName, agentDirectory, globalPluginsDirectory ?? "N/A");
+
+        foreach (var pluginReference in agentConfig.Plugins)
+        {
+            if (string.IsNullOrWhiteSpace(pluginReference)) continue;
+
+            try
+            {
+                string? resolvedPath = ResolvePluginPath(pluginReference, agentDirectory, globalPluginsDirectory);
+
+                 if (resolvedPath != null && Directory.Exists(resolvedPath)) // Only handle prompt directories for now
+                 {
+                    string pluginName = Path.GetFileName(resolvedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                    _logger.LogDebug("Importing plugin '{PluginName}' from directory: {Path}", pluginName, resolvedPath);
+                    kernel.ImportPluginFromPromptDirectory(resolvedPath, pluginName);
+                 }
+                 // TODO: Add support for OpenAPI plugins (.yaml/.json) or Native plugins (by Type name) here if needed
+                 // else if (resolvedPath != null && File.Exists(resolvedPath) && (resolvedPath.EndsWith(".yaml") || resolvedPath.EndsWith(".json")))
+                 // {
+                 //     string pluginName = Path.GetFileNameWithoutExtension(resolvedPath);
+                 //     _logger.LogDebug("Importing OpenAPI plugin '{PluginName}' from file: {Path}", pluginName, resolvedPath);
+                 //     // Note: OpenAPI import might require different parameters or async handling
+                 //     // await kernel.ImportPluginFromOpenApiAsync(...);
+                 // }
+                 // else
+                 // {
+                 //     _logger.LogWarning("Could not find plugin directory or supported file for reference '{PluginReference}' for agent '{AgentName}'. Looked in: {ResolvedPath}", pluginReference, agentName, resolvedPath ?? pluginReference);
+                 // }
+                 else
+                 {
+                      _logger.LogWarning("Could not find plugin directory for reference '{PluginReference}' for agent '{AgentName}'. Looked in agent dir ('{AgentDir}') and global dir ('{GlobalDir}'). Prompt directory plugins are currently supported.", 
+                                       pluginReference, agentName, agentDirectory, globalPluginsDirectory ?? "N/A");
+                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load plugin reference '{PluginReference}' for agent '{AgentName}'.", pluginReference, agentName);
+                // Continue trying to load other plugins
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private string? ResolvePluginPath(string pluginReference, string agentDirectory, string? globalPluginsDirectory)
+    {
+        // Simplistic resolution: Check agent-relative first, then global-relative.
+        // Assumes pluginReference is a directory name or relative path to a directory.
+
+        // Clean the reference (e.g., remove leading './')
+        var cleanedReference = pluginReference.TrimStart('.', Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        string potentialAgentRelativePath = Path.Combine(agentDirectory, cleanedReference);
+        if (Directory.Exists(potentialAgentRelativePath))
+        {
+            return Path.GetFullPath(potentialAgentRelativePath);
+        }
+
+        if (globalPluginsDirectory != null)
+        {
+             string potentialGlobalRelativePath = Path.Combine(globalPluginsDirectory, cleanedReference);
+             if (Directory.Exists(potentialGlobalRelativePath))
+             {
+                 return Path.GetFullPath(potentialGlobalRelativePath);
+             }
+        }
+
+        return null; // Path not found as a directory in either location
     }
 } 

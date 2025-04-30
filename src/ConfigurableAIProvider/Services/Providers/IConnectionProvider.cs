@@ -2,7 +2,8 @@ using ConfigurableAIProvider.Configuration;
 using System.Threading.Tasks;
 using System.Collections.Generic; // Required for KeyNotFoundException documentation
 
-namespace ConfigurableAIProvider.Services;
+// Update namespace
+namespace ConfigurableAIProvider.Services.Providers;
 
 /// <summary>
 /// Provides access to resolved AI service connection configurations.

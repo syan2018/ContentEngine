@@ -6,7 +6,8 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
 
-namespace ConfigurableAIProvider.Services;
+// Update namespace
+namespace ConfigurableAIProvider.Services.Loaders;
 
 /// <summary>
 /// Loads and caches agent configurations from subdirectories.

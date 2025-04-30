@@ -9,7 +9,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ConfigurableAIProvider.Services;
+// Update namespace
+namespace ConfigurableAIProvider.Services.Providers;
 
 /// <summary>
 /// Loads connection configurations from a YAML file and resolves placeholders.

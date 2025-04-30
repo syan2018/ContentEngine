@@ -2,7 +2,8 @@ using ConfigurableAIProvider.Configuration;
 using System.Threading.Tasks;
 using System.IO; // Required for exception documentation
 
-namespace ConfigurableAIProvider.Services;
+// Update namespace
+namespace ConfigurableAIProvider.Services.Loaders;
 
 /// <summary>
 /// Loads agent configurations.
