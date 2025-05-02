@@ -1,0 +1,203 @@
+@page "/ai-schema-creation"
+@using ContentEngine.WebApp.Core.DataPipeline.Models
+@using ContentEngine.WebApp.Core.DataPipeline.Services
+@using ContentEngine.WebApp.Core.Utils
+@* @inject ISchemaDefinitionService SchemaService *@
+@* @inject IAISchemaSuggestionService AIService // Placeholder for AI service injection *@
+@inject NavigationManager NavigationManager
+@inject Microsoft.Extensions.Localization.IStringLocalizer<AISchemaCreation> Localizer 
+@* @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> SharedLocalizer // 如果需要共享资源 *@
+@attribute [StreamRendering(true)]
+
+<PageTitle>@Localizer["PageTitle"]</PageTitle>
+
+<div class="container mt-4">
+    <h1>@Localizer["PageTitle"]</h1>
+    <p class="text-muted mb-4">@Localizer["PageDescription"]</p>
+
+    <!-- Step Indicator -->
+    <div class="steps mb-5">
+        <div class="step active">@Localizer["Step1"]</div>
+        <div class="step">@Localizer["Step2"]</div>
+        <div class="step">@Localizer["Step3"]</div>
+    </div>
+
+    <div class="row">
+        <div class="col">
+             <!-- Basic Information Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    @Localizer["SchemaBasicsHeader"]
+                </div>
+                <div class="card-body">
+                    <div class="mb-3 row">
+                        <label for="schemaName" class="col-sm-3 col-form-label">@Localizer["SchemaNameLabel"]:</label>
+                        <div class="col-sm-9">
+                             <input type="text" id="schemaName" class="form-control" @bind="SchemaName" placeholder="@Localizer["SchemaNamePlaceholder"]">
+                        </div>
+                    </div>
+                    <div class="mb-3 row">
+                        <label for="schemaDesc" class="col-sm-3 col-form-label">@Localizer["SchemaDescLabel"]:</label>
+                         <div class="col-sm-9">
+                            <input type="text" id="schemaDesc" class="form-control" @bind="SchemaDescription" placeholder="@Localizer["SchemaDescPlaceholder"]">
+                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prompt Input Card -->
+            <div class="card mb-4">
+                 <div class="card-header">
+                    @Localizer["DataNeedsHeader"]
+                </div>
+                <div class="card-body">
+                    <p>@Localizer["DataNeedsInstruction"]</p>
+                    <textarea class="form-control" rows="6" @bind="UserPrompt" placeholder="@Localizer["UserPromptPlaceholder"]"></textarea>
+                    <div class="text-end mt-3">
+                        <button class="btn btn-primary" @onclick="AnalyzePrompt" disabled="@IsAnalyzing">
+                            @if (IsAnalyzing)
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                <span class="ms-1">@Localizer["AnalyzingStatus"]</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-magic me-1"></i> <!-- Assuming Bootstrap Icons are available -->
+                                <span>@Localizer["AnalyzeButton"]</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+             <!-- AI Analysis Result Section -->
+            @if (!string.IsNullOrEmpty(AnalysisResult))
+            {
+                <div class="ai-section card mb-4">
+                     <div class="card-header bg-info-subtle">
+                        @Localizer["AIResultHeader"]
+                    </div>
+                    <div class="card-body">
+                        @((MarkupString)AnalysisResult) <!-- Render as HTML if needed, sanitize carefully -->
+                         <p class="mt-3 text-muted small">@Localizer["AIResultInstruction"]</p>
+                    </div>
+                </div>
+            }
+             @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                 <div class="alert alert-danger" role="alert">
+                    @ErrorMessage
+                </div>
+            }
+
+            <!-- Navigation / Status Bar -->
+            <div class="d-flex justify-content-between mt-4 mb-4">
+                 <button class="btn btn-secondary" disabled>@Localizer["PreviousButton"]</button>
+                 <button class="btn btn-primary" @onclick="GoToNextStep" disabled="@string.IsNullOrEmpty(AnalysisResult)">@Localizer["NextButton"] <i class="bi bi-arrow-right"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string SchemaName { get; set; } = "";
+    private string SchemaDescription { get; set; } = "";
+    private string UserPrompt { get; set; } = "";
+    private string AnalysisResult { get; set; } = ""; // Stores AI suggestion (potentially HTML formatted)
+    private string ErrorMessage { get; set; } = "";
+    private bool IsAnalyzing { get; set; } = false;
+
+    // Placeholder for the suggested SchemaDefinition based on AI analysis
+    private SchemaDefinition? SuggestedSchema { get; set; }
+
+    private async Task AnalyzePrompt()
+    {
+        IsAnalyzing = true;
+        ErrorMessage = string.Empty;
+        AnalysisResult = string.Empty;
+        SuggestedSchema = null;
+        StateHasChanged();
+
+        if (string.IsNullOrWhiteSpace(UserPrompt) || string.IsNullOrWhiteSpace(SchemaName))
+        {
+            ErrorMessage = Localizer["MissingInputError"];
+            IsAnalyzing = false;
+            StateHasChanged();
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(1500); // Simulate AI call
+
+            SuggestedSchema = new SchemaDefinition // Create dummy schema
+            {
+                Name = SchemaName,
+                Description = SchemaDescription,
+                Fields = new List<FieldDefinition>
+                {
+                    new FieldDefinition { Name = "Title", Type = FieldType.Text, IsRequired = true },
+                    new FieldDefinition { Name = "Author", Type = FieldType.Reference, ReferenceSchemaName = "Author" },
+                    new FieldDefinition { Name = "PublicationYear", Type = FieldType.Number },
+                    new FieldDefinition { Name = "ISBN", Type = FieldType.Text },
+                    new FieldDefinition { Name = "Summary", Type = FieldType.Text },
+                    new FieldDefinition { Name = "CoverImageUrl", Type = FieldType.Text }
+                }
+            };
+
+            if (UserPrompt.Contains("books", StringComparison.OrdinalIgnoreCase))
+            {
+                AnalysisResult = BuildBookSuggestionHtml(SuggestedSchema);
+            }
+            else
+            {
+                AnalysisResult = $"<p>{Localizer["AIAnalysisGeneric"]}</p>";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error during AI analysis: {ex.Message}");
+            ErrorMessage = Localizer["AnalysisError"];
+        }
+        finally
+        {
+            IsAnalyzing = false;
+            StateHasChanged();
+        }
+    }
+
+    private string BuildBookSuggestionHtml(SchemaDefinition? schema)
+    {
+        if (schema == null) return string.Empty;
+
+        var authorSchemaName = schema.Fields.FirstOrDefault(f => f.Name == "Author")?.ReferenceSchemaName ?? "Author";
+
+        // Use System.Text.StringBuilder for better performance and readability
+        var sb = new System.Text.StringBuilder();
+        sb.AppendFormat("<p>{0}</p>", Localizer["AIAnalysisBookIntro"]);
+        sb.AppendLine("<ul>");
+        sb.AppendFormat("<li><strong>{0}:</strong> {1} ({2})</li>", Localizer["FieldTitle"], Localizer["FieldTypeText"], Localizer["FieldRequired"]);
+        sb.AppendFormat("<li><strong>{0}:</strong> {1}</li>", Localizer["FieldAuthor"], Localizer["FieldTypeReference", authorSchemaName]);
+        sb.AppendFormat("<li><strong>{0}:</strong> {1}</li>", Localizer["FieldPubYear"], Localizer["FieldTypeNumber"]);
+        sb.AppendFormat("<li><strong>{0}:</strong> {1}</li>", Localizer["FieldISBN"], Localizer["FieldTypeText"]);
+        sb.AppendFormat("<li><strong>{0}:</strong> {1}</li>", Localizer["FieldSummary"], Localizer["FieldTypeTextLong"]);
+        sb.AppendFormat("<li><strong>{0}:</strong> {1}</li>", Localizer["FieldCoverImage"], Localizer["FieldTypeTextUrl"]);
+        sb.AppendLine("</ul>");
+        sb.AppendFormat("<p>{0}</p>", Localizer["AIRefineInstruction"]);
+
+        return sb.ToString();
+    }
+
+    private void GoToNextStep()
+    {
+        if (SuggestedSchema != null)
+        {
+            Console.WriteLine("Navigating to next step with suggested schema...");
+            // NavigationManager.NavigateTo($"/ai-schema-review/{SchemaName}"); // Example navigation
+        }
+        else
+        {
+            ErrorMessage = Localizer["ProceedError"];
+        }
+    }
+} 

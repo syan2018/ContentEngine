@@ -1,0 +1,115 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="AIAnalysisBookIntro" xml:space="preserve">
+    <value>根据您存储图书信息的需求，我建议采用以下结构：</value>
+  </data>
+  <data name="AIAnalysisGeneric" xml:space="preserve">
+    <value>AI 分析完成。建议的字段将根据您的提示显示在此处。请提供更多详细信息以获得具体建议。</value>
+  </data>
+  <data name="AIRefineInstruction" xml:space="preserve">
+    <value>我们可以在下一步优化类型（例如，为 CoverImageUrl 指定 URL 验证）和必填字段。</value>
+  </data>
+  <data name="AIResultHeader" xml:space="preserve">
+    <value>AI 分析与建议</value>
+  </data>
+  <data name="AIResultInstruction" xml:space="preserve">
+    <value>请检查下面的建议。您可以在下一步中对其进行优化。</value>
+  </data>
+  <data name="AnalysisError" xml:space="preserve">
+    <value>分析提示时发生错误。请重试。</value>
+  </data>
+  <data name="AnalyzeButton" xml:space="preserve">
+    <value>分析需求</value>
+  </data>
+  <data name="AnalyzingStatus" xml:space="preserve">
+    <value>分析中...</value>
+  </data>
+  <data name="DataNeedsHeader" xml:space="preserve">
+    <value>描述您的数据需求</value>
+  </data>
+  <data name="DataNeedsInstruction" xml:space="preserve">
+    <value>请详细描述您想要结构化的信息。细节越丰富，AI 的建议就越好。</value>
+  </data>
+  <data name="FieldAuthor" xml:space="preserve">
+    <value>作者</value>
+  </data>
+  <data name="FieldCoverImage" xml:space="preserve">
+    <value>封面图片 URL</value>
+  </data>
+  <data name="FieldISBN" xml:space="preserve">
+    <value>ISBN</value>
+  </data>
+  <data name="FieldPubYear" xml:space="preserve">
+    <value>出版年份</value>
+  </data>
+  <data name="FieldRequired" xml:space="preserve">
+    <value>必填</value>
+  </data>
+  <data name="FieldSummary" xml:space="preserve">
+    <value>摘要</value>
+  </data>
+  <data name="FieldTitle" xml:space="preserve">
+    <value>标题</value>
+  </data>
+  <data name="FieldTypeNumber" xml:space="preserve">
+    <value>数字</value>
+  </data>
+  <data name="FieldTypeReference" xml:space="preserve">
+    <value>引用 (链接到 '{0}' 结构)</value>
+    <comment>使用 {0} 作为结构名称占位符</comment>
+  </data>
+  <data name="FieldTypeText" xml:space="preserve">
+    <value>文本</value>
+  </data>
+  <data name="FieldTypeTextLong" xml:space="preserve">
+    <value>长文本</value>
+  </data>
+  <data name="FieldTypeTextUrl" xml:space="preserve">
+    <value>文本 (URL 格式)</value>
+  </data>
+  <data name="MissingInputError" xml:space="preserve">
+    <value>请输入结构名称和数据需求描述。</value>
+  </data>
+  <data name="NextButton" xml:space="preserve">
+    <value>下一步: 检查建议</value>
+  </data>
+  <data name="PageDescription" xml:space="preserve">
+    <value>描述您需要的数据结构，让 AI 帮助您定义 Schema。</value>
+  </data>
+  <data name="PageTitle" xml:space="preserve">
+    <value>AI 结构创建器</value>
+  </data>
+  <data name="PreviousButton" xml:space="preserve">
+    <value>上一步</value>
+  </data>
+  <data name="ProceedError" xml:space="preserve">
+    <value>没有建议的结构，无法继续。请先分析需求。</value>
+  </data>
+  <data name="SchemaBasicsHeader" xml:space="preserve">
+    <value>基本信息</value>
+  </data>
+  <data name="SchemaDescLabel" xml:space="preserve">
+    <value>描述</value>
+  </data>
+  <data name="SchemaDescPlaceholder" xml:space="preserve">
+    <value>简要描述此结构的用途</value>
+  </data>
+  <data name="SchemaNameLabel" xml:space="preserve">
+    <value>结构名称</value>
+  </data>
+  <data name="SchemaNamePlaceholder" xml:space="preserve">
+    <value>例如：ProductCatalog, UserProfile, BlogPost</value>
+  </data>
+  <data name="Step1" xml:space="preserve">
+    <value>1. 描述需求</value>
+  </data>
+  <data name="Step2" xml:space="preserve">
+    <value>2. 检查建议</value>
+  </data>
+  <data name="Step3" xml:space="preserve">
+    <value>3. 优化与创建</value>
+  </data>
+  <data name="UserPromptPlaceholder" xml:space="preserve">
+    <value>例如：我需要存储图书信息，包括标题、作者（应链接到 Author 结构）、出版年份、ISBN、简短摘要和封面图片 URL。</value>
+  </data>
+</root>

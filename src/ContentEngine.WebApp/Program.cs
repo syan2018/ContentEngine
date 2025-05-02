@@ -2,12 +2,17 @@ using ContentEngine.WebApp.Components;
 using ContentEngine.WebApp.Core.Storage;
 using ContentEngine.WebApp.Core.DataPipeline.Services;
 using ConfigurableAIProvider.Extensions;
+using Microsoft.AspNetCore.Localization;
+using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// 1. 添加本地化服务
+builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
 
 // 注册 LiteDB 上下文为单例服务
 builder.Services.AddSingleton<LiteDbContext>();
@@ -22,6 +27,20 @@ builder.Services.AddScoped<IDataEntryService, DataEntryService>();
 builder.Services.AddConfigurableAIProvider(builder.Configuration);
 // ******************************************
 
+// 2. 配置请求本地化选项 (可选，但推荐)
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    // 定义支持的语言文化
+    var supportedCultures = new[]
+    {
+        new CultureInfo("en"),
+        new CultureInfo("zh")
+    };
+    options.DefaultRequestCulture = new RequestCulture("zh");
+    options.SupportedCultures = supportedCultures;
+    options.SupportedUICultures = supportedCultures;
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -31,6 +50,9 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
+// 3. 使用本地化中间件 (重要：放在请求处理管道的早期，但在路由之后通常是好的)
+app.UseRequestLocalization();
 
 app.UseHttpsRedirection();
 

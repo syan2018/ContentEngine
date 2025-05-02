@@ -1,0 +1,115 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="AIAnalysisBookIntro" xml:space="preserve">
+    <value>Based on your description for storing book information, I suggest the following structure:</value>
+  </data>
+  <data name="AIAnalysisGeneric" xml:space="preserve">
+    <value>AI analysis complete. Suggested fields will be shown here based on your prompt. Please provide more details for a specific suggestion.</value>
+  </data>
+  <data name="AIRefineInstruction" xml:space="preserve">
+    <value>We can refine the types (e.g., specify URL validation for CoverImageUrl) and required fields in the next step.</value>
+  </data>
+  <data name="AIResultHeader" xml:space="preserve">
+    <value>AI Analysis &amp; Suggestion</value>
+  </data>
+  <data name="AIResultInstruction" xml:space="preserve">
+    <value>Review the suggestion below. You'll be able to refine it in the next step.</value>
+  </data>
+  <data name="AnalysisError" xml:space="preserve">
+    <value>An error occurred while analyzing the prompt. Please try again.</value>
+  </data>
+  <data name="AnalyzeButton" xml:space="preserve">
+    <value>Analyze Prompt</value>
+  </data>
+  <data name="AnalyzingStatus" xml:space="preserve">
+    <value>Analyzing...</value>
+  </data>
+  <data name="DataNeedsHeader" xml:space="preserve">
+    <value>Describe Your Data Needs</value>
+  </data>
+  <data name="DataNeedsInstruction" xml:space="preserve">
+    <value>Provide a detailed description of the information you want to structure. The more detail, the better the AI suggestion.</value>
+  </data>
+  <data name="FieldAuthor" xml:space="preserve">
+    <value>Author</value>
+  </data>
+  <data name="FieldCoverImage" xml:space="preserve">
+    <value>CoverImageUrl</value>
+  </data>
+  <data name="FieldISBN" xml:space="preserve">
+    <value>ISBN</value>
+  </data>
+  <data name="FieldPubYear" xml:space="preserve">
+    <value>PublicationYear</value>
+  </data>
+  <data name="FieldRequired" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="FieldSummary" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="FieldTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="FieldTypeNumber" xml:space="preserve">
+    <value>Number</value>
+  </data>
+  <data name="FieldTypeReference" xml:space="preserve">
+    <value>Reference (Links to '{0}' schema)</value>
+    <comment>Use {0} as placeholder for schema name</comment>
+  </data>
+  <data name="FieldTypeText" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="FieldTypeTextLong" xml:space="preserve">
+    <value>Text (Long)</value>
+  </data>
+  <data name="FieldTypeTextUrl" xml:space="preserve">
+    <value>Text (URL format)</value>
+  </data>
+  <data name="MissingInputError" xml:space="preserve">
+    <value>Please provide both a Schema Name and a description of your data needs.</value>
+  </data>
+  <data name="NextButton" xml:space="preserve">
+    <value>Next: Review Suggestion</value>
+  </data>
+  <data name="PageDescription" xml:space="preserve">
+    <value>Describe the data structure you need, and let AI help you define the schema.</value>
+  </data>
+  <data name="PageTitle" xml:space="preserve">
+    <value>AI Schema Creator</value>
+  </data>
+  <data name="PreviousButton" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="ProceedError" xml:space="preserve">
+    <value>Cannot proceed without a suggested schema. Please analyze the prompt first.</value>
+  </data>
+  <data name="SchemaBasicsHeader" xml:space="preserve">
+    <value>Schema Basics</value>
+  </data>
+  <data name="SchemaDescLabel" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="SchemaDescPlaceholder" xml:space="preserve">
+    <value>Briefly describe the purpose of this schema</value>
+  </data>
+  <data name="SchemaNameLabel" xml:space="preserve">
+    <value>Schema Name</value>
+  </data>
+  <data name="SchemaNamePlaceholder" xml:space="preserve">
+    <value>e.g., ProductCatalog, UserProfile, BlogPost</value>
+  </data>
+  <data name="Step1" xml:space="preserve">
+    <value>1. Describe Needs</value>
+  </data>
+  <data name="Step2" xml:space="preserve">
+    <value>2. Review Suggestion</value>
+  </data>
+  <data name="Step3" xml:space="preserve">
+    <value>3. Refine &amp; Create</value>
+  </data>
+  <data name="UserPromptPlaceholder" xml:space="preserve">
+    <value>Example: I need to store information about books, including title, author (which should link to an Author schema), publication year, ISBN, a short summary, and cover image URL.</value>
+  </data>
+</root>
