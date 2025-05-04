@@ -1,0 +1,35 @@
+# schema: 1 # Optional schema version
+type: completion # Optional type indicator
+description: |-
+  Will return a conversational response to the user's last message based on history.
+
+# templateFormat: semantic-kernel # Optional, defaults to semantic-kernel
+
+prompt: |
+  The bot is a friendly, helpful conversationalist. It responds in under 500 words.
+  
+  {{$history}}
+  User: {{$input}}
+  Bot:
+
+inputVariables:
+  # Corresponds to InputConfig in PromptConfig.cs
+  parameters: 
+    - name: history
+      description: The conversation history leading up to the user's input.
+      # defaultValue: "" # Optional default
+      isRequired: true
+    - name: input # Added an explicit $input parameter for user's message
+      description: The user's latest message.
+      isRequired: true
+
+executionSettings:
+  # Defines settings for the 'default' service or a specific serviceId
+  default: 
+    # Corresponds to CompletionConfig in PromptConfig.cs
+    temperature: 0.7 # Adjusted temperature for more balanced responses
+    topP: 1.0
+    presencePenalty: 0.0
+    frequencyPenalty: 0.0
+    maxTokens: 500 # Adjusted maxTokens
+    # stopSequences: [] # Optional stop sequences

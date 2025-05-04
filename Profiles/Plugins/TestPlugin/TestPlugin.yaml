@@ -1,0 +1,8 @@
+# Configuration for TestPlugin
+name: TestPlugin
+description: A simple plugin for testing purposes.
+
+functions:
+  cSharpFunctions:
+    # Load from the main application assembly since dll is omitted
+    - className: ConfigurableAIProvider.Plugins.TestPluginFunctions 

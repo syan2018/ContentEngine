@@ -7,7 +7,8 @@ models:
   # embedder: azure-embedding-ada 
 
 plugins:
-  
+  - Communicator  # Assumes 'Communicator' is in the global plugin dir or relative
+  - TestPlugin    # Add reference to our new test plugin
 
 # Optional: Override default log level for this specific agent
 logLevel: Information 

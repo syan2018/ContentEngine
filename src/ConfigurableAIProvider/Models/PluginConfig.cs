@@ -1,117 +1,101 @@
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
+using System.Collections.Generic; // Added
+using System.IO; // Added
+using System; // Added
 
-namespace ConfigurableAIProvider.Models;
+namespace ConfigurableAIProvider.Models; // Adjusted namespace
 
-/// <summary>
-/// Represents the configuration for a Semantic Kernel plugin, typically loaded from a plugin.yaml file.
-/// </summary>
 public class PluginConfig
 {
+    // Deserializer setup remains the same
     private static readonly IDeserializer Deserializer = new DeserializerBuilder()
-        .WithNamingConvention(CamelCaseNamingConvention.Instance)
-        // Allow properties not present in YAML to be ignored during deserialization
-        .IgnoreUnmatchedProperties()
-        .Build();
+            .WithNamingConvention(CamelCaseNamingConvention.Instance)
+            .IgnoreUnmatchedProperties() // Keep IgnoreUnmatchedProperties
+            .Build();
 
-    /// <summary>
-    /// Optional name of the plugin. If not provided, it might be inferred from the directory name.
-    /// </summary>
     [YamlMember(Alias = "name")]
     public string? Name { get; set; }
 
-    /// <summary>
-    /// Optional description of the plugin.
-    /// </summary>
     [YamlMember(Alias = "description")]
     public string? Description { get; set; }
 
-    /// <summary>
-    /// Configuration for the functions contained within the plugin.
-    /// </summary>
-    [YamlMember(Alias = "functions")] // Match case used in reference
+    [YamlMember(Alias = "functions")] // Use lowercase 'f' consistent with reference YAML alias
     public FunctionsNode? Functions { get; set; }
 
-    /// <summary>
-    /// Represents the 'functions' node in plugin.yaml.
-    /// </summary>
-    public class FunctionsNode // Renamed from FunctionsConfig to avoid conflict
+    // Renamed inner class to avoid conflict with System.Functions
+    public class FunctionsNode 
     {
-        /// <summary>
-        /// List of semantic function configurations.
-        /// </summary>
         [YamlMember(Alias = "semanticFunctions")]
-        public List<SemanticFunctionConfig>? SemanticFunctions { get; set; }
+        public List<SemanticFunctionConfig>? SemanticFunctions { get; set; } // Use List<> instead of array
 
-        /// <summary>
-        /// List of C# (native) function configurations.
-        /// </summary>
         [YamlMember(Alias = "cSharpFunctions")]
-        public List<CSharpFunctionConfig>? CSharpFunctions { get; set; } // Corrected type to List
+        public List<CSharpFunctionConfig>? CSharpFunctions { get; set; } // Use List<> instead of array
+
+        // Renamed inner class
+        public class SemanticFunctionConfig 
+        {
+            [YamlMember(Alias = "path")]
+            public string? Path { get; set; } // Use PascalCase for property
+
+            // ExposeToPlanner removed for simplicity, aligning with reference base
+            // [YamlMember(Alias = "exposeToPlanner")]
+            // public bool ExposeToPlanner { get; set; } = true;
+        }
+
+        // Renamed inner class
+        public class CSharpFunctionConfig 
+        {
+            [YamlMember(Alias = "dll")]
+            public string? Dll { get; set; } // Use PascalCase for property
+
+            [YamlMember(Alias = "className")]
+            public string? ClassName { get; set; } // Use PascalCase for property
+
+            // ExposeToPlanner removed for simplicity
+            // [YamlMember(Alias = "exposeToPlanner")]
+            // public bool? ExposeToPlanner { get; set; }
+        }
     }
 
-    /// <summary>
-    /// Configuration for a single semantic function reference.
-    /// </summary>
-    public class SemanticFunctionConfig
-    {
-        /// <summary>
-        /// Relative path to the .prompt.yaml file for the semantic function.
-        /// </summary>
-        [YamlMember(Alias = "file")] // Changed from 'path' to 'file' based on KernelExtensions logic
-        public string? File { get; set; }
-
-        // ExposeToPlanner might be handled differently in newer SK or planner implementations
-        // [YamlMember(Alias = "exposeToPlanner")]
-        // public bool ExposeToPlanner { get; set; } = true;
-    }
-
-    /// <summary>
-    /// Configuration for a single C# function reference.
-    /// </summary>
-    public class CSharpFunctionConfig
-    {
-        /// <summary>
-        /// Relative path to the DLL containing the native function.
-        /// </summary>
-        [YamlMember(Alias = "dll")]
-        public string? Dll { get; set; }
-
-        /// <summary>
-        /// The fully qualified name of the class containing the native functions.
-        /// </summary>
-        [YamlMember(Alias = "className")]
-        public string? ClassName { get; set; }
-
-        // ExposeToPlanner might be handled differently
-        // [YamlMember(Alias = "exposeToPlanner")]
-        // public bool? ExposeToPlanner { get; set; }
-    }
-
-    /// <summary>
-    /// Deserializes a PluginConfig from a YAML file.
-    /// </summary>
-    /// <param name="filePath">The absolute path to the plugin.yaml file.</param>
-    /// <returns>The deserialized PluginConfig.</returns>
-    /// <exception cref="FileNotFoundException">Thrown if the file does not exist.</exception>
-    /// <exception cref="YamlDotNet.Core.YamlException">Thrown on YAML parsing errors.</exception>
+    // Static methods remain mostly the same, ensure validation is present
     public static PluginConfig FromFile(string filePath)
     {
         if (!System.IO.File.Exists(filePath))
         {
             throw new FileNotFoundException("Plugin configuration file not found.", filePath);
         }
-        return Deserializer.Deserialize<PluginConfig>(System.IO.File.ReadAllText(filePath));
+        var yamlContent = System.IO.File.ReadAllText(filePath);
+        return FromYamlInternal(yamlContent, filePath);
     }
 
-    /// <summary>
-    /// Deserializes a PluginConfig from a YAML string.
-    /// </summary>
-    /// <param name="yaml">The YAML content.</param>
-    /// <returns>The deserialized PluginConfig.</returns>
-    /// <exception cref="YamlDotNet.Core.YamlException">Thrown on YAML parsing errors.</exception>
     public static PluginConfig FromYaml(string yaml)
     {
-        return Deserializer.Deserialize<PluginConfig>(yaml);
+        return FromYamlInternal(yaml, "[YAML Content]");
     }
-} 
+    
+    private static PluginConfig FromYamlInternal(string yaml, string sourceIdentifier)
+    {
+        PluginConfig config;
+        try
+        {
+            config = Deserializer.Deserialize<PluginConfig>(yaml);
+        }
+        catch (YamlDotNet.Core.YamlException ex)
+        {
+            throw new InvalidDataException($"Failed to parse YAML in plugin configuration source: {sourceIdentifier}. Error: {ex.Message}", ex);
+        }
+
+        // Basic validation (can be expanded)
+        if (config.Functions == null || 
+            (config.Functions.SemanticFunctions == null && config.Functions.CSharpFunctions == null) ||
+            (config.Functions.SemanticFunctions?.Count == 0 && config.Functions.CSharpFunctions?.Count == 0))
+        {
+             // Log a warning if a plugin defines no functions, as it might be unintentional.
+             // Consider using proper logging if available instead of Console.WriteLine
+             Console.WriteLine($"Warning: Plugin configuration source '{sourceIdentifier}' defines a plugin '{config.Name ?? "(unknown)"}' with no functions.");
+        }
+        
+        return config;
+    }
+}

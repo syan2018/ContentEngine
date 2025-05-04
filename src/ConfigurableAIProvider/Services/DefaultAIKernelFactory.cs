@@ -11,7 +11,8 @@ using System.Threading.Tasks;
 using System.Linq;
 using System.IO;
 using System;
-using ConfigurableAIProvider.Extensions;
+// Use an alias to distinguish our KernelExtensions from Microsoft's
+using CaipExtensions = ConfigurableAIProvider.Extensions;
 using ConfigurableAIProvider.Models; // Ensure KernelExtensions are available
 
 namespace ConfigurableAIProvider.Services;
@@ -162,87 +163,106 @@ public class DefaultAIKernelFactory : IAIKernelFactory
         }
     }
 
-    private Task LoadPluginsAsync(Kernel kernel, AgentConfig agentConfig, string agentName)
+    /// <summary>
+    /// Loads plugins specified in the agent configuration into the kernel.
+    /// It resolves plugin paths relative to the agent's directory and the global plugins directory.
+    /// It expects each plugin directory to contain a PluginName.yaml configuration file.
+    /// </summary>
+    private async Task LoadPluginsAsync(Kernel kernel, AgentConfig agentConfig, string agentName)
     {
         if (agentConfig.Plugins == null || !agentConfig.Plugins.Any())
-        {
-            _logger.LogInformation("No plugins specified for agent '{AgentName}'.", agentName);
-            return Task.CompletedTask;
+        {   
+            _logger.LogInformation("No plugins specified in configuration for agent '{AgentName}'.", agentName);
+            await Task.CompletedTask; // Use await Task.CompletedTask for async method without async ops
+            return;
         }
 
-        // --- Determine Base Paths ---
-        // Agent-specific plugins are expected within the agent's config directory.
-        // IAgentConfigLoader should provide the base path for the *loaded* agent config.
+        // Determine base paths for plugin resolution
         string agentOutputDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, _providerOptions.AgentsDirectory, agentName));
-        
-        // Global plugins path from options (relative to AppContext.BaseDirectory)
         string? globalPluginsOutputDirectory = !string.IsNullOrWhiteSpace(_providerOptions.GlobalPluginsDirectory)
             ? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, _providerOptions.GlobalPluginsDirectory))
             : null;
+        _logger.LogDebug("Agent-specific config base directory: {AgentDir}", agentOutputDirectory);
         _logger.LogDebug("Global plugins base directory: {GlobalDir}", globalPluginsOutputDirectory ?? "N/A");
-        // --- End Base Paths ---
 
+        _logger.LogInformation("Loading {PluginCount} plugin reference(s) for agent '{AgentName}'.", agentConfig.Plugins.Count, agentName);
 
-        _logger.LogInformation("Loading plugins for agent '{AgentName}'.", agentName);
+        // Use the logger factory to create logger for the aliased extensions type
+        var kernelExtensionsLogger = _loggerFactory.CreateLogger(typeof(CaipExtensions.KernelExtensions).FullName ?? "CaipKernelExtensions");
 
         foreach (var pluginReference in agentConfig.Plugins)
         {
-            if (string.IsNullOrWhiteSpace(pluginReference)) continue;
+            if (string.IsNullOrWhiteSpace(pluginReference)) 
+            {
+                _logger.LogWarning("Empty plugin reference found for agent '{AgentName}', skipping.", agentName);
+                continue;
+            }
 
+            string? resolvedPluginDirectoryPath = null;
             string? resolvedPluginConfigPath = null;
+            string pluginLogPrefix = $"Agent '{agentName}', Plugin Ref '{pluginReference}'"; // Prefix for logs related to this reference
+
             try
             {
-                // Resolve the path to the plugin directory first
-                string? pluginDirectoryPath = ResolvePluginDirectoryPath(pluginReference, agentOutputDirectory, globalPluginsOutputDirectory);
+                // 1. Resolve the plugin directory path
+                resolvedPluginDirectoryPath = ResolvePluginDirectoryPath(pluginReference, agentOutputDirectory, globalPluginsOutputDirectory);
 
-                if (pluginDirectoryPath != null)
+                if (resolvedPluginDirectoryPath == null)
                 {
-                     resolvedPluginConfigPath = Path.Combine(pluginDirectoryPath, "plugin.yaml"); // Expected config file name
+                    _logger.LogWarning("{PluginLogPrefix}: Could not resolve plugin directory. Looked relative to agent config dir ('{AgentBasePath}') and global dir ('{GlobalBasePath}'). Skipping plugin.", 
+                                     pluginLogPrefix, agentOutputDirectory, globalPluginsOutputDirectory ?? "N/A");
+                    continue; // Skip if directory not found
+                }
 
-                     if (File.Exists(resolvedPluginConfigPath))
-                     {
-                         _logger.LogInformation("Attempting to load plugin for agent '{AgentName}' from config: {PluginConfigPath}", agentName, resolvedPluginConfigPath);
-                        
-                         // Use the ImportPluginFromConfig extension method
-                         var plugin = ConfigurableAIProvider.Extensions.KernelExtensions.ImportPluginFromConfig(
-                             kernel, 
-                             resolvedPluginConfigPath, 
-                             _loggerFactory.CreateLogger(nameof(ConfigurableAIProvider.Extensions.KernelExtensions)));
-                        
-                         // KernelExtensions.ImportPluginFromConfig returns the plugin. 
-                         // In SK 1.x, KernelPluginFactory.CreateFromFunctions doesn't automatically add it to kernel.Plugins.
-                         // We might need to add it manually if it's not accessible otherwise.
-                         if (plugin != null && !kernel.Plugins.Contains(plugin.Name))
-                         {
-                              kernel.Plugins.Add(plugin); // Manually add the created plugin to the kernel's collection
-                             _logger.LogDebug("Successfully imported and added plugin '{PluginName}' via config for agent '{AgentName}'.", plugin.Name, agentName);
-                         }
-                         else if (plugin != null)
-                         {
-                             _logger.LogDebug("Plugin '{PluginName}' was already present in the kernel after import from config.", plugin.Name);
-                         }
-                         // If plugin is null, ImportPluginFromConfig would have logged the error.
-                     }
-                     else
-                     {
-                          _logger.LogWarning("Plugin configuration file 'plugin.yaml' not found in resolved directory: {PluginDirectoryPath} (from reference '{PluginReference}') for agent '{AgentName}'. Cannot load plugin via config. Skipping.", 
-                                           pluginDirectoryPath, pluginReference, agentName);
-                     }
-                }
-                else
+                // 2. Determine the expected configuration file path (PluginName.yaml)
+                string potentialPluginName = Path.GetFileName(resolvedPluginDirectoryPath); // Infer name from dir
+                resolvedPluginConfigPath = Path.Combine(resolvedPluginDirectoryPath, $"{potentialPluginName}.yaml"); 
+                _logger.LogDebug("{PluginLogPrefix}: Resolved directory to '{ResolvedDir}'. Expecting config file at '{ResolvedConfigPath}'.", 
+                                 pluginLogPrefix, resolvedPluginDirectoryPath, resolvedPluginConfigPath);
+
+
+                // 3. Check if the config file exists
+                if (!File.Exists(resolvedPluginConfigPath))
                 {
-                     _logger.LogWarning("Could not resolve plugin directory for reference '{PluginReference}' for agent '{AgentName}'. Looked relative to agent config dir ('{AgentBasePath}') and global dir ('{GlobalBasePath}'). Skipping plugin.", 
-                                      pluginReference, agentName, agentOutputDirectory, globalPluginsOutputDirectory ?? "N/A");
+                    _logger.LogWarning("{PluginLogPrefix}: Expected plugin configuration file not found at '{ResolvedConfigPath}'. Skipping plugin load via this reference.", 
+                                     pluginLogPrefix, resolvedPluginConfigPath);
+                    continue; // Skip if config file doesn't exist
                 }
+
+                // 4. Attempt to load the plugin using the Kernel Extension method (using the alias)
+                _logger.LogInformation("{PluginLogPrefix}: Attempting to load plugin from config: {PluginConfigPath}", pluginLogPrefix, resolvedPluginConfigPath);
+                
+                KernelPlugin? plugin = CaipExtensions.KernelExtensions.ImportPluginFromConfig(
+                    kernel, 
+                    resolvedPluginConfigPath, 
+                    resolvedPluginDirectoryPath, 
+                    kernelExtensionsLogger); 
+
+                // 5. Register the loaded plugin with the kernel if successful
+                if (plugin != null)
+                {
+                    if (!kernel.Plugins.Contains(plugin.Name))
+                    {
+                        kernel.Plugins.Add(plugin); // Add the loaded plugin to the kernel's collection
+                        _logger.LogInformation("{PluginLogPrefix}: Successfully imported and added plugin '{PluginName}' ({FunctionCount} functions) to kernel.", 
+                                             pluginLogPrefix, plugin.Name, plugin.Count());
+                    }
+                    else
+                    {
+                        // This might happen if different references lead to the same plugin name being loaded
+                        _logger.LogWarning("{PluginLogPrefix}: Plugin with name '{PluginName}' was already present in the kernel. Skipping duplicate addition from config '{ResolvedConfigPath}'.", 
+                                         pluginLogPrefix, plugin.Name, resolvedPluginConfigPath);
+                    }
+                }
+                // If plugin is null, the KernelExtension method already logged the reason for failure.
             }
-            catch (Exception ex)
+            catch (Exception ex) // Catch unexpected errors during the process for this plugin reference
             {
-                _logger.LogError(ex, "Failed to load plugin from reference '{PluginReference}' (resolved config path: {ResolvedPath}) for agent '{AgentName}'. Skipping this plugin.", 
-                                 pluginReference, resolvedPluginConfigPath ?? "[Resolution Failed]", agentName);
+                _logger.LogError(ex, "{PluginLogPrefix}: An unexpected error occurred while processing plugin reference (Resolved Dir: {ResolvedDir}, Config: {ResolvedConfig}). Skipping this plugin reference.", 
+                                 pluginLogPrefix, resolvedPluginDirectoryPath ?? "[Dir Resolution Failed]", resolvedPluginConfigPath ?? "[Cfg Resolution Failed]");
             }
         }
-
-        return Task.CompletedTask;
+        await Task.CompletedTask; // Added await here
     }
 
     /// <summary>

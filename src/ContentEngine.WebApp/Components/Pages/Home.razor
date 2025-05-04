@@ -10,7 +10,7 @@
 
 @if (isLoading)
 {
-    <p><em>Loading AI response...</em></p>
+    <p><em>Loading AI and Plugin responses...</em></p>
 }
 else if (!string.IsNullOrEmpty(errorMessage))
 {
@@ -18,7 +18,11 @@ else if (!string.IsNullOrEmpty(errorMessage))
 }
 else
 {
-    <p>AI Response: <strong>@aiResponse</strong></p>
+    <p>AI (Prompt) Response: <strong>@aiResponse</strong></p>
+    <hr />
+    <p>Test Plugin (C#) Response: <strong>@pluginResponse</strong></p>
+    <hr />
+    <p>Communicator Plugin (Semantic) Response: <strong>@communicatorResponse</strong></p>
 }
 
 Welcome to your new app.
@@ -26,39 +30,74 @@ Welcome to your new app.
 @code {
     private bool isLoading = true;
     private string? aiResponse;
+    private string? pluginResponse;
+    private string? communicatorResponse;
     private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
         isLoading = true;
-        Kernel? kernel = null; // Initialize kernel as nullable
         try
         {
-            // Assuming 'SimpleChat' agent is configured to use 'ollama-qwen3-8b'
-            kernel = await AiKernelFactory.BuildKernelAsync("SimpleChat");
+            var kernel = await AiKernelFactory.BuildKernelAsync("SimpleChat");
 
             if (kernel == null)
             {
                 throw new InvalidOperationException("Failed to create the AI Kernel for agent 'SimpleChat'.");
             }
+            
+            if (!kernel.Plugins.Contains("TestPlugin"))
+            {
+                Console.WriteLine("Warning: TestPlugin was not found in the loaded kernel plugins.");
+            }
+            if (!kernel.Plugins.Contains("Communicator"))
+            {
+                Console.WriteLine("Warning: Communicator plugin was not found in the loaded kernel plugins.");
+            }
 
-            // Use a more specific prompt to increase chances of getting the exact desired output
-            var result = await kernel.InvokePromptAsync("Hello World!");
-            aiResponse = result.GetValue<string>();
+            var promptResult = await kernel.InvokePromptAsync("Briefly introduce yourself.");
+            aiResponse = promptResult.GetValue<string>();
+
+            try
+            {
+                var pluginArgs = new KernelArguments
+                {
+                    ["name"] = "Syan"
+                };
+                var pluginResult = await kernel.InvokeAsync("TestPlugin", "SayHello", pluginArgs);
+                pluginResponse = pluginResult.GetValue<string>();
+            }
+            catch (Exception ex)
+            {
+                pluginResponse = $"Error invoking TestPlugin: {ex.Message}";
+                Console.WriteLine(ex);
+            }
+
+            try
+            {
+                var commArgs = new KernelArguments
+                {
+                    { "input", "你好吗？" },
+                    { "history", "" }
+                };
+                var commResult = await kernel.InvokeAsync("Communicator", "ChatWithUser", commArgs);
+                communicatorResponse = commResult.GetValue<string>();
+            }
+            catch (Exception ex)
+            {
+                communicatorResponse = $"Error invoking Communicator: {ex.Message}";
+                Console.WriteLine(ex);
+            }
+
         }
         catch (Exception ex)
         {
-            // Log the full exception details for debugging
-            Console.Error.WriteLine($"Error invoking AI Kernel: {ex}"); 
-            errorMessage = $"Failed to get AI response: {ex.Message}"; // Show a simpler message to the user
+            await Console.Error.WriteLineAsync($"Error during AI/Plugin invocation setup: {ex}");
+            errorMessage = $"Failed to get responses: {ex.Message}";
         }
         finally
         {
             isLoading = false;
-            // Kernel disposal is usually handled by the DI container if the factory provides transient or scoped instances.
-            // If the factory provides a singleton or you manage lifecycle manually, ensure proper disposal.
-            // (kernel as IDisposable)?.Dispose(); // Example if manual disposal is needed
         }
-        // No need to call StateHasChanged() here as Blazor handles it after OnInitializedAsync
     }
 }
