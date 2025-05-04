@@ -24,6 +24,11 @@ public class AgentConfig
     [YamlMember(Alias = "models")]
     public Dictionary<string, string>? Models { get; set; }
 
+    /// <summary>
+    /// List of plugin configurations to load for this agent.
+    /// Each string should be a path relative to the AgentsBasePath,
+    /// pointing to a directory containing a plugin.yaml file.
+    /// </summary>
     [YamlMember(Alias = "plugins")]
     public List<string>? Plugins { get; set; }
 

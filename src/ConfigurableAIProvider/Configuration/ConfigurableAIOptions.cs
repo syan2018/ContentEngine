@@ -38,7 +38,7 @@ public class ConfigurableAIOptions
     /// The optional root directory path for globally shared plugins.
     /// If set, plugins referenced in agent.yaml might be resolved against this path.
     /// </summary>
-    public string? GlobalPluginsDirectory { get; set; } = "Plugins"; // Keep the old default for now
+    public string? GlobalPluginsDirectory { get; set; } = "Profiles/Plugins"; // Keep the old default for now
 
     /// <summary>
     /// The current operating environment (e.g., "dev", "prod").

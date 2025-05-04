@@ -2,9 +2,13 @@
 
     <PropertyGroup>
         <OutputType>Library</OutputType>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <IsPackable>true</IsPackable>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <Description>A configurable provider for Semantic Kernel instances based on YAML files.</Description>
+        <PackageTags>semantic-kernel;ai;configuration;llm</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>

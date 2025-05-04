@@ -3,7 +3,7 @@
 
 # Example: Use a different model ID during development
 models:
-  chat: gemini-2.5-flash # Maybe a cheaper/faster dev deployment
+  chat: ollama-qwen3-8b # Maybe a cheaper/faster dev deployment
 
 # Example: Maybe disable a plugin during development
 # plugins:
