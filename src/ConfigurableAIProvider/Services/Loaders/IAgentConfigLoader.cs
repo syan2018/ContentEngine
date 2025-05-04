@@ -1,6 +1,7 @@
 using ConfigurableAIProvider.Configuration;
 using System.Threading.Tasks;
-using System.IO; // Required for exception documentation
+using System.IO;
+using ConfigurableAIProvider.Models; // Required for exception documentation
 
 // Update namespace
 namespace ConfigurableAIProvider.Services.Loaders;

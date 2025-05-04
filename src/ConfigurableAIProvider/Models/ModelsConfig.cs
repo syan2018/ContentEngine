@@ -1,9 +1,8 @@
+using ConfigurableAIProvider.Configuration;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
-using System.Collections.Generic;
-using System.IO;
 
-namespace ConfigurableAIProvider.Configuration;
+namespace ConfigurableAIProvider.Models;
 
 /// <summary>
 /// Represents the entire collection of model definitions loaded from models.yaml.
@@ -17,10 +16,10 @@ public class ModelsConfig
 
     /// <summary>
     /// Dictionary mapping unique model definition IDs (e.g., "azure-gpt4o-mini-std")
-    /// to their corresponding ModelDefinition objects.
+    /// to their corresponding ModelConfig objects.
     /// </summary>
     [YamlMember(Alias = "models")]
-    public Dictionary<string, ModelDefinition>? Models { get; set; }
+    public Dictionary<string, ModelConfig>? Models { get; set; }
 
     public static ModelsConfig FromFile(string filePath)
     {

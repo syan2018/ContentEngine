@@ -8,6 +8,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using ConfigurableAIProvider.Models;
 
 // Update namespace
 namespace ConfigurableAIProvider.Services.Providers;

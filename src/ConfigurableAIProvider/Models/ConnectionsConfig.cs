@@ -1,9 +1,8 @@
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
-using System.Collections.Generic;
-using System.IO; // Required for File.ReadAllText
 
-namespace ConfigurableAIProvider.Configuration;
+
+namespace ConfigurableAIProvider.Models;
 
 /// <summary>
 /// Represents the overall connections configuration loaded from connections.yaml.

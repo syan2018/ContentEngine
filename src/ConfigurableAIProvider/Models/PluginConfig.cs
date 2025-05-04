@@ -1,9 +1,7 @@
-using System.Collections.Generic;
-using System.IO;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace ConfigurableAIProvider.Configuration;
+namespace ConfigurableAIProvider.Models;
 
 /// <summary>
 /// Represents the configuration for a Semantic Kernel plugin, typically loaded from a plugin.yaml file.

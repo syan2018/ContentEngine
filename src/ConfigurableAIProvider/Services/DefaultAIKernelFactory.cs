@@ -11,7 +11,8 @@ using System.Threading.Tasks;
 using System.Linq;
 using System.IO;
 using System;
-using ConfigurableAIProvider.Extensions; // Ensure KernelExtensions are available
+using ConfigurableAIProvider.Extensions;
+using ConfigurableAIProvider.Models; // Ensure KernelExtensions are available
 
 namespace ConfigurableAIProvider.Services;
 
@@ -119,36 +120,36 @@ public class DefaultAIKernelFactory : IAIKernelFactory
             try
             {
                 // 1. Get the full Model Definition from the ID
-                ModelDefinition modelDefinition = await _modelProvider.GetModelDefinitionAsync(modelDefinitionId);
+                ModelConfig modelConfig = await _modelProvider.GetModelDefinitionAsync(modelDefinitionId);
 
                 // 2. Get the resolved Connection Configuration
-                if (string.IsNullOrWhiteSpace(modelDefinition.Connection))
+                if (string.IsNullOrWhiteSpace(modelConfig.Connection))
                 {
                      _logger.LogWarning("Skipping model definition '{ModelDefinitionId}' referenced by agent '{AgentName}' (logical name '{LogicalModelName}') because it's missing a 'connection' property.", 
                                       modelDefinitionId, agentName, logicalModelName);
                     continue;
                 }
-                ConnectionConfig connectionConfig = await _connectionProvider.GetResolvedConnectionAsync(modelDefinition.Connection);
+                ConnectionConfig connectionConfig = await _connectionProvider.GetResolvedConnectionAsync(modelConfig.Connection);
                 
                 // 3. Find the appropriate configurator based on the *connection's* service type
                 var configurator = _serviceConfigurators.FirstOrDefault(c => c.HandledServiceType == connectionConfig.ServiceType);
 
                 if (configurator != null)
                 {
-                    // 4. Configure the service using the ModelDefinition and ConnectionConfig
+                    // 4. Configure the service using the ModelConfig and ConnectionConfig
                     _logger.LogDebug("Using {ConfiguratorType} to configure AI service for model definition '{ModelDefinitionId}' (Actual Model ID: {ActualModelId}) using connection '{ConnectionName}' for agent '{AgentName}'.",
-                                    configurator.GetType().Name, modelDefinitionId, modelDefinition.ModelId, modelDefinition.Connection, agentName);
-                    configurator.ConfigureService(builder, modelDefinition, connectionConfig);
+                                    configurator.GetType().Name, modelDefinitionId, modelConfig.ModelId, modelConfig.Connection, agentName);
+                    configurator.ConfigureService(builder, modelConfig, connectionConfig);
                 }
                 else
                 {
                     _logger.LogWarning("No service configurator found for ServiceType '{ServiceType}' used by connection '{ConnectionName}' (referenced by model definition '{ModelDefinitionId}'). Skipping logical model '{LogicalModelName}'.",
-                                     connectionConfig.ServiceType, modelDefinition.Connection, modelDefinitionId, logicalModelName);
+                                     connectionConfig.ServiceType, modelConfig.Connection, modelDefinitionId, logicalModelName);
                 }
             }
             catch (KeyNotFoundException knfex)
             {
-                // Handle cases where ModelDefinition ID or Connection Name isn't found
+                // Handle cases where ModelConfig ID or Connection Name isn't found
                 _logger.LogError(knfex, "Configuration lookup failed for logical model '{LogicalModelName}' (referenced Model Definition ID '{ModelDefinitionId}' or Connection '{ConnectionName}') in agent '{AgentName}'. Check models.yaml and connections.yaml. Skipping this model.",
                                  logicalModelName, modelDefinitionId, agentConfig.Models.GetValueOrDefault(logicalModelName), agentName);
             }

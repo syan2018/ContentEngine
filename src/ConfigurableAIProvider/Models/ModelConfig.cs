@@ -1,12 +1,11 @@
 using YamlDotNet.Serialization;
-using System.Collections.Generic;
 
-namespace ConfigurableAIProvider.Configuration;
+namespace ConfigurableAIProvider.Models;
 
 /// <summary>
 /// Represents a single reusable model definition from models.yaml.
 /// </summary>
-public class ModelDefinition
+public class ModelConfig
 {
     [YamlMember(Alias = "connection")]
     public string? Connection { get; set; } // Required: Refers to a key in connections.yaml

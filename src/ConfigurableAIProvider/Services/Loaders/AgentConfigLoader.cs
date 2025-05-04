@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
+using ConfigurableAIProvider.Models;
 
 // Update namespace
 namespace ConfigurableAIProvider.Services.Loaders;

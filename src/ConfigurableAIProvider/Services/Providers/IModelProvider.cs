@@ -1,11 +1,10 @@
-using ConfigurableAIProvider.Configuration;
-using System.Threading.Tasks;
-using System.Collections.Generic; // For KeyNotFoundException docs
+
+using ConfigurableAIProvider.Models; 
 
 namespace ConfigurableAIProvider.Services.Providers;
 
 /// <summary>
-/// Provides access to centrally defined AI model configurations (ModelDefinition).
+/// Provides access to centrally defined AI model configurations (ModelConfig).
 /// </summary>
 public interface IModelProvider
 {
@@ -13,7 +12,7 @@ public interface IModelProvider
     /// Gets the configuration definition for a specific model by its unique ID.
     /// </summary>
     /// <param name="modelDefinitionId">The unique identifier of the model definition (key in models.yaml).</param>
-    /// <returns>The corresponding ModelDefinition.</returns>
+    /// <returns>The corresponding ModelConfig.</returns>
     /// <exception cref="KeyNotFoundException">If the model definition ID is not found.</exception>
-    Task<ModelDefinition> GetModelDefinitionAsync(string modelDefinitionId);
+    Task<ModelConfig> GetModelDefinitionAsync(string modelDefinitionId);
 } 

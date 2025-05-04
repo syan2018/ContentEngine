@@ -7,18 +7,19 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using ConfigurableAIProvider.Models;
 
 namespace ConfigurableAIProvider.Services.Providers;
 
 /// <summary>
-/// Loads and caches ModelDefinition configurations from the central models.yaml file.
+/// Loads and caches ModelConfig configurations from the central models.yaml file.
 /// </summary>
 public class ModelProvider : IModelProvider
 {
     private readonly ConfigurableAIOptions _options;
     private readonly ILogger<ModelProvider> _logger;
     // Cache loaded definitions directly
-    private readonly ConcurrentDictionary<string, ModelDefinition> _modelDefinitions = new();
+    private readonly ConcurrentDictionary<string, ModelConfig> _modelDefinitions = new();
     private ModelsConfig? _loadedConfig;
     private readonly SemaphoreSlim _initSemaphore = new SemaphoreSlim(1, 1);
 
@@ -71,10 +72,10 @@ public class ModelProvider : IModelProvider
                               _logger.LogWarning("Model definition '{ModelId}' is missing required 'connection' or 'modelId'. It will not be available.", kvp.Key);
                               continue; // Skip invalid entries
                          }
-                          _modelDefinitions.TryAdd(kvp.Key, kvp.Value);
+                         _modelDefinitions.TryAdd(kvp.Key, kvp.Value);
                      }
                 }
-                 _logger.LogInformation("Cached {Count} valid model definitions.", _modelDefinitions.Count);
+                _logger.LogInformation("Cached {Count} valid model definitions.", _modelDefinitions.Count);
 
             }
             catch (Exception ex)
@@ -92,7 +93,7 @@ public class ModelProvider : IModelProvider
         }
     }
 
-    public async Task<ModelDefinition> GetModelDefinitionAsync(string modelDefinitionId)
+    public async Task<ModelConfig> GetModelDefinitionAsync(string modelDefinitionId)
     {
         await EnsureInitializedAsync();
 
@@ -100,12 +101,10 @@ public class ModelProvider : IModelProvider
         {
             return definition;
         }
-        else
-        {
-             _logger.LogWarning("Model definition with ID '{ModelDefinitionId}' not found in the loaded configuration.", modelDefinitionId);
-             // Check if it was present in the file but invalid during init? Log _loadedConfig state?
-             // For simplicity, just throw KeyNotFound if not in the valid cache.
-            throw new KeyNotFoundException($"Model definition with ID '{modelDefinitionId}' not found.");
-        }
+
+        _logger.LogWarning("Model definition with ID '{ModelDefinitionId}' not found in the loaded configuration.", modelDefinitionId);
+        // Check if it was present in the file but invalid during init? Log _loadedConfig state?
+        // For simplicity, just throw KeyNotFound if not in the valid cache.
+        throw new KeyNotFoundException($"Model definition with ID '{modelDefinitionId}' not found.");
     }
 } 

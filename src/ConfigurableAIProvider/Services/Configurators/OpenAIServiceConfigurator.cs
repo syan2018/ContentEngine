@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using System;
 using System.Net.Http;
+using ConfigurableAIProvider.Models;
 
 namespace ConfigurableAIProvider.Services.Configurators;
 
@@ -13,13 +14,13 @@ public class OpenAIServiceConfigurator(ILogger<OpenAIServiceConfigurator> logger
 {
     public ServiceType HandledServiceType => ServiceType.OpenAI;
 
-    public void ConfigureService(IKernelBuilder builder, ModelDefinition modelDefinition, ConnectionConfig connectionConfig)
+    public void ConfigureService(IKernelBuilder builder, ModelConfig modelConfig, ConnectionConfig connectionConfig)
     {
-        // Use properties from modelDefinition
-        if (string.IsNullOrWhiteSpace(connectionConfig.ApiKey) || string.IsNullOrWhiteSpace(modelDefinition.ModelId))
+        // Use properties from modelConfig
+        if (string.IsNullOrWhiteSpace(connectionConfig.ApiKey) || string.IsNullOrWhiteSpace(modelConfig.ModelId))
         {
             logger.LogError("Cannot configure OpenAI service. ApiKey or ModelId is missing for connection '{ConnectionName}', model definition ID corresponding to '{ModelId}'.",
-                             modelDefinition.Connection, modelDefinition.ModelId ?? "[Not Specified]");
+                             modelConfig.Connection, modelConfig.ModelId ?? "[Not Specified]");
             return; 
         }
 
@@ -38,7 +39,7 @@ public class OpenAIServiceConfigurator(ILogger<OpenAIServiceConfigurator> logger
             catch (UriFormatException ex)
             {
                 logger.LogError(ex, "Invalid BaseUrl format specified for connection '{ConnectionName}': {BaseUrl}. OpenAI service will use the default endpoint.", 
-                                 modelDefinition.Connection, connectionConfig.BaseUrl);
+                                 modelConfig.Connection, connectionConfig.BaseUrl);
                 // httpClient remains null, so SK uses default behavior
             }
         }
@@ -46,34 +47,34 @@ public class OpenAIServiceConfigurator(ILogger<OpenAIServiceConfigurator> logger
 
         try
         {
-            // Use modelDefinition.EndpointType and modelDefinition.ModelId
-            switch (modelDefinition.EndpointType)
+            // Use modelConfig.EndpointType and modelConfig.ModelId
+            switch (modelConfig.EndpointType)
             {
                 case EndpointType.ChatCompletion:
                     builder.AddOpenAIChatCompletion(
-                        modelId: modelDefinition.ModelId!, 
+                        modelId: modelConfig.ModelId!, 
                         apiKey: connectionConfig.ApiKey!, 
                         orgId: connectionConfig.OrgId, 
                         httpClient: httpClient // Pass the configured HttpClient (can be null)
                     );
                     logger.LogDebug("Added OpenAI Chat Completion: ModelId={ModelId}{CustomEndpoint}", 
-                                     modelDefinition.ModelId, 
+                                     modelConfig.ModelId, 
                                      httpClient != null ? $" (Endpoint: {httpClient.BaseAddress})" : " (Default Endpoint)");
                     break;
                 case EndpointType.TextCompletion:
                     // If needed, implement TextCompletion similarly, passing the httpClient
-                     logger.LogWarning("OpenAI Text Completion endpoint type specified for model '{ModelId}' but not added by configurator. Use Chat Completion or Embedding.", modelDefinition.ModelId);
+                     logger.LogWarning("OpenAI Text Completion endpoint type specified for model '{ModelId}' but not added by configurator. Use Chat Completion or Embedding.", modelConfig.ModelId);
                     break;
                 default:
                     logger.LogWarning("Unsupported OpenAI endpoint type '{EndpointType}' for model '{ModelId}'.",
-                                     modelDefinition.EndpointType, modelDefinition.ModelId);
+                                     modelConfig.EndpointType, modelConfig.ModelId);
                     break;
             }
         }
         catch (Exception ex)
         {
              // Log general errors during SK service addition
-             logger.LogError(ex, "Failed to add OpenAI service for model '{ModelId}' using connection '{ConnectionName}'.", modelDefinition.ModelId, modelDefinition.Connection);
+             logger.LogError(ex, "Failed to add OpenAI service for model '{ModelId}' using connection '{ConnectionName}'.", modelConfig.ModelId, modelConfig.Connection);
         }
     }
 } 

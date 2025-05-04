@@ -1,11 +1,8 @@
-using System.Collections.Generic;
-using System.IO;
-using System.Linq; // Added for LINQ operations
-using Microsoft.SemanticKernel; // Added for PromptExecutionSettings
+using Microsoft.SemanticKernel;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace ConfigurableAIProvider.Configuration;
+namespace ConfigurableAIProvider.Models;
 
 /// <summary>
 /// Represents the configuration for a Semantic Kernel semantic function,

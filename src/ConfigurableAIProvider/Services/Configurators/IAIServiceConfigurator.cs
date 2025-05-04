@@ -1,4 +1,5 @@
 using ConfigurableAIProvider.Configuration;
+using ConfigurableAIProvider.Models;
 using Microsoft.SemanticKernel;
 
 namespace ConfigurableAIProvider.Services.Configurators;
@@ -17,7 +18,7 @@ public interface IAIServiceConfigurator
     /// Configures the KernelBuilder by adding the appropriate AI service.
     /// </summary>
     /// <param name="builder">The IKernelBuilder to configure.</param>
-    /// <param name="modelDefinition">The centrally defined model configuration.</param>
+    /// <param name="modelConfig">The centrally defined model configuration.</param>
     /// <param name="connectionConfig">The resolved connection configuration.</param>
-    void ConfigureService(IKernelBuilder builder, ModelDefinition modelDefinition, ConnectionConfig connectionConfig);
+    void ConfigureService(IKernelBuilder builder, ModelConfig modelConfig, ConnectionConfig connectionConfig);
 } 

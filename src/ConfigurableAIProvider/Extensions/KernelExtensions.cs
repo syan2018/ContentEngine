@@ -6,7 +6,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks; // Added for Task
 using YamlDotNet.Core; // Added for YamlException
-using ConfigurableAIProvider.Configuration; // Make sure this is present
+using ConfigurableAIProvider.Configuration;
+using ConfigurableAIProvider.Models; // Make sure this is present
 
 namespace ConfigurableAIProvider.Extensions;
 

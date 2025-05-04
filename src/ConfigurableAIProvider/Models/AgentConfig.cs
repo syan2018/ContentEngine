@@ -1,10 +1,8 @@
 using Microsoft.Extensions.Logging;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
-using System.IO;
-using System.Collections.Generic;
 
-namespace ConfigurableAIProvider.Configuration;
+namespace ConfigurableAIProvider.Models;
 
 /// <summary>
 /// Represents the configuration for a specific AI Agent, loaded from YAML.
