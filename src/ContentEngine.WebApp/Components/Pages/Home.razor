@@ -1,6 +1,7 @@
 ﻿@page "/"
 @using Microsoft.SemanticKernel
 @using ConfigurableAIProvider.Services
+@using ConfigurableAIProvider.Services.Factories
 @inject IAIKernelFactory AiKernelFactory
 @attribute [StreamRendering(true)]
 
@@ -8,35 +9,35 @@
 
 <h1>Hello, AI world!</h1>
 
-@if (isLoading)
+@if (_isLoading)
 {
     <p><em>Loading AI and Plugin responses...</em></p>
 }
-else if (!string.IsNullOrEmpty(errorMessage))
+else if (!string.IsNullOrEmpty(_errorMessage))
 {
-    <p style="color: red;">Error: @errorMessage</p>
+    <p style="color: red;">Error: @_errorMessage</p>
 }
 else
 {
-    <p>AI (Prompt) Response: <strong>@aiResponse</strong></p>
+    <p>AI (Prompt) Response: <strong>@_aiResponse</strong></p>
     <hr />
-    <p>Test Plugin (C#) Response: <strong>@pluginResponse</strong></p>
+    <p>Test Plugin (C#) Response: <strong>@_pluginResponse</strong></p>
     <hr />
-    <p>Communicator Plugin (Semantic) Response: <strong>@communicatorResponse</strong></p>
+    <p>Communicator Plugin (Semantic) Response: <strong>@_communicatorResponse</strong></p>
 }
 
 Welcome to your new app.
 
 @code {
-    private bool isLoading = true;
-    private string? aiResponse;
-    private string? pluginResponse;
-    private string? communicatorResponse;
-    private string? errorMessage;
+    private bool _isLoading = true;
+    private string? _aiResponse;
+    private string? _pluginResponse;
+    private string? _communicatorResponse;
+    private string? _errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
-        isLoading = true;
+        _isLoading = true;
         try
         {
             var kernel = await AiKernelFactory.BuildKernelAsync("SimpleChat");
@@ -56,7 +57,7 @@ Welcome to your new app.
             }
 
             var promptResult = await kernel.InvokePromptAsync("Briefly introduce yourself.");
-            aiResponse = promptResult.GetValue<string>();
+            _aiResponse = promptResult.GetValue<string>();
 
             try
             {
@@ -65,11 +66,11 @@ Welcome to your new app.
                     ["name"] = "Syan"
                 };
                 var pluginResult = await kernel.InvokeAsync("TestPlugin", "SayHello", pluginArgs);
-                pluginResponse = pluginResult.GetValue<string>();
+                _pluginResponse = pluginResult.GetValue<string>();
             }
             catch (Exception ex)
             {
-                pluginResponse = $"Error invoking TestPlugin: {ex.Message}";
+                _pluginResponse = $"Error invoking TestPlugin: {ex.Message}";
                 Console.WriteLine(ex);
             }
 
@@ -81,11 +82,11 @@ Welcome to your new app.
                     { "history", "" }
                 };
                 var commResult = await kernel.InvokeAsync("Communicator", "ChatWithUser", commArgs);
-                communicatorResponse = commResult.GetValue<string>();
+                _communicatorResponse = commResult.GetValue<string>();
             }
             catch (Exception ex)
             {
-                communicatorResponse = $"Error invoking Communicator: {ex.Message}";
+                _communicatorResponse = $"Error invoking Communicator: {ex.Message}";
                 Console.WriteLine(ex);
             }
 
@@ -93,11 +94,11 @@ Welcome to your new app.
         catch (Exception ex)
         {
             await Console.Error.WriteLineAsync($"Error during AI/Plugin invocation setup: {ex}");
-            errorMessage = $"Failed to get responses: {ex.Message}";
+            _errorMessage = $"Failed to get responses: {ex.Message}";
         }
         finally
         {
-            isLoading = false;
+            _isLoading = false;
         }
     }
 }

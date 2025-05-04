@@ -1,21 +1,17 @@
 using ConfigurableAIProvider.Configuration;
-using ConfigurableAIProvider.Services.Loaders;     // Added
-using ConfigurableAIProvider.Services.Providers;   // Added
-using ConfigurableAIProvider.Services.Configurators; // Added
-using Microsoft.Extensions.Logging;
-using Microsoft.SemanticKernel;
+using ConfigurableAIProvider.Models;
+using ConfigurableAIProvider.Services.Configurators;
+using ConfigurableAIProvider.Services.Loaders;
+using ConfigurableAIProvider.Services.Providers;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options; // Still needed for GlobalPluginsDirectory from ConfigurableAIOptions
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Linq;
-using System.IO;
-using System;
-// Use an alias to distinguish our KernelExtensions from Microsoft's
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel;
 using CaipExtensions = ConfigurableAIProvider.Extensions;
-using ConfigurableAIProvider.Models; // Ensure KernelExtensions are available
 
-namespace ConfigurableAIProvider.Services;
+// Ensure KernelExtensions are available
+
+namespace ConfigurableAIProvider.Services.Factories;
 
 /// <summary>
 /// Default implementation of IAIKernelFactory that builds Kernels based on Agent configurations 

@@ -2,14 +2,12 @@ using ConfigurableAIProvider.Configuration;
 using ConfigurableAIProvider.Services.Loaders;
 using ConfigurableAIProvider.Services.Providers;
 using ConfigurableAIProvider.Services.Configurators;
-using ConfigurableAIProvider.Services;
+using ConfigurableAIProvider.Services.Factories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Microsoft.SemanticKernel;
 
 namespace ConfigurableAIProvider.Extensions;
 
@@ -40,14 +38,13 @@ public static class ServiceCollectionExtensions
 
         // --- Register AI Service Configurators (Use TryAddEnumerable) ---
         // This ensures all configurators are added to the collection injected via IEnumerable<IAIServiceConfigurator>
-        services.TryAddEnumerable(new[]
-        {
+        services.TryAddEnumerable([
             // Register each configurator implementation
             ServiceDescriptor.Singleton<IAIServiceConfigurator, AzureOpenAIServiceConfigurator>(),
             ServiceDescriptor.Singleton<IAIServiceConfigurator, OpenAIServiceConfigurator>(),
             ServiceDescriptor.Singleton<IAIServiceConfigurator, OllamaServiceConfigurator>()
             // Add other configurators here if needed
-        });
+        ]);
 
         // --- Ensure Necessary Logging is Available ---
         services.TryAddSingleton<ILoggerFactory, NullLoggerFactory>();

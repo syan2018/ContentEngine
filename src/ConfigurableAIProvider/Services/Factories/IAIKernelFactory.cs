@@ -1,7 +1,6 @@
 using Microsoft.SemanticKernel;
-using System.Threading.Tasks;
 
-namespace ConfigurableAIProvider.Services;
+namespace ConfigurableAIProvider.Services.Factories;
 
 /// <summary>
 /// Interface for creating Kernel instances based on named configurations (Agents).
