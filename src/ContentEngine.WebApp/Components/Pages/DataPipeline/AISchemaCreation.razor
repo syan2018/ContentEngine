@@ -56,7 +56,7 @@
                         <p>@Localizer["DataNeedsInstruction"]</p>
                         <textarea class="form-control" rows="6" @bind="UserPrompt" placeholder="@Localizer["UserPromptPlaceholder"]"></textarea>
                         <div class="text-end mt-3">
-                            <button class="btn btn-secondary me-2" @onclick="ShowSampleDialog">@Localizer["AddSampleButton", "添加样例数据"]</button>
+                            <button class="btn btn-secondary me-2" @onclick="ShowSampleDialog">@Localizer["AddSampleButton"]</button>
                             <button class="btn btn-primary" @onclick="AnalyzePrompt" disabled="@IsAnalyzing">
                                 @if (IsAnalyzing)
                                 {
@@ -73,7 +73,7 @@
                         @if (!string.IsNullOrWhiteSpace(SampleData))
                         {
                             <div class="alert alert-info mt-3">
-                                <strong>@Localizer["SampleDataPreviewLabel", "已添加样例"]:</strong>
+                                <strong>@Localizer["SampleDataPreviewLabel"]:</strong>
                                 <pre style="white-space:pre-wrap;">@SampleData</pre>
                             </div>
                         }
@@ -87,16 +87,16 @@
                         <div class="modal-dialog">
                             <div class="modal-content">
                                 <div class="modal-header">
-                                    <h5 class="modal-title">@Localizer["SampleDialogTitle", "输入样例数据"]</h5>
+                                    <h5 class="modal-title">@Localizer["SampleDialogTitle"]</h5>
                                     <button type="button" class="btn-close" @onclick="HideSampleDialog"></button>
                                 </div>
                                 <div class="modal-body">
                                     <textarea class="form-control" rows="8" @bind="SampleDialogText"></textarea>
-                                    <div class="form-text">@Localizer["SampleDialogTip", "支持文本、CSV、JSON等格式"]</div>
+                                    <div class="form-text">@Localizer["SampleDialogTip"]</div>
                                 </div>
                                 <div class="modal-footer">
-                                    <button class="btn btn-secondary" @onclick="HideSampleDialog">@Localizer["CancelButton", "取消"]</button>
-                                    <button class="btn btn-primary" @onclick="OnSampleDialogOk">@Localizer["OkButton", "确定"]</button>
+                                    <button class="btn btn-secondary" @onclick="HideSampleDialog">@Localizer["CancelButton"]</button>
+                                    <button class="btn btn-primary" @onclick="OnSampleDialogOk">@Localizer["OkButton"]</button>
                                 </div>
                             </div>
                         </div>
@@ -132,16 +132,16 @@
     {
         @* 第2步：字段编辑与AI优化 *@
         <div class="card mb-4">
-            <div class="card-header">@Localizer["EditFieldsHeader", "编辑字段"]</div>
+            <div class="card-header">@Localizer["EditFieldsHeader"]</div>
             <div class="card-body">
                 <table class="table table-bordered table-sm">
                     <thead>
                         <tr>
-                            <th>@Localizer["FieldNameLabel", "字段名"]</th>
-                            <th>@Localizer["FieldTypeLabel", "类型"]</th>
-                            <th>@Localizer["FieldRequiredLabel", "必填"]</th>
-                            <th>@Localizer["FieldCommentLabel", "备注"]</th>
-                            <th>@Localizer["ActionsLabel", "操作"]</th>
+                            <th>@Localizer["FieldNameLabel"]</th>
+                            <th>@Localizer["FieldTypeLabel"]</th>
+                            <th>@Localizer["FieldRequiredLabel"]</th>
+                            <th>@Localizer["FieldCommentLabel"]</th>
+                            <th>@Localizer["ActionsLabel"]</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -161,16 +161,16 @@
                                 <td><input type="checkbox" class="form-check-input" @bind="currentField.IsRequired" /></td>
                                 <td><input class="form-control form-control-sm" @bind="currentField.Comment" /></td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveField(currentField)">@Localizer["RemoveButton", "移除"]</button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveField(currentField)">@Localizer["RemoveButton"]</button>
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
-                <button class="btn btn-sm btn-outline-success mt-2" @onclick="AddField">+ @Localizer["AddFieldButton", "添加字段"]</button>
+                <button class="btn btn-sm btn-outline-success mt-2" @onclick="AddField">+ @Localizer["AddFieldButton"]</button>
                 <hr />
                 <div class="mb-2">
-                    <label>@Localizer["AIRefineFeedbackLabel", "对AI优化的补充说明（可选）"]</label>
+                    <label>@Localizer["AIRefineFeedbackLabel"]</label>
                     <textarea class="form-control" rows="2" @bind="UserFeedback"></textarea>
                 </div>
                 @* Button Layout Optimization *@
@@ -178,8 +178,8 @@
                     <button class="btn btn-secondary" @onclick="GoToStep1">@Localizer["PreviousButton"]</button>
                     <div>
                         <button class="btn btn-info me-2" @onclick="RefineFieldsByAI" disabled="@IsRefining">
-                            @if (IsRefining) { <span class="spinner-border spinner-border-sm"></span> @Localizer["RefiningStatus", "AI优化中..."] }
-                            else { <i class="bi bi-lightning"></i> @Localizer["AIRefineButton", "AI优化字段"] }
+                            @if (IsRefining) { <span class="spinner-border spinner-border-sm"></span> @Localizer["RefiningStatus"] }
+                            else { <i class="bi bi-lightning"></i> @Localizer["AIRefineButton"] }
                         </button>
                         <button class="btn btn-primary" @onclick="GoToStep3" disabled="@(!EditableFields.Any(f => !string.IsNullOrWhiteSpace(f.Name)))">@Localizer["NextButton"] <i class="bi bi-arrow-right"></i></button>
                     </div>
@@ -195,17 +195,17 @@
     {
         @* 第3步：最终确认与注册 *@
         <div class="card mb-4">
-            <div class="card-header">@Localizer["ConfirmHeader", "确认表结构"]</div>
+            <div class="card-header">@Localizer["ConfirmHeader"]</div>
             <div class="card-body">
                 <h5>@Localizer["SchemaNameLabel"]: @SchemaName</h5>
                 <h6>@Localizer["SchemaDescLabel"]: @SchemaDescription</h6>
                 <table class="table table-bordered table-sm mt-3">
                     <thead>
                         <tr>
-                            <th>@Localizer["FieldNameLabel", "字段名"]</th>
-                            <th>@Localizer["FieldTypeLabel", "类型"]</th>
-                            <th>@Localizer["FieldRequiredLabel", "必填"]</th>
-                            <th>@Localizer["FieldCommentLabel", "备注"]</th>
+                            <th>@Localizer["FieldNameLabel"]</th>
+                            <th>@Localizer["FieldTypeLabel"]</th>
+                            <th>@Localizer["FieldRequiredLabel"]</th>
+                            <th>@Localizer["FieldCommentLabel"]</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -223,7 +223,7 @@
                  @* Button Layout Optimization *@
                 <div class="d-flex justify-content-between mt-4">
                     <button class="btn btn-secondary" @onclick="GoToStep2">@Localizer["PreviousButton"]</button>
-                    <button class="btn btn-success" @onclick="RegisterSchema" disabled="@IsRegistering">@Localizer["RegisterButton", "注册表结构"]</button>
+                    <button class="btn btn-success" @onclick="RegisterSchema" disabled="@IsRegistering">@Localizer["RegisterButton"]</button>
                 </div>
                 @if (!string.IsNullOrEmpty(ErrorMessage))
                 {
@@ -231,7 +231,7 @@
                 }
                 @if (RegisterSuccess)
                 {
-                    <div class="alert alert-success mt-2">@Localizer["RegisterSuccess", "注册成功！即将跳转..."]</div>
+                    <div class="alert alert-success mt-2">@Localizer["RegisterSuccess"]</div>
                 }
             </div>
         </div>
@@ -392,7 +392,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Register schema failed.");
-            ErrorMessage = $"{Localizer["RegisterError", "注册失败"]}: {ex.Message}";
+            ErrorMessage = $"{Localizer["RegisterError"]}: {ex.Message}";
         }
         finally
         {

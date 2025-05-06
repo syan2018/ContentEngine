@@ -129,7 +129,7 @@
     <value>请输入结构名称和数据需求描述。</value>
   </data>
   <data name="NextButton" xml:space="preserve">
-    <value>下一步: 检查建议</value>
+    <value>下一步</value>
   </data>
   <data name="PageDescription" xml:space="preserve">
     <value>描述您需要的数据结构，让 AI 帮助您定义 Schema。</value>
@@ -169,5 +169,68 @@
   </data>
   <data name="UserPromptPlaceholder" xml:space="preserve">
     <value>例如：我需要存储图书信息，包括标题、作者（应链接到 Author 结构）、出版年份、ISBN、简短摘要和封面图片 URL。</value>
+  </data>
+  <data name="AddSampleButton" xml:space="preserve">
+    <value>添加样例数据</value>
+  </data>
+  <data name="FieldNameLabel" xml:space="preserve">
+    <value>字段名</value>
+  </data>
+  <data name="FieldTypeLabel" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="FieldRequiredLabel" xml:space="preserve">
+    <value>必填</value>
+  </data>
+  <data name="FieldCommentLabel" xml:space="preserve">
+    <value>备注</value>
+  </data>
+  <data name="ActionsLabel" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="EditFieldsHeader" xml:space="preserve">
+    <value>编辑字段</value>
+  </data>
+  <data name="AddFieldButton" xml:space="preserve">
+    <value>添加字段</value>
+  </data>
+  <data name="AIRefineFeedbackLabel" xml:space="preserve">
+    <value>对AI优化的补充说明（可选）</value>
+  </data>
+  <data name="RemoveButton" xml:space="preserve">
+    <value>移除</value>
+  </data>
+  <data name="AIRefineButton" xml:space="preserve">
+    <value>AI优化字段</value>
+  </data>
+  <data name="RefiningStatus" xml:space="preserve">
+    <value>AI优化中...</value>
+  </data>
+  <data name="ConfirmHeader" xml:space="preserve">
+    <value>确认表结构</value>
+  </data>
+  <data name="RegisterButton" xml:space="preserve">
+    <value>注册表结构</value>
+  </data>
+  <data name="RegisterError" xml:space="preserve">
+    <value>注册失败</value>
+  </data>
+  <data name="RegisterSuccess" xml:space="preserve">
+    <value>注册成功！即将跳转...</value>
+  </data>
+  <data name="SampleDialogTitle" xml:space="preserve">
+    <value>输入样例数据</value>
+  </data>
+  <data name="SampleDialogTip" xml:space="preserve">
+    <value>支持文本、CSV、JSON等格式</value>
+  </data>
+  <data name="CancelButton" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="OkButton" xml:space="preserve">
+    <value>确定</value>
+  </data>
+  <data name="SampleDataPreviewLabel" xml:space="preserve">
+    <value>已添加样例</value>
   </data>
 </root> 

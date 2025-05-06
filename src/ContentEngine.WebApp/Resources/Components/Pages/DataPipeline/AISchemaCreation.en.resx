@@ -71,7 +71,7 @@
     <value>Please provide both a Schema Name and a description of your data needs.</value>
   </data>
   <data name="NextButton" xml:space="preserve">
-    <value>Next: Review Suggestion</value>
+    <value>Next</value>
   </data>
   <data name="PageDescription" xml:space="preserve">
     <value>Describe the data structure you need, and let AI help you define the schema.</value>
@@ -111,5 +111,65 @@
   </data>
   <data name="UserPromptPlaceholder" xml:space="preserve">
     <value>Example: I need to store information about books, including title, author (which should link to an Author schema), publication year, ISBN, a short summary, and cover image URL.</value>
+  </data>
+  <data name="FieldNameLabel" xml:space="preserve">
+    <value>Field Name</value>
+  </data>
+  <data name="FieldTypeLabel" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="FieldRequiredLabel" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="FieldCommentLabel" xml:space="preserve">
+    <value>Comment</value>
+  </data>
+  <data name="ActionsLabel" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="EditFieldsHeader" xml:space="preserve">
+    <value>Edit Fields</value>
+  </data>
+  <data name="AddFieldButton" xml:space="preserve">
+    <value>Add Field</value>
+  </data>
+  <data name="AIRefineFeedbackLabel" xml:space="preserve">
+    <value>Additional feedback for AI refinement (optional)</value>
+  </data>
+  <data name="RemoveButton" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="AIRefineButton" xml:space="preserve">
+    <value>Refine Fields by AI</value>
+  </data>
+  <data name="RefiningStatus" xml:space="preserve">
+    <value>Refining by AI...</value>
+  </data>
+  <data name="ConfirmHeader" xml:space="preserve">
+    <value>Confirm Schema</value>
+  </data>
+  <data name="RegisterButton" xml:space="preserve">
+    <value>Register Schema</value>
+  </data>
+  <data name="RegisterError" xml:space="preserve">
+    <value>Registration failed</value>
+  </data>
+  <data name="RegisterSuccess" xml:space="preserve">
+    <value>Registration successful! Redirecting...</value>
+  </data>
+  <data name="SampleDialogTitle" xml:space="preserve">
+    <value>Enter Sample Data</value>
+  </data>
+  <data name="SampleDialogTip" xml:space="preserve">
+    <value>Supports text, CSV, JSON, etc.</value>
+  </data>
+  <data name="CancelButton" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="OkButton" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="SampleDataPreviewLabel" xml:space="preserve">
+    <value>Sample Added</value>
   </data>
 </root>
