@@ -1,6 +1,4 @@
 using ContentEngine.Core.DataPipeline.Models;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace ContentEngine.Core.AI.Services
 {
@@ -10,11 +8,12 @@ namespace ContentEngine.Core.AI.Services
     public interface ISchemaSuggestionService
     {
         /// <summary>
-        /// Suggests a SchemaDefinition based on a natural language description.
+        /// Suggests a SchemaDefinition based on a natural language description and optional sample data.
         /// </summary>
         /// <param name="userPrompt">The user's natural language description of the data needed.</param>
         /// <param name="schemaName">The desired name for the schema provided by the user.</param>
         /// <param name="schemaDescription">The description for the schema provided by the user.</param>
+        /// <param name="samples">Optional: user-provided sample data (text, CSV, or JSON).</param>
         /// <param name="cancellationToken">Optional cancellation token.</param>
         /// <returns>
         /// A Task representing the asynchronous operation.
@@ -25,6 +24,7 @@ namespace ContentEngine.Core.AI.Services
             string userPrompt,
             string schemaName,
             string schemaDescription,
+            string? samples = null,
             CancellationToken cancellationToken = default);
     }
 } 

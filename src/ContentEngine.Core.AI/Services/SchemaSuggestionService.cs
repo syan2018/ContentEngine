@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using System.Text.RegularExpressions;
 using System.Text;
+using ContentEngine.Core.AI.Utils;
 
 namespace ContentEngine.Core.AI.Services
 {
@@ -28,6 +29,7 @@ namespace ContentEngine.Core.AI.Services
             string userPrompt,
             string schemaName,
             string schemaDescription,
+            string? samples = null,
             CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(userPrompt) || string.IsNullOrWhiteSpace(schemaName))
@@ -46,18 +48,20 @@ namespace ContentEngine.Core.AI.Services
 
                 var arguments = new KernelArguments
                 {
-                    { "description", userPrompt }
+                    { "description", userPrompt },
+                    { "samples", samples ?? string.Empty }
                 };
 
                 _logger.LogInformation("Invoking {PluginName}.{FunctionName}...", PluginName, FunctionName);
                 var result = await kernel.InvokeAsync(PluginName, FunctionName, arguments, cancellationToken);
                 string? suggestionText = result.GetValue<string>()?.Trim();
+                suggestionText = AIResponseCleaner.RemoveThinkTags(suggestionText);
                 _logger.LogDebug("Raw AI suggestion:\n{SuggestionText}", suggestionText);
 
                 if (string.IsNullOrWhiteSpace(suggestionText))
                     throw new InvalidOperationException("AI did not provide a suggestion.");
 
-                var parsedFields = ParseSuggestionToFields(suggestionText);
+                var parsedFields = ParseMarkdownTableToFields(suggestionText);
                 if (parsedFields == null || parsedFields.Count == 0)
                     throw new FormatException("Could not parse the AI suggestion into fields. Check AI output format or parser logic.");
 
@@ -78,52 +82,43 @@ namespace ContentEngine.Core.AI.Services
         }
 
         /// <summary>
-        /// 解析 AI 输出文本为 FieldDefinition 列表。
+        /// 解析 AI 输出的 markdown 表格为 FieldDefinition 列表。
         /// </summary>
-        private List<FieldDefinition>? ParseSuggestionToFields(string suggestionText)
+        private List<FieldDefinition>? ParseMarkdownTableToFields(string markdown)
         {
-            var fields = new List<FieldDefinition>();
-            // Regex to capture: FieldName (Type[:TargetSchema], Required/Optional)
-            var regex = new Regex(@"^- \s*([\w\s]+)\s*\(\s*(\w+)(?::([\w\s]+))?\s*,\s*(\w+)\s*\)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
-            var matches = regex.Matches(suggestionText);
-            foreach (Match match in matches)
-            {
-                if (match.Groups.Count >= 5)
-                {
-                    string name = match.Groups[1].Value.Trim();
-                    string typeStr = match.Groups[2].Value.Trim();
-                    string? referenceTarget = match.Groups[3].Success ? match.Groups[3].Value.Trim() : null;
-                    string requiredStr = match.Groups[4].Value.Trim();
+            // 匹配markdown表格的行
+            var lines = markdown.Split('\n').Select(l => l.Trim()).Where(l => l.StartsWith("|")).ToList();
+            if (lines.Count < 2) return null; // 至少有表头和一行分隔
 
-                    if (Enum.TryParse<FieldType>(typeStr, true, out var fieldType))
-                    {
-                        var fieldDef = new FieldDefinition
-                        {
-                            Name = name,
-                            Type = fieldType,
-                            IsRequired = requiredStr.Equals("Required", StringComparison.OrdinalIgnoreCase),
-                            ReferenceSchemaName = fieldType == FieldType.Reference ? referenceTarget : null
-                        };
-                        if (!string.IsNullOrWhiteSpace(fieldDef.Name))
-                        {
-                            fields.Add(fieldDef);
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Parsed field has empty name from line: {Line}", match.Value);
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogWarning("Could not parse FieldType '{TypeString}' from line: {Line}", typeStr, match.Value);
-                    }
-                }
-                else
+            // 跳过表头和分隔线
+            var dataLines = lines.Skip(2);
+            var fields = new List<FieldDefinition>();
+            foreach (var line in dataLines)
+            {
+                // | FieldName | Type | Required | Comment |
+                var cells = line.Split('|').Select(c => c.Trim()).ToArray();
+                if (cells.Length < 5) continue;
+                var name = cells[1];
+                var typeStr = cells[2];
+                var requiredStr = cells[3];
+                var comment = cells[4];
+                FieldType fieldType;
+                if (!Enum.TryParse<FieldType>(typeStr, true, out fieldType))
                 {
-                    _logger.LogWarning("Regex did not match expected groups for line: {Line}", match.Value);
+                    _logger.LogWarning("Could not parse FieldType '{TypeString}' from table line: {Line}", typeStr, line);
+                    continue;
                 }
+                var fieldDef = new FieldDefinition
+                {
+                    Name = name,
+                    Type = fieldType,
+                    IsRequired = requiredStr.Contains("必填") || requiredStr.Equals("Required", StringComparison.OrdinalIgnoreCase),
+                    Comment = comment
+                };
+                // Reference 类型的目标Schema名可通过备注或后续增强
+                fields.Add(fieldDef);
             }
             return fields.Count > 0 ? fields : null;
         }
     }
-} 
+}

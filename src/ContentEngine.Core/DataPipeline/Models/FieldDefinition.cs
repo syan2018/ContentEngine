@@ -25,8 +25,12 @@ public class FieldDefinition
     /// </summary>
     public string? ReferenceSchemaName { get; set; }
 
+    /// <summary>
+    /// 字段备注/说明
+    /// </summary>
+    public string? Comment { get; set; }
+
     // 可以根据需要添加其他属性，例如：
-    // public string Description { get; set; }
     // public object DefaultValue { get; set; }
     // public string ValidationRegex { get; set; }
 } 

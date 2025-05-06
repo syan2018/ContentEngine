@@ -53,6 +53,7 @@
                     <p>@Localizer["DataNeedsInstruction"]</p>
                     <textarea class="form-control" rows="6" @bind="UserPrompt" placeholder="@Localizer["UserPromptPlaceholder"]"></textarea>
                     <div class="text-end mt-3">
+                        <button class="btn btn-secondary me-2" @onclick="ShowSampleDialog">@Localizer["AddSampleButton", "添加样例数据"]</button>
                         <button class="btn btn-primary" @onclick="AnalyzePrompt" disabled="@IsAnalyzing">
                             @if (IsAnalyzing)
                             {
@@ -66,8 +67,38 @@
                             }
                         </button>
                     </div>
+                    @if (!string.IsNullOrWhiteSpace(SampleData))
+                    {
+                        <div class="alert alert-info mt-3">
+                            <strong>@Localizer["SampleDataPreviewLabel", "已添加样例"]:</strong>
+                            <pre style="white-space:pre-wrap;">@SampleData</pre>
+                        </div>
+                    }
                 </div>
             </div>
+
+            <!-- 样例数据输入弹窗 -->
+            @if (SampleDialogVisible)
+            {
+                <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.3);">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">@Localizer["SampleDialogTitle", "输入样例数据"]</h5>
+                                <button type="button" class="btn-close" @onclick="HideSampleDialog"></button>
+                            </div>
+                            <div class="modal-body">
+                                <textarea class="form-control" rows="8" @bind="SampleDialogText"></textarea>
+                                <div class="form-text">@Localizer["SampleDialogTip", "支持文本、CSV、JSON等格式"]</div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-secondary" @onclick="HideSampleDialog">@Localizer["CancelButton", "取消"]</button>
+                                <button class="btn btn-primary" @onclick="OnSampleDialogOk">@Localizer["OkButton", "确定"]</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
 
              <!-- AI Analysis Result Section -->
             @if (SuggestedSchema != null)
@@ -107,6 +138,26 @@
 
     private SchemaDefinition? SuggestedSchema { get; set; }
 
+    // 样例数据相关
+    private string? SampleData { get; set; }
+    private bool SampleDialogVisible { get; set; } = false;
+    private string SampleDialogText { get; set; } = string.Empty;
+
+    private void ShowSampleDialog()
+    {
+        SampleDialogText = SampleData ?? string.Empty;
+        SampleDialogVisible = true;
+    }
+    private void HideSampleDialog()
+    {
+        SampleDialogVisible = false;
+    }
+    private void OnSampleDialogOk()
+    {
+        SampleData = SampleDialogText;
+        SampleDialogVisible = false;
+    }
+
     private async Task AnalyzePrompt()
     {
         IsAnalyzing = true;
@@ -124,7 +175,7 @@
 
         try
         {
-            SuggestedSchema = await SchemaSuggestionService.SuggestSchemaAsync(UserPrompt, SchemaName, SchemaDescription);
+            SuggestedSchema = await SchemaSuggestionService.SuggestSchemaAsync(UserPrompt, SchemaName, SchemaDescription, SampleData);
             if (SuggestedSchema == null || SuggestedSchema.Fields == null || SuggestedSchema.Fields.Count == 0)
             {
                 ErrorMessage = Localizer["NoFieldsSuggested"];
@@ -161,11 +212,13 @@
             }
 
             string requiredDisplay = field.IsRequired ? Localizer["FieldRequired"] : Localizer["FieldOptional"];
+            string commentDisplay = !string.IsNullOrWhiteSpace(field.Comment) ? $"<span class='text-muted ms-2'>({System.Net.WebUtility.HtmlEncode(field.Comment)})</span>" : string.Empty;
 
-            sb.AppendFormat("<li><strong>{0}:</strong> {1} ({2})</li>",
+            sb.AppendFormat("<li><strong>{0}:</strong> {1} ({2}) {3}</li>",
                             System.Net.WebUtility.HtmlEncode(field.Name),
                             typeDisplay,
-                            requiredDisplay);
+                            requiredDisplay,
+                            commentDisplay);
         }
         sb.AppendLine("</ul>");
         return sb.ToString();
@@ -182,4 +235,4 @@
             ErrorMessage = Localizer["ProceedError"];
         }
     }
-} 
+}

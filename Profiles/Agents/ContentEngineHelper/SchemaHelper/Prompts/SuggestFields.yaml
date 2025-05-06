@@ -1,24 +1,19 @@
-description: "Analyzes user description and suggests schema fields."
+description: "Analyzes user description and sample data, suggests schema fields with names and comments."
 prompt: |
-  You are an expert data modeler assisting a user in defining a data schema.
-  Analyze the user's requirements described below.
-  Based ONLY on the description, suggest a list of relevant fields for the schema.
+  You are a professional data modeler. Analyze the user's requirements and the provided sample data.
+  Your task is to suggest a list of fields for a data schema.
 
-  **Available Field Types:**
-  *   Text: For short strings.
-  *   Number: For numerical values (integer or decimal).
-  *   Boolean: For true/false values.
-  *   Date: For date or date-time values.
-  *   Reference: For linking to another schema (mention the likely target schema name if obvious).
+  - Detect the language of the user's description and output all field names and comments in that language.
+  - For each field, provide:
+    * Field Name (in the detected language)
+    * Field Type (choose from: Text, Number, Boolean, Date, Reference)
+    * Required/Optional
+    * Field Comment (a short description to the field with it actual meaning, in the detected language)
+  - If sample data is provided, use it to infer field types and comments.
+  - Output as a markdown table with columns: FieldName | Type | Required | Comment
 
-  **Output Format:**
-  Provide ONLY a bulleted list using markdown. Each line must follow this exact format:
-  `- FieldName (Type, Required/Optional)`
-  Example: `- ProductName (Text, Required)`
-  Example: `- Price (Number, Required)`
-  Example: `- IsAvailable (Boolean, Optional)`
-  Example: `- ReleaseDate (Date, Optional)`
-  Example: `- Author (Reference:Authors, Required)`
+  **Sample Data:**
+  {{$samples}}
 
   **User Requirements:**
   {{$description}}
@@ -29,8 +24,10 @@ inputVariables:
     - name: description
       description: "The user's natural language description of the data needed."
       isRequired: true
+    - name: samples
+      description: "Optional: user-provided sample data (text, CSV, or JSON)."
+      isRequired: false
 executionSettings:
-  default: # Settings for the 'chat' service defined in agent.yaml
-    temperature: 0.3 # Lower temperature for more deterministic output format
-    maxTokens: 500
-    # topP: 0.5
+  default:
+    temperature: 0.3
+    maxTokens: 800
