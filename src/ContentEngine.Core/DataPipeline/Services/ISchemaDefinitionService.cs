@@ -1,8 +1,6 @@
-using ContentEngine.WebApp.Core.DataPipeline.Models;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using ContentEngine.Core.DataPipeline.Models;
 
-namespace ContentEngine.WebApp.Core.DataPipeline.Services;
+namespace ContentEngine.Core.DataPipeline.Services;
 
 /// <summary>
 /// 定义管理 SchemaDefinition 的服务接口

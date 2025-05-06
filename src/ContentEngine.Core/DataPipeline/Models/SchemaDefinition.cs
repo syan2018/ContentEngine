@@ -1,6 +1,4 @@
-namespace ContentEngine.WebApp.Core.DataPipeline.Models;
-
-using System.Collections.Generic;
+namespace ContentEngine.Core.DataPipeline.Models;
 
 /// <summary>
 /// 定义一个用户可定制的数据结构模板 (Schema)

@@ -1,6 +1,6 @@
 using ContentEngine.WebApp.Components;
-using ContentEngine.WebApp.Core.Storage;
-using ContentEngine.WebApp.Core.DataPipeline.Services;
+using ContentEngine.Core.Storage;
+using ContentEngine.Core.DataPipeline.Services;
 using ConfigurableAIProvider.Extensions;
 using Microsoft.AspNetCore.Localization;
 using System.Globalization;
@@ -26,6 +26,7 @@ builder.Services.AddScoped<IDataEntryService, DataEntryService>();
 // *** 测试：注册 ConfigurableAIProvider 相关服务 ***
 builder.Services.AddConfigurableAIProvider(builder.Configuration);
 // ******************************************
+
 
 // 2. 配置请求本地化选项 (可选，但推荐)
 builder.Services.Configure<RequestLocalizationOptions>(options =>

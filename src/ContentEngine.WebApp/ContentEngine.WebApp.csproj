@@ -14,6 +14,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ConfigurableAIProvider\ConfigurableAIProvider.csproj" />
+    <ProjectReference Include="..\ContentEngine.Core\ContentEngine.Core.csproj" />
+    <ProjectReference Include="..\ContentEngine.Core.AI\ContentEngine.Core.AI.csproj" />
   </ItemGroup>
 
   <ItemGroup>

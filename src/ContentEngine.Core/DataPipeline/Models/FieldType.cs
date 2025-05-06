@@ -1,4 +1,4 @@
-namespace ContentEngine.WebApp.Core.DataPipeline.Models;
+namespace ContentEngine.Core.DataPipeline.Models;
 
 /// <summary>
 /// 定义 Schema 字段支持的数据类型

@@ -1,8 +1,6 @@
 using LiteDB;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
-namespace ContentEngine.WebApp.Core.DataPipeline.Services;
+namespace ContentEngine.Core.DataPipeline.Services;
 
 /// <summary>
 /// 定义管理具体数据实例 (BsonDocument) 的服务接口
