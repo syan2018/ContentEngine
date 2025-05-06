@@ -11,8 +11,8 @@ alwaysApply: true
 
 保持清晰的目录结构以分离关注点：
 
-*   **`Components/` & `Pages/`**: 存放 Blazor UI 组件和页面。组件应小而聚焦。
-*   **`Core/`**: 存放与 UI 无关的核心业务逻辑。
+*   **`ContentEngine.WebApp/`**: 存放 Blazor UI 组件和页面。组件应小而聚焦。
+*   **`ContentEngine.Core/`**: 存放与 UI 无关的核心业务逻辑。
     *   **`Models/`**: 存放数据结构（如 `SchemaDefinition`）。
     *   **`Services/`**: 存放业务逻辑服务接口和实现（如 `SchemaDefinitionService`）。
     *   **`Storage/`**: 存放数据访问逻辑（如 `LiteDbContext`）。

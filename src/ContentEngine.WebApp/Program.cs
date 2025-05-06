@@ -1,6 +1,7 @@
 using ContentEngine.WebApp.Components;
 using ContentEngine.Core.Storage;
 using ContentEngine.Core.DataPipeline.Services;
+using ContentEngine.Core.AI.Services;
 using ConfigurableAIProvider.Extensions;
 using Microsoft.AspNetCore.Localization;
 using System.Globalization;
@@ -27,6 +28,8 @@ builder.Services.AddScoped<IDataEntryService, DataEntryService>();
 builder.Services.AddConfigurableAIProvider(builder.Configuration);
 // ******************************************
 
+// 注册 Schema 建议服务
+builder.Services.AddScoped<ISchemaSuggestionService, SchemaSuggestionService>();
 
 // 2. 配置请求本地化选项 (可选，但推荐)
 builder.Services.Configure<RequestLocalizationOptions>(options =>

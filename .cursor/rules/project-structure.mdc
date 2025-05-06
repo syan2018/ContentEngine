@@ -5,19 +5,27 @@ alwaysApply: true
 ---
 # ContentEngine Project Structure
 
-This document outlines the recommended project structure for the `ContentEngine.WebApp` Blazor Server application.
+This document outlines the recommended project structure for the ContentEngine application after refactoring.
 
-*   **`[/ContentEngine/ContentEngine.WebApp/ContentEngine.WebApp.csproj](mdc:ContentEngine/ContentEngine.WebApp/ContentEngine.WebApp.csproj)`**: The main Blazor Server project file.
-*   **`[/ContentEngine/ContentEngine.WebApp/Program.cs](mdc:ContentEngine/ContentEngine.WebApp/Program.cs)`**: Application entry point, dependency injection configuration.
-*   **`[/ContentEngine/ContentEngine.WebApp/Components/](mdc:ContentEngine/ContentEngine.WebApp/Components)`**: Reusable Blazor UI components and pages, organized by feature area (e.g., `DataPipeline`, `Reasoning`, `Layout`).
-*   **`[/ContentEngine/ContentEngine.WebApp/Core/](mdc:ContentEngine/ContentEngine.WebApp/Core)`**: Contains the core business logic, separated from the UI.
-    *   **`[/ContentEngine/ContentEngine.WebApp/Core/DataPipeline/](mdc:ContentEngine/ContentEngine.WebApp/Core/DataPipeline)`**: Logic for data ingestion, cleaning, and AI structuring.
-    *   **`[/ContentEngine/ContentEngine.WebApp/Core/Reasoning/](mdc:ContentEngine/ContentEngine.WebApp/Core/Reasoning)`**: Logic for the inference engine.
-    *   **`[/ContentEngine/ContentEngine.WebApp/Core/Generation/](mdc:ContentEngine/ContentEngine.WebApp/Core/Generation)`**: Logic for content generation and export.
-    *   **`[/ContentEngine/ContentEngine.WebApp/Core/Storage/](mdc:ContentEngine/ContentEngine.WebApp/Core/Storage)`**: Data access logic (repositories, DbContext).
-    *   **`[/ContentEngine/ContentEngine.WebApp/Core/SharedKernel/](mdc:ContentEngine/ContentEngine.WebApp/Core/SharedKernel)`**: Code shared across core modules.
-*   **`[/ContentEngine/ContentEngine.WebApp/BackgroundTasks/](mdc:ContentEngine/ContentEngine.WebApp/BackgroundTasks)`**: Implementation for long-running background tasks (e.g., AI processing).
-*   **`[/ContentEngine/ContentEngine.WebApp/wwwroot/](mdc:ContentEngine/ContentEngine.WebApp/wwwroot)`**: Static web assets (CSS, JavaScript).
-*   **`[/ContentEngine/Docs/](mdc:ContentEngine/Docs)`**: Project documentation and design discussions.
-*   **`[/ContentEngine/README.zh-CN.md](mdc:ContentEngine/README.zh-CN.md)`**: Main project description (Chinese).
+*   **`[/src/ContentEngine.WebApp/ContentEngine.WebApp.csproj](mdc:src/ContentEngine.WebApp/ContentEngine.WebApp.csproj)`**: The main Blazor Server project file, responsible for the User Interface (UI) layer and application hosting.
+*   **`[/src/ContentEngine.WebApp/Program.cs](mdc:src/ContentEngine.WebApp/Program.cs)`**: Application entry point, dependency injection (DI) container setup, middleware configuration, and application startup logic.
+*   **`[/src/ContentEngine.WebApp/Components/](mdc:src/ContentEngine.WebApp/Components)`**: Contains Blazor UI components (`.razor`) and pages, organized by feature area (e.g., `DataPipeline`). UI logic should primarily call services from Core and Core.AI.
+*   **`[/src/ContentEngine.WebApp/wwwroot/](mdc:src/ContentEngine.WebApp/wwwroot)`**: Holds static web assets like CSS, JavaScript, and images.
+*   **`[/src/ContentEngine.WebApp/Resources/](mdc:src/ContentEngine.WebApp/Resources)`**: Contains localization resource files (`.resx`) for the UI layer.
+*   **`[/src/ContentEngine.WebApp/appsettings.json](mdc:src/ContentEngine.WebApp/appsettings.json)`**: Main application configuration file.
+*   ---
+*   **`[/src/ContentEngine.Core/ContentEngine.Core.csproj](mdc:src/ContentEngine.Core/ContentEngine.Core.csproj)`**: Class library containing the core business domain logic, models, and services **not specific to AI**.
+    *   **`[/src/ContentEngine.Core/Models/](mdc:src/ContentEngine.Core/Models)`**: Defines core domain entities and data structures (e.g., `SchemaDefinition`, `FieldDefinition`).
+    *   **`[/src/ContentEngine.Core/Services/](mdc:src/ContentEngine.Core/Services)`**: Contains interfaces and implementations for core business logic services (e.g., `ISchemaDefinitionService`, `IDataEntryService`).
+    *   **`[/src/ContentEngine.Core/Storage/](mdc:src/ContentEngine.Core/Storage)`**: Handles data persistence logic, including DbContext definitions (e.g., `LiteDbContext`) and repository patterns if used.
+    *   **`[/src/ContentEngine.Core/Utils/](mdc:src/ContentEngine.Core/Utils)`**: Provides shared, non-UI, non-AI utility classes.
+*   ---
+*   **`[/src/ContentEngine.Core.AI/ContentEngine.Core.AI.csproj](mdc:src/ContentEngine.Core.AI/ContentEngine.Core.AI.csproj)`**: Class library dedicated to **AI-related application services**. It orchestrates AI tasks using the underlying `ConfigurableAIProvider`.
+    *   **`[/src/ContentEngine.Core.AI/Services/](mdc:src/ContentEngine.Core.AI/Services)`**: Contains interfaces and implementations for AI-driven business capabilities (e.g., `ISchemaSuggestionService`). These services interact with the `Kernel` provided by `IAIKernelFactory` and handle parsing/interpretation of AI results.
+*   ---
+*   **`[/src/ConfigurableAIProvider/ConfigurableAIProvider.csproj](mdc:src/ConfigurableAIProvider/ConfigurableAIProvider.csproj)`**: Infrastructure library providing the configurable AI Kernel factory (`IAIKernelFactory`). Responsible for loading AI configurations from YAML files.
+*   ---
+*   **`[/Profiles/](mdc:Profiles)`**: Central directory for storing YAML configuration files (connections, models, agents, plugins) used by `ConfigurableAIProvider`. Typically included in the WebApp build output.
+*   **`[/Docs/](mdc:Docs)`**: Contains project documentation, design notes, and overviews like `[DataPipeline_Overview.md](mdc:Docs/DataPipeline_Overview.md)`.
+*   **`[README.md](mdc:README.md)` / `[README.zh-CN.md](mdc:README.zh-CN.md)`**: Main project description files.
 
