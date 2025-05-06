@@ -49,3 +49,19 @@ models:
     modelId: "gemini-2.5-flash-preview-04-17-nothink" # AI Hub Mix uses specific model strings
     endpointType: ChatCompletion
 
+  # --- Grok Model ---
+  grok-3:
+    connection: xai # References the Grok connection
+    modelId: "grok-3-latest" # Grok uses specific model strings
+    endpointType: ChatCompletion
+    
+  grok-3-fast:
+    connection: xai 
+    modelId: "grok-3-fast" 
+    endpointType: ChatCompletion
+  
+  grok-3-mini-fast:
+    connection: xai 
+    modelId: "grok-3-mini-fast-latest"
+    endpointType: ChatCompletion
+

@@ -29,3 +29,9 @@ connections:
     serviceType: OpenAI 
     baseUrl: "https://aihubmix.com/v1"
     apiKey: "{{AIHUBMIX_KEY}}" 
+
+  # === Grok ===
+  xai:
+    serviceType: OpenAI 
+    baseUrl: "https://api.x.ai/v1"
+    apiKey: "{{XAI_API_KEY}}" 
