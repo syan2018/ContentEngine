@@ -17,7 +17,8 @@ namespace ContentEngine.Core.AI.Services
         private readonly ILogger<SchemaSuggestionService> _logger;
         private const string AgentName = "ContentEngineHelper";
         private const string PluginName = "SchemaHelper";
-        private const string FunctionName = "SuggestFields";
+        private const string SuggestFunction = "SuggestFields";
+        private const string RefineFunction = "RefineFields";
 
         public SchemaSuggestionService(IAIKernelFactory kernelFactory, ILogger<SchemaSuggestionService> logger)
         {
@@ -52,8 +53,8 @@ namespace ContentEngine.Core.AI.Services
                     { "samples", samples ?? string.Empty }
                 };
 
-                _logger.LogInformation("Invoking {PluginName}.{FunctionName}...", PluginName, FunctionName);
-                var result = await kernel.InvokeAsync(PluginName, FunctionName, arguments, cancellationToken);
+                _logger.LogInformation("Invoking {PluginName}.{FunctionName}...", PluginName, SuggestFunction);
+                var result = await kernel.InvokeAsync(PluginName, SuggestFunction, arguments, cancellationToken);
                 string? suggestionText = result.GetValue<string>()?.Trim();
                 suggestionText = AIResponseCleaner.RemoveThinkTags(suggestionText);
                 _logger.LogDebug("Raw AI suggestion:\n{SuggestionText}", suggestionText);
@@ -81,21 +82,66 @@ namespace ContentEngine.Core.AI.Services
             }
         }
 
+        public async Task<List<FieldDefinition>?> RefineSchemaAsync(
+            List<FieldDefinition> currentFields,
+            string originalDescription,
+            string? userFeedback = null,
+            CancellationToken cancellationToken = default)
+        {
+            Kernel? kernel = null;
+            try
+            {
+                _logger.LogInformation("Building Kernel for Agent '{AgentName}'...", AgentName);
+                kernel = await _kernelFactory.BuildKernelAsync(AgentName);
+                if (kernel == null)
+                    throw new InvalidOperationException($"Failed to create the AI Kernel for agent '{AgentName}'.");
+
+                if (!kernel.Plugins.Contains(PluginName))
+                    _logger.LogWarning("Plugin '{PluginName}' not found in the kernel.", PluginName);
+
+                // 将当前字段列表转为markdown表格
+                var fieldsMarkdown = BuildFieldsMarkdownTable(currentFields);
+                var arguments = new KernelArguments
+                {
+                    { "originalDescription", originalDescription },
+                    { "fields", fieldsMarkdown },
+                    { "feedback", userFeedback ?? string.Empty }
+                };
+
+                _logger.LogInformation("Invoking {PluginName}.{FunctionName}...", PluginName, RefineFunction);
+                var result = await kernel.InvokeAsync(PluginName, RefineFunction, arguments, cancellationToken);
+                string? refinedText = result.GetValue<string>()?.Trim();
+                refinedText = AIResponseCleaner.RemoveThinkTags(refinedText);
+                _logger.LogDebug("Raw AI refined fields:\n{RefinedText}", refinedText);
+
+                if (string.IsNullOrWhiteSpace(refinedText))
+                    throw new InvalidOperationException("AI did not provide a refined field list.");
+
+                var parsedFields = ParseMarkdownTableToFields(refinedText);
+                if (parsedFields == null || parsedFields.Count == 0)
+                    throw new FormatException("Could not parse the AI refined fields into list. Check AI output format or parser logic.");
+
+                _logger.LogInformation("Schema refined successfully. Found {FieldCount} fields.", parsedFields.Count);
+                return parsedFields;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during AI schema refinement process.");
+                throw;
+            }
+        }
+
         /// <summary>
         /// 解析 AI 输出的 markdown 表格为 FieldDefinition 列表。
         /// </summary>
         private List<FieldDefinition>? ParseMarkdownTableToFields(string markdown)
         {
-            // 匹配markdown表格的行
             var lines = markdown.Split('\n').Select(l => l.Trim()).Where(l => l.StartsWith("|")).ToList();
-            if (lines.Count < 2) return null; // 至少有表头和一行分隔
-
-            // 跳过表头和分隔线
+            if (lines.Count < 2) return null;
             var dataLines = lines.Skip(2);
             var fields = new List<FieldDefinition>();
             foreach (var line in dataLines)
             {
-                // | FieldName | Type | Required | Comment |
                 var cells = line.Split('|').Select(c => c.Trim()).ToArray();
                 if (cells.Length < 5) continue;
                 var name = cells[1];
@@ -115,10 +161,24 @@ namespace ContentEngine.Core.AI.Services
                     IsRequired = requiredStr.Contains("必填") || requiredStr.Equals("Required", StringComparison.OrdinalIgnoreCase),
                     Comment = comment
                 };
-                // Reference 类型的目标Schema名可通过备注或后续增强
                 fields.Add(fieldDef);
             }
             return fields.Count > 0 ? fields : null;
+        }
+
+        /// <summary>
+        /// 将字段列表转为markdown表格字符串。
+        /// </summary>
+        private string BuildFieldsMarkdownTable(List<FieldDefinition> fields)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("| FieldName | Type | Required | Comment |");
+            sb.AppendLine("|-----------|------|----------|---------|");
+            foreach (var f in fields)
+            {
+                sb.AppendLine($"| {f.Name} | {f.Type} | {(f.IsRequired ? "Required" : "Optional")} | {f.Comment ?? ""} |");
+            }
+            return sb.ToString();
         }
     }
 }

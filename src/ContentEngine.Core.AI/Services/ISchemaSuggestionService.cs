@@ -1,4 +1,7 @@
 using ContentEngine.Core.DataPipeline.Models;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace ContentEngine.Core.AI.Services
 {
@@ -25,6 +28,15 @@ namespace ContentEngine.Core.AI.Services
             string schemaName,
             string schemaDescription,
             string? samples = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Refine and optimize a field list using AI, based on current fields and user feedback.
+        /// </summary>
+        Task<List<FieldDefinition>?> RefineSchemaAsync(
+            List<FieldDefinition> currentFields,
+            string originalDescription,
+            string? userFeedback = null,
             CancellationToken cancellationToken = default);
     }
 } 

@@ -1,4 +1,5 @@
 description: "Provides functions to help with schema definition and modification."
 functions:
   semanticFunctions:
-    - path: ./Prompts/SuggestFields.yaml # 相对于本文件的路径
+    - path: ./Prompts/SuggestFields.yaml
+    - path: ./Prompts/RefineFields.yaml

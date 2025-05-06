@@ -1,0 +1,37 @@
+description: "Refine and optimize a schema field list based on user feedback and original requirements."
+prompt: |
+  You are a professional data modeler. Given the original requirements, the current schema field list, and user feedback, optimize and refine the schema.
+  - Output a markdown table with columns: FieldName | Type | Required | Comment
+  - For each field, provide:
+    * Field Name (in the detected language)
+    * Field Type (choose from: Text, Number, Boolean, Date, Reference)
+    * Required/Optional
+    * Field Comment (a short description to the field with it actual meaning, in the detected language)
+  - You may add, remove, or adjust fields as needed based on all provided context.
+  - All output should be in the same language as the original description/field list.
+
+  **Original User Requirements:**
+  {{$originalDescription}}
+
+  **Current Fields:**
+  {{$fields}}
+
+  **User Feedback for Refinement:**
+  {{$feedback}}
+
+  **Refined Fields:**
+inputVariables:
+  parameters:
+    - name: originalDescription
+      description: "The user's original natural language description of the data needed."
+      isRequired: true
+    - name: fields
+      description: "Current schema fields as a markdown table."
+      isRequired: true
+    - name: feedback
+      description: "User's feedback or additional requirements for refinement."
+      isRequired: false
+executionSettings:
+  default:
+    temperature: 0.3
+    maxTokens: 800 
