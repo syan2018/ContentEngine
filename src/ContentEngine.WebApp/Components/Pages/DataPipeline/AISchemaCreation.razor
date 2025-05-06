@@ -2,12 +2,19 @@
 @using ContentEngine.WebApp.Core.DataPipeline.Models
 @using ContentEngine.WebApp.Core.DataPipeline.Services
 @using ContentEngine.WebApp.Core.Utils
+@using Microsoft.SemanticKernel
+@using ConfigurableAIProvider.Services.Factories
+@using System.Text.RegularExpressions
+@using System.Text
 @* @inject ISchemaDefinitionService SchemaService *@
 @* @inject IAISchemaSuggestionService AIService // Placeholder for AI service injection *@
 @inject NavigationManager NavigationManager
 @inject Microsoft.Extensions.Localization.IStringLocalizer<AISchemaCreation> Localizer 
 @* @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> SharedLocalizer // 如果需要共享资源 *@
+@inject IAIKernelFactory AiKernelFactory
+@inject ILogger<AISchemaCreation> Logger
 @attribute [StreamRendering(true)]
+@rendermode InteractiveServer
 
 <PageTitle>@Localizer["PageTitle"]</PageTitle>
 
@@ -71,15 +78,15 @@
             </div>
 
              <!-- AI Analysis Result Section -->
-            @if (!string.IsNullOrEmpty(AnalysisResult))
+            @if (SuggestedSchema != null)
             {
                 <div class="ai-section card mb-4">
                      <div class="card-header bg-info-subtle">
                         @Localizer["AIResultHeader"]
                     </div>
                     <div class="card-body">
-                        @((MarkupString)AnalysisResult) <!-- Render as HTML if needed, sanitize carefully -->
-                         <p class="mt-3 text-muted small">@Localizer["AIResultInstruction"]</p>
+                        @((MarkupString)FormatSchemaSuggestionHtml(SuggestedSchema))
+                         <p class="mt-3 text-muted small">@Localizer["AIRefineInstruction"]</p>
                     </div>
                 </div>
             }
@@ -93,7 +100,7 @@
             <!-- Navigation / Status Bar -->
             <div class="d-flex justify-content-between mt-4 mb-4">
                  <button class="btn btn-secondary" disabled>@Localizer["PreviousButton"]</button>
-                 <button class="btn btn-primary" @onclick="GoToNextStep" disabled="@string.IsNullOrEmpty(AnalysisResult)">@Localizer["NextButton"] <i class="bi bi-arrow-right"></i></button>
+                 <button class="btn btn-primary" @onclick="GoToNextStep" disabled="@(SuggestedSchema == null)">@Localizer["NextButton"] <i class="bi bi-arrow-right"></i></button>
             </div>
         </div>
     </div>
@@ -103,18 +110,15 @@
     private string SchemaName { get; set; } = "";
     private string SchemaDescription { get; set; } = "";
     private string UserPrompt { get; set; } = "";
-    private string AnalysisResult { get; set; } = ""; // Stores AI suggestion (potentially HTML formatted)
     private string ErrorMessage { get; set; } = "";
     private bool IsAnalyzing { get; set; } = false;
 
-    // Placeholder for the suggested SchemaDefinition based on AI analysis
     private SchemaDefinition? SuggestedSchema { get; set; }
 
     private async Task AnalyzePrompt()
     {
         IsAnalyzing = true;
         ErrorMessage = string.Empty;
-        AnalysisResult = string.Empty;
         SuggestedSchema = null;
         StateHasChanged();
 
@@ -126,38 +130,58 @@
             return;
         }
 
+        Kernel? kernel = null;
         try
         {
-            await Task.Delay(1500); // Simulate AI call
+            Logger.LogInformation("Building Kernel for Agent 'ContentEngineHelper'...");
+            kernel = await AiKernelFactory.BuildKernelAsync("ContentEngineHelper");
+            if (kernel == null)
+            {
+                throw new InvalidOperationException("Failed to create the AI Kernel for agent 'ContentEngineHelper'. Check configuration and logs.");
+            }
+            Logger.LogInformation("Kernel built successfully.");
 
-            SuggestedSchema = new SchemaDefinition // Create dummy schema
+            if (!kernel.Plugins.Contains("SchemaHelper"))
+            {
+                 Logger.LogWarning("SchemaHelper plugin not found in the kernel.");
+            }
+
+            var arguments = new KernelArguments
+            {
+                { "description", UserPrompt }
+            };
+
+            Logger.LogInformation("Invoking SchemaHelper.SuggestFields function...");
+            var result = await kernel.InvokeAsync("SchemaHelper", "SuggestFields", arguments);
+            string? suggestionText = result.GetValue<string>()?.Trim();
+            Logger.LogDebug("Raw AI suggestion:\n{SuggestionText}", suggestionText);
+
+            if (string.IsNullOrWhiteSpace(suggestionText))
+            {
+                throw new InvalidOperationException("AI did not provide a suggestion.");
+            }
+
+            Logger.LogInformation("Parsing AI suggestion...");
+            var parsedFields = ParseSuggestionToFields(suggestionText);
+            if (parsedFields == null || parsedFields.Count == 0)
+            {
+                 throw new FormatException("Could not parse the AI suggestion into fields. Check AI output format or parser logic.");
+            }
+
+            SuggestedSchema = new SchemaDefinition
             {
                 Name = SchemaName,
                 Description = SchemaDescription,
-                Fields = new List<FieldDefinition>
-                {
-                    new FieldDefinition { Name = "Title", Type = FieldType.Text, IsRequired = true },
-                    new FieldDefinition { Name = "Author", Type = FieldType.Reference, ReferenceSchemaName = "Author" },
-                    new FieldDefinition { Name = "PublicationYear", Type = FieldType.Number },
-                    new FieldDefinition { Name = "ISBN", Type = FieldType.Text },
-                    new FieldDefinition { Name = "Summary", Type = FieldType.Text },
-                    new FieldDefinition { Name = "CoverImageUrl", Type = FieldType.Text }
-                }
+                Fields = parsedFields
             };
+             Logger.LogInformation("Schema suggestion parsed successfully. Found {FieldCount} fields.", SuggestedSchema.Fields.Count);
 
-            if (UserPrompt.Contains("books", StringComparison.OrdinalIgnoreCase))
-            {
-                AnalysisResult = BuildBookSuggestionHtml(SuggestedSchema);
-            }
-            else
-            {
-                AnalysisResult = $"<p>{Localizer["AIAnalysisGeneric"]}</p>";
-            }
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Error during AI analysis: {ex.Message}");
-            ErrorMessage = Localizer["AnalysisError"];
+            Logger.LogError(ex, "Error during AI schema suggestion process.");
+            ErrorMessage = $"{Localizer["AnalysisError"]}: {ex.Message}";
+            SuggestedSchema = null;
         }
         finally
         {
@@ -166,25 +190,77 @@
         }
     }
 
-    private string BuildBookSuggestionHtml(SchemaDefinition? schema)
+    private List<FieldDefinition>? ParseSuggestionToFields(string suggestionText)
     {
-        if (schema == null) return string.Empty;
+        var fields = new List<FieldDefinition>();
+        var regex = new Regex(@"^- \s*([\w\s]+)\s*\(\s*(\w+)(?::([\w\s]+))?\s*,\s*(\w+)\s*\)", RegexOptions.IgnoreCase | RegexOptions.Multiline);
 
-        var authorSchemaName = schema.Fields.FirstOrDefault(f => f.Name == "Author")?.ReferenceSchemaName ?? "Author";
+        var matches = regex.Matches(suggestionText);
 
-        // Use System.Text.StringBuilder for better performance and readability
-        var sb = new System.Text.StringBuilder();
-        sb.AppendFormat("<p>{0}</p>", Localizer["AIAnalysisBookIntro"]);
+        foreach (Match match in matches)
+        {
+            if (match.Groups.Count >= 5)
+            {
+                string name = match.Groups[1].Value.Trim();
+                string typeStr = match.Groups[2].Value.Trim();
+                string? referenceTarget = match.Groups[3].Success ? match.Groups[3].Value.Trim() : null;
+                string requiredStr = match.Groups[4].Value.Trim();
+
+                if (Enum.TryParse<FieldType>(typeStr, true, out var fieldType))
+                {
+                    var fieldDef = new FieldDefinition
+                    {
+                        Name = name,
+                        Type = fieldType,
+                        IsRequired = requiredStr.Equals("Required", StringComparison.OrdinalIgnoreCase),
+                        ReferenceSchemaName = fieldType == FieldType.Reference ? referenceTarget : null
+                    };
+
+                    if (!string.IsNullOrWhiteSpace(fieldDef.Name))
+                    {
+                         fields.Add(fieldDef);
+                    }
+                     else {
+                         Logger.LogWarning("Parsed field has empty name from line: {Line}", match.Value);
+                     }
+                }
+                else
+                {
+                     Logger.LogWarning("Could not parse FieldType '{TypeString}' from line: {Line}", typeStr, match.Value);
+                }
+            }
+             else {
+                 Logger.LogWarning("Regex did not match expected groups for line: {Line}", match.Value);
+             }
+        }
+        return fields.Count > 0 ? fields : null;
+    }
+
+    private string FormatSchemaSuggestionHtml(SchemaDefinition? schema)
+    {
+        if (schema == null || schema.Fields == null || schema.Fields.Count == 0)
+            return $"<p>{Localizer["NoFieldsSuggested"]}</p>";
+
+        var sb = new StringBuilder();
+        sb.AppendFormat("<p>{0}</p>", Localizer["AIAnalysisIntro"]);
         sb.AppendLine("<ul>");
-        sb.AppendFormat("<li><strong>{0}:</strong> {1} ({2})</li>", Localizer["FieldTitle"], Localizer["FieldTypeText"], Localizer["FieldRequired"]);
-        sb.AppendFormat("<li><strong>{0}:</strong> {1}</li>", Localizer["FieldAuthor"], Localizer["FieldTypeReference", authorSchemaName]);
-        sb.AppendFormat("<li><strong>{0}:</strong> {1}</li>", Localizer["FieldPubYear"], Localizer["FieldTypeNumber"]);
-        sb.AppendFormat("<li><strong>{0}:</strong> {1}</li>", Localizer["FieldISBN"], Localizer["FieldTypeText"]);
-        sb.AppendFormat("<li><strong>{0}:</strong> {1}</li>", Localizer["FieldSummary"], Localizer["FieldTypeTextLong"]);
-        sb.AppendFormat("<li><strong>{0}:</strong> {1}</li>", Localizer["FieldCoverImage"], Localizer["FieldTypeTextUrl"]);
-        sb.AppendLine("</ul>");
-        sb.AppendFormat("<p>{0}</p>", Localizer["AIRefineInstruction"]);
 
+        foreach (var field in schema.Fields)
+        {
+            string typeDisplay = Localizer[$"FieldType{field.Type}"];
+            if (field.Type == FieldType.Reference && !string.IsNullOrWhiteSpace(field.ReferenceSchemaName))
+            {
+                 typeDisplay = Localizer["FieldTypeReferenceLinked", field.ReferenceSchemaName];
+            }
+
+            string requiredDisplay = field.IsRequired ? Localizer["FieldRequired"] : Localizer["FieldOptional"];
+
+            sb.AppendFormat("<li><strong>{0}:</strong> {1} ({2})</li>",
+                            System.Net.WebUtility.HtmlEncode(field.Name),
+                            typeDisplay,
+                            requiredDisplay);
+        }
+        sb.AppendLine("</ul>");
         return sb.ToString();
     }
 
@@ -192,8 +268,7 @@
     {
         if (SuggestedSchema != null)
         {
-            Console.WriteLine("Navigating to next step with suggested schema...");
-            // NavigationManager.NavigateTo($"/ai-schema-review/{SchemaName}"); // Example navigation
+            Logger.LogInformation("Proceeding to next step with suggested schema: {SchemaName}", SuggestedSchema.Name);
         }
         else
         {

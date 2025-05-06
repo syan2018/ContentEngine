@@ -1,0 +1,9 @@
+description: "Suggests schema fields based on natural language description."
+
+models:
+  # 使用你在 models.yaml 中定义好的聊天模型 ID
+  chat: gemini-2.5-flash
+
+plugins:
+  # 引用 Agent 本地的插件
+  - SchemaHelper
