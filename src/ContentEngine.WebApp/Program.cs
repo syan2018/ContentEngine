@@ -5,12 +5,15 @@ using ContentEngine.Core.AI.Services;
 using ConfigurableAIProvider.Extensions;
 using Microsoft.AspNetCore.Localization;
 using System.Globalization;
+using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+builder.Services.AddMudServices();
 
 // 1. 添加本地化服务
 builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
