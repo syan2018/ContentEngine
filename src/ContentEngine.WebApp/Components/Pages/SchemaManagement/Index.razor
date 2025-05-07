@@ -5,12 +5,11 @@
     <MudStack Spacing="6">
         <MudGrid Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
             <MudItem xs="12" sm="8">
-                <MudText Typo="Typo.h4" GutterBottom="true" Style="font-weight: 600;">数据管理</MudText>
+                <MudText Typo="Typo.h4" GutterBottom="true" Class="page-title">数据管理</MudText>
                 <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">创建和管理您的数据结构定义 (Schema)</MudText>
             </MudItem>
             <MudItem xs="12" sm="4" Class="d-flex justify-sm-end align-self-center">
-                <MudButton Variant="Variant.Filled" Size="Size.Large"
-                           Style="background-color: #6A0DAD; color: white; text-transform: none; border-radius: 8px;"
+                <MudButton Variant="Variant.Filled" Size="Size.Large" Class="create-schema-button"
                            OnClick="NavigateToCreateSchema" StartIcon="@Material.Filled.Add">
                     创建新数据结构
                 </MudButton>
@@ -24,8 +23,7 @@
                               Immediate="true" DebounceInterval="300" Class="search-textfield" />
             </MudItem>
             <MudItem xs="12" sm="3" Class="d-flex justify-sm-start justify-xs-stretch">
-                <MudButton Variant="Variant.Outlined" StartIcon="@Material.Filled.FilterList" FullWidth="true" 
-                           Style="height: 56px; border-color: #E0E0E0; color: #424242; text-transform: none; border-radius: 8px;">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Material.Filled.FilterList" FullWidth="true" Class="filter-button">
                     筛选
                 </MudButton> 
             </MudItem>
@@ -33,15 +31,15 @@
 
         @if (_schemas == null)
         {
-            <MudPaper Class="pa-4 d-flex flex-column align-center justify-center" Elevation="0" Style="min-height: 300px;">
+            <MudPaper Class="pa-4 d-flex flex-column align-center justify-center loading-empty-paper" Elevation="0">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
                 <MudText Class="mt-2">正在加载数据结构列表...</MudText>
             </MudPaper>
         }
         else if (!_filteredSchemas?.Any() ?? true)
         {
-            <MudPaper Class="pa-8 text-center" Elevation="0" Style="min-height: 300px;">
-                <MudIcon Icon="@Material.Filled.LibraryBooks" Size="Size.Large" Color="Color.Default" Class="mb-4" Style="font-size: 4rem;" />
+            <MudPaper Class="pa-8 text-center loading-empty-paper" Elevation="0">
+                <MudIcon Icon="@Material.Filled.LibraryBooks" Size="Size.Large" Color="Color.Default" Class="mb-4 empty-state-icon" />
                 <MudText Typo="Typo.h5" GutterBottom="true">@(string.IsNullOrWhiteSpace(SearchTerm) ? "暂无数据结构" : "未找到匹配的数据结构")</MudText>
                 <MudText Class="mud-text-secondary">@(string.IsNullOrWhiteSpace(SearchTerm) ? "点击右上角 \"创建新数据结构\" 开始吧！" : "尝试修改您的搜索词或清除筛选条件。")</MudText>
             </MudPaper>
@@ -52,26 +50,25 @@
                 @foreach (var schema in _filteredSchemas)
                 {
                     <MudItem xs="12" sm="6" md="4" lg="3">
-                        <MudCard Class="d-flex flex-column schema-card" Style="height: 100%; border: 1px solid #E0E0E0; border-radius: 12px;" Elevation="0">
+                        <MudCard Class="d-flex flex-column schema-card" Elevation="0">
                             <MudCardHeader>
                                 <CardHeaderContent>
                                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
-                                        <MudText Typo="Typo.h6" Style="font-weight: 600; cursor:pointer;" @onclick="() => NavigateToDetails(schema.Id)">@schema.Name</MudText>
-                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" 
-                                                 Style="background-color: #F5F5F5; color: #424242; border-color: #E0E0E0; border-radius: 6px; font-size: 0.75rem; height: 24px; padding: 0 8px;">
+                                        <MudText Typo="Typo.h6" Class="schema-card-title" @onclick="() => NavigateToDetails(schema.Id)">@schema.Name</MudText>
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="schema-card-chip">
                                             @($"{schema.FieldCount} 字段")
                                         </MudChip>
                                     </MudStack>
                                 </CardHeaderContent>
                             </MudCardHeader>
                             <MudCardContent Class="pt-0">
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3" Lines="2" Title="@schema.Description">@schema.Description</MudText>
-                                <MudStack Spacing="1">
-                                    <MudGrid Spacing="1" Justify="Justify.SpaceBetween" Style="font-size: 0.875rem;">
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3 schema-card-description" Lines="2" Title="@schema.Description">@schema.Description</MudText>
+                                <MudStack Spacing="1" Class="schema-card-meta">
+                                    <MudGrid Spacing="1" Justify="Justify.SpaceBetween">
                                         <MudItem><MudText Typo="Typo.caption">记录数:</MudText></MudItem>
                                         <MudItem Class="text-right"><MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">@schema.RecordCount</MudText></MudItem>
                                     </MudGrid>
-                                    <MudGrid Spacing="1" Justify="Justify.SpaceBetween" Style="font-size: 0.875rem;">
+                                    <MudGrid Spacing="1" Justify="Justify.SpaceBetween">
                                         <MudItem><MudText Typo="Typo.caption">更新于:</MudText></MudItem>
                                         <MudItem Class="text-right"><MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">@schema.LastModified.ToString("yyyy-MM-dd")</MudText></MudItem>
                                     </MudGrid>
@@ -82,12 +79,16 @@
                                     <MudItem xs="6" Class="pa-0">
                                         <MudButton FullWidth="true" Size="Size.Medium" Variant="Variant.Text" 
                                                    StartIcon="@Material.Filled.Visibility" OnClick="() => NavigateToDetails(schema.Id)" 
-                                                   Class="action-button" Style="color: #424242; text-transform: none; justify-content: center;">查看</MudButton>
+                                                   Class="action-button schema-action-button">
+                                            查看
+                                        </MudButton>
                                     </MudItem>
                                     <MudItem xs="6" Class="pa-0">
                                         <MudButton FullWidth="true" Size="Size.Medium" Variant="Variant.Text" 
                                                    StartIcon="@Material.Filled.Input" OnClick="() => NavigateToDataEntry(schema.Name)" 
-                                                   Class="action-button" Style="color: #424242; text-transform: none; justify-content: center;">注入</MudButton>
+                                                   Class="action-button schema-action-button">
+                                            注入
+                                        </MudButton>
                                     </MudItem>
                                 </MudGrid>
                             </MudCardActions>
@@ -102,19 +103,85 @@
 </MudContainer>
 
 <style>
+    .page-title {
+        font-weight: 600;
+    }
+
+    .create-schema-button {
+        background-color: #6A0DAD !important; /* Important to override MudBlazor default */
+        color: white !important;
+        text-transform: none;
+        border-radius: 8px;
+    }
+
     .search-textfield .mud-input-slot {
         border-radius: 8px;
     }
+
+    .filter-button {
+        height: 56px;
+        border-color: #E0E0E0;
+        color: #424242;
+        text-transform: none;
+        border-radius: 8px;
+    }
+
+    .loading-empty-paper {
+        min-height: 300px;
+    }
+
+    .empty-state-icon {
+        font-size: 4rem;
+    }
+
+    .schema-card {
+        height: 100%;
+        border: 1px solid #E0E0E0;
+        border-radius: 12px;
+    }
+
     .schema-card .mud-card-header {
         padding: 16px;
     }
+
+    .schema-card-title {
+        font-weight: 600;
+        cursor: pointer;
+    }
+    
+    .schema-card-chip {
+        background-color: #F5F5F5;
+        color: #424242;
+        border-color: #E0E0E0 !important; /* Important to override MudChip's own variant styles */
+        border-radius: 6px;
+        font-size: 0.75rem;
+        height: 24px;
+        padding: 0 8px;
+        line-height: normal; /* For better vertical alignment of text */
+    }
+
     .schema-card .mud-card-content {
         padding-left: 16px;
         padding-right: 16px;
         padding-bottom: 12px;
     }
+
+    .schema-card-meta {
+        font-size: 0.875rem;
+    }
+
+    .action-button {
+        /* Shared styles for action buttons if any beyond specific ones below */
+    }
+
     .action-button:hover {
         background-color: #F5F5F5 !important;
+    }
+
+    .schema-action-button {
+        color: #424242 !important;
+        text-transform: none;
+        /* justify-content: center; Let MudButton handle this with FullWidth */
     }
 </style>
 
