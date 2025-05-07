@@ -52,7 +52,7 @@ models:
   # --- Grok Model ---
   grok-3:
     connection: xai # References the Grok connection
-    modelId: "grok-3-latest" # Grok uses specific model strings
+    modelId: "grok-3" # Grok uses specific model strings
     endpointType: ChatCompletion
     
   grok-3-fast:
@@ -62,6 +62,6 @@ models:
   
   grok-3-mini-fast:
     connection: xai 
-    modelId: "grok-3-mini-fast-latest"
+    modelId: "grok-3-mini-fast"
     endpointType: ChatCompletion
 
