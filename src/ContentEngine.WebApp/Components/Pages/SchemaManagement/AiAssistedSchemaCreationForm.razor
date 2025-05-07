@@ -85,7 +85,7 @@
 
 
 @code {
-    [Parameter] public EventCallback<SchemaDefinition> OnAiSchemaGenerated { get; set; }
+    [Parameter] public EventCallback<SchemaDefinition> OnValidSchemaSubmit { get; set; }
     [Parameter] public EventCallback OnCancelClicked { get; set; } 
 
     // Simple view model to hold form state
@@ -166,7 +166,7 @@
     {
         if (_generatedSchema != null)
         {
-            await OnAiSchemaGenerated.InvokeAsync(_generatedSchema);
+            await OnValidSchemaSubmit.InvokeAsync(_generatedSchema);
         }
     }
 

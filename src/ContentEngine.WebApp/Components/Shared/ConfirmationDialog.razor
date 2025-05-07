@@ -1,0 +1,24 @@
+@namespace ContentEngine.WebApp.Components.Shared
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <MudText>@ContentText</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">@CancelButtonText</MudButton>
+        <MudButton Color="@OkButtonColor" Variant="Variant.Filled" OnClick="Submit">@OkButtonText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public string ContentText { get; set; } = "您确定要执行此操作吗？";
+    [Parameter] public string OkButtonText { get; set; } = "确定";
+    [Parameter] public string CancelButtonText { get; set; } = "取消";
+    [Parameter] public Color OkButtonColor { get; set; } = Color.Primary;
+
+    void Submit() => MudDialog.Close(DialogResult.Ok(true));
+    void Cancel() => MudDialog.Cancel();
+} 

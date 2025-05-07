@@ -1,4 +1,6 @@
 @page "/schema-management/create"
+@using Microsoft.Extensions.Logging
+@inject ILogger<CreatePage> _logger
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @using ContentEngine.Core.DataPipeline.Models 
@@ -11,12 +13,12 @@
             <MudText Typo="Typo.subtitle1" Class="mud-text-secondary page-sub-title">定义新的数据结构 (Schema) 以组织和管理您的内容。</MudText>
         </div>
 
-        <MudTabs Elevation="2" Rounded="true" PanelClass="pa-4 mt-4">
-            <MudTabPanel Text="手动创建">
-                <ManualSchemaCreationForm @ref="_manualForm" OnValidSchemaSubmit="HandleManualSubmit" OnCancelClicked="NavigateBackToList" /> 
-            </MudTabPanel>
+        <MudTabs Elevation="2" Rounded="true" PanelClass="pa-4 mt-4" Justify="Justify.Center">
             <MudTabPanel Text="AI 辅助创建">
-                <AiAssistedSchemaCreationForm OnAiSchemaGenerated="HandleAiSubmit" OnCancelClicked="NavigateBackToList" /> 
+                <AiAssistedSchemaCreationForm OnValidSchemaSubmit="HandleSubmit" OnCancelClicked="NavigateBackToList" /> 
+            </MudTabPanel>
+            <MudTabPanel Text="手动创建">
+                <ManualSchemaCreationForm @ref="_manualForm" OnValidSchemaSubmit="HandleSubmit" OnCancelClicked="NavigateBackToList" /> 
             </MudTabPanel>
         </MudTabs>
 
@@ -39,51 +41,48 @@
     private bool _isSaving = false;
 
     // Handles submission from the Manual form
-    private async Task HandleManualSubmit(SchemaDefinition schema)
+    private async Task HandleSubmit(SchemaDefinition schema)
     {
-        await SaveSchema(schema, "手动");
-        // Optionally reset the form after successful save
-        _manualForm?.ResetForm(); 
-    }
-
-    // Handles submission from the AI form
-    private async Task HandleAiSubmit(SchemaDefinition schema)
-    {
-        await SaveSchema(schema, "AI生成");
-        // Resetting AI form might need a public method similar to Manual form if required
-    }
-
-    // Common save logic
-    private async Task SaveSchema(SchemaDefinition schema, string sourceType)
-    {
-        if (_isSaving) return;
+        _logger.LogInformation("[CreatePage] HandleSubmit called for schema: {SchemaName}", schema.Name);
+        if (_isSaving) 
+        {
+            _logger.LogWarning("[CreatePage] HandleSubmit: Already saving, returning.");
+            return;
+        }
         _isSaving = true;
-
-        Snackbar.Add($"({sourceType}) 正在保存数据结构...", Severity.Info);
-        
+        Snackbar.Add($"(手动) 正在保存数据结构...", Severity.Info);
         try
         {
-            // InternalKey removed as it doesn't exist on the model
-            
-            await SchemaService.CreateSchemaAsync(schema);
-            Snackbar.Add($"数据结构 '{schema.Name}' ({sourceType}) 保存成功!", Severity.Success);
-            
-            // Navigate back to the list after save
-            await Task.Delay(1000); // Give user time to see success message
+            await SaveSchema(schema);
+            Snackbar.Add($"数据结构 '{schema.Name}' 保存成功!", Severity.Success);
+            _manualForm?.ResetForm(); 
+            _logger.LogInformation("[CreatePage] Form reset called after HandleSubmit.");
+            _logger.LogInformation("[CreatePage] Navigating back to list after 1 second delay.");
+            await Task.Delay(1000); 
             NavigateBackToList();
         }
         catch (Exception ex)
-        {
-            // Log the exception properly
-            Console.Error.WriteLine($"Error saving schema from {sourceType}: {ex}"); 
-            Snackbar.Add($"({sourceType}) 保存失败: {ex.Message}", Severity.Error, config => { config.RequireInteraction = true; });
+        { 
+            _logger.LogError(ex, "[CreatePage] Error saving schema {SchemaName} from submission.", schema.Name); 
+            Snackbar.Add($"保存失败: {ex.Message}", Severity.Error, config => { config.RequireInteraction = true; });
         }
         finally
         {
             _isSaving = false;
-            // This might be needed if the saving state itself should update the UI immediately
-            // StateHasChanged(); 
         }
+    }
+
+
+    // Common save logic - sourceType parameter removed
+    private async Task SaveSchema(SchemaDefinition schema)
+    {
+        _logger.LogInformation("[CreatePage] SaveSchema called. Schema Name: {SchemaName}", schema.Name);
+        // Snackbar messages are also handled by the calling methods
+        
+        _logger.LogInformation("[CreatePage] SaveSchema: Calling SchemaService.CreateSchemaAsync for schema {SchemaName}.", schema.Name);
+        await SchemaService.CreateSchemaAsync(schema);
+        _logger.LogInformation("[CreatePage] SaveSchema: CreateSchemaAsync completed for schema {SchemaName}.", schema.Name);
+        // Success Snackbar and navigation are handled by the calling methods
     }
 
     private void NavigateBackToList()

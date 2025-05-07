@@ -1,4 +1,6 @@
 @using ContentEngine.Core.DataPipeline.Models
+@using Microsoft.Extensions.Logging
+@inject ILogger<ManualSchemaCreationForm> _logger
 @using CoreFieldType = ContentEngine.Core.DataPipeline.Models.FieldType 
 
 <MudForm @ref="_form" Model="@_schema" OnValidSubmit="SubmitForm">
@@ -66,7 +68,7 @@
 
     <div class="d-flex justify-end mt-4">
         <MudButton Variant="Variant.Outlined" OnClick="OnCancel" Class="mr-2">取消</MudButton>
-        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="create-schema-button">保存数据结构</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="create-schema-button" OnClick="HandleSaveClicked">保存数据结构</MudButton>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_errorMessage))
@@ -114,21 +116,33 @@
         StateHasChanged();
     }
 
-    private async Task SubmitForm()
+    private async Task ProcessSchemaSubmission()
     {
-        await _form!.Validate();
+        _logger.LogInformation("[ManualForm] ProcessSchemaSubmission started.");
+        if (_form == null) 
+        { 
+            _logger.LogError("[ManualForm] _form is null in ProcessSchemaSubmission."); 
+            return; 
+        }
+
+        await _form.Validate();
+        _logger.LogInformation("[ManualForm] Form validation result: IsValid = {IsValid}", _form.IsValid);
+
         if (!_form.IsValid)
         {
             _errorMessage = "请修正表单中的错误。";
+            _logger.LogWarning("[ManualForm] Form is invalid. Error message set.");
             return;
         }
 
         _errorMessage = null;
         _schema.Fields.RemoveAll(f => string.IsNullOrWhiteSpace(f.Name));
+        _logger.LogInformation("[ManualForm] Fields after removing empty ones: {FieldCount}", _schema.Fields.Count);
 
         if (!_schema.Fields.Any())
         {
             _errorMessage = "数据结构必须至少包含一个有效字段定义。";
+            _logger.LogWarning("[ManualForm] No fields defined. Error message set.");
             AddField(); // Add an empty field back for user to fill
             return;
         }
@@ -139,11 +153,21 @@
                                 .Select(g => g.Key);
         if (duplicateFields.Any())
         {
-            _errorMessage = $"发现重复的字段名: {string.Join(", ", duplicateFields)}。字段名必须唯一（不区分大小写）。";
+            var duplicates = string.Join(", ", duplicateFields);
+            _errorMessage = $"发现重复的字段名: {duplicates}。字段名必须唯一（不区分大小写）。";
+            _logger.LogWarning("[ManualForm] Duplicate fields found: {DuplicateFields}", duplicates);
             return;
         }
         
+        _logger.LogInformation("[ManualForm] All checks passed. Invoking OnValidSchemaSubmit.");
         await OnValidSchemaSubmit.InvokeAsync(_schema);
+        _logger.LogInformation("[ManualForm] OnValidSchemaSubmit invoked.");
+    }
+
+    private async Task HandleSaveClicked()
+    {
+        _logger.LogInformation("[ManualForm] Save button clicked, calling ProcessSchemaSubmission.");
+        await ProcessSchemaSubmission();
     }
 
     private async Task OnCancel()

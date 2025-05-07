@@ -1,5 +1,9 @@
 @page "/schema-management"
+@using ContentEngine.WebApp.Components.Shared
 @inject NavigationManager NavigationManager
+@inject ISchemaDefinitionService SchemaService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
     <MudStack Spacing="6">
@@ -18,59 +22,65 @@
 
         <MudGrid AlignItems="AlignItems.Center" Spacing="2">
             <MudItem xs="12" sm="9">
-                <MudTextField @bind-Value="SearchTerm" Placeholder="搜索数据结构..." Variant="Variant.Outlined" 
+                <MudTextField T="string" @bind-Value="SearchTerm" Placeholder="搜索数据结构..." Variant="Variant.Outlined" 
                               Adornment="Adornment.Start" AdornmentIcon="@Material.Filled.Search" Clearable="true" 
                               Immediate="true" DebounceInterval="300" Class="search-textfield" />
             </MudItem>
             <MudItem xs="12" sm="3" Class="d-flex justify-sm-start justify-xs-stretch">
-                <MudButton Variant="Variant.Outlined" StartIcon="@Material.Filled.FilterList" FullWidth="true" Class="filter-button">
-                    筛选
+                <MudButton Variant="Variant.Outlined" StartIcon="@Material.Filled.FilterList" FullWidth="true" Class="filter-button" Disabled="true"> 
+                    筛选 (待实现) 
                 </MudButton> 
             </MudItem>
         </MudGrid>
 
-        @if (_schemas == null)
+        @if (_isLoading)
         {
             <MudPaper Class="pa-4 d-flex flex-column align-center justify-center loading-empty-paper" Elevation="0">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
                 <MudText Class="mt-2">正在加载数据结构列表...</MudText>
             </MudPaper>
         }
-        else if (!_filteredSchemas?.Any() ?? true)
+        else if (!_pagedSchemas?.Any() ?? true)
         {
             <MudPaper Class="pa-8 text-center loading-empty-paper" Elevation="0">
                 <MudIcon Icon="@Material.Filled.LibraryBooks" Size="Size.Large" Color="Color.Default" Class="mb-4 empty-state-icon" />
-                <MudText Typo="Typo.h5" GutterBottom="true">@(string.IsNullOrWhiteSpace(SearchTerm) ? "暂无数据结构" : "未找到匹配的数据结构")</MudText>
-                <MudText Class="mud-text-secondary">@(string.IsNullOrWhiteSpace(SearchTerm) ? "点击右上角 \"创建新数据结构\" 开始吧！" : "尝试修改您的搜索词或清除筛选条件。")</MudText>
+                <MudText Typo="Typo.h5" GutterBottom="true">@(string.IsNullOrWhiteSpace(_searchTerm) ? "暂无数据结构" : "未找到匹配的数据结构")</MudText>
+                <MudText Class="mud-text-secondary">@(string.IsNullOrWhiteSpace(_searchTerm) ? "点击右上角 \"创建新数据结构\" 开始吧！" : "尝试修改您的搜索词或清除筛选条件。")</MudText>
             </MudPaper>
         }
         else
         {
             <MudGrid Spacing="3">
-                @foreach (var schema in _filteredSchemas)
+                @foreach (var schema in _pagedSchemas)
                 {
                     <MudItem xs="12" sm="6" md="4" lg="3">
                         <MudCard Class="d-flex flex-column schema-card" Elevation="0">
                             <MudCardHeader>
                                 <CardHeaderContent>
-                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                         <MudText Typo="Typo.h6" Class="schema-card-title" @onclick="() => NavigateToDetails(schema.Id)">@schema.Name</MudText>
                                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="schema-card-chip">
-                                            @($"{schema.FieldCount} 字段")
+                                            @($"{schema.Fields?.Count ?? 0} 字段")
                                         </MudChip>
                                     </MudStack>
                                 </CardHeaderContent>
+                                <CardHeaderActions>
+                                    <MudMenu Icon="@Material.Filled.MoreVert" Size="Size.Small" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                                        <MudMenuItem OnClick="() => NavigateToEditPage(schema.Id)">编辑</MudMenuItem>
+                                        <MudMenuItem OnClick="() => DeleteSchemaAsync(schema)">删除</MudMenuItem>
+                                    </MudMenu>
+                                </CardHeaderActions>
                             </MudCardHeader>
                             <MudCardContent Class="pt-0">
                                 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3 schema-card-description" Lines="2" Title="@schema.Description">@schema.Description</MudText>
                                 <MudStack Spacing="1" Class="schema-card-meta">
                                     <MudGrid Spacing="1" Justify="Justify.SpaceBetween">
                                         <MudItem><MudText Typo="Typo.caption">记录数:</MudText></MudItem>
-                                        <MudItem Class="text-right"><MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">@schema.RecordCount</MudText></MudItem>
+                                        <MudItem Class="text-right"><MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">N/A</MudText></MudItem>
                                     </MudGrid>
                                     <MudGrid Spacing="1" Justify="Justify.SpaceBetween">
                                         <MudItem><MudText Typo="Typo.caption">更新于:</MudText></MudItem>
-                                        <MudItem Class="text-right"><MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">@schema.LastModified.ToString("yyyy-MM-dd")</MudText></MudItem>
+                                        <MudItem Class="text-right"><MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">@schema.UpdatedAt.ToString("yyyy-MM-dd")</MudText></MudItem>
                                     </MudGrid>
                                 </MudStack>
                             </MudCardContent>
@@ -98,7 +108,7 @@
             </MudGrid>
         }
 
-        <MudPagination Count="_totalPages" @bind-SelectedPage="CurrentPage" Color="Color.Primary" Class="mt-8 d-flex justify-center" Disabled="_totalPages <= 1" />
+        <MudPagination Count="_totalPages" @bind-SelectedPage="CurrentPage" Color="Color.Primary" Class="mt-8 d-flex justify-center" Disabled="_totalPages <= 1 || _isLoading" />
     </MudStack>
 </MudContainer>
 
@@ -186,51 +196,56 @@
 </style>
 
 @code {
-    private class TempDisplaySchema
-    {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
-        public string Name { get; set; } = "示例 Schema";
-        public string Description { get; set; } = "这是一个用于演示的 Schema 定义。这是一个非常非常非常长的描述，用来测试溢出和省略号截断的效果，看看是不是能够正常显示。";
-        public int FieldCount { get; set; } = 5;
-        public int RecordCount { get; set; } = 100;
-        public DateTime LastModified { get; set; } = DateTime.Now.AddDays(-1);
-    }
-
-    private List<TempDisplaySchema>? _schemas;
-    private List<TempDisplaySchema>? _filteredSchemas;
+    private List<SchemaDefinition>? _allSchemas;
+    private List<SchemaDefinition>? _pagedSchemas;
     private string _searchTerm = string.Empty;
     private int _currentPage = 1;
     private const int PageSize = 8; 
     private int _totalPages = 1;
+    private bool _isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
-        await Task.Delay(250); 
-        _schemas = new List<TempDisplaySchema>
+        await LoadSchemasAsync();
+    }
+
+    private async Task LoadSchemasAsync()
+    {
+        _isLoading = true;
+        _allSchemas = null;
+        _pagedSchemas = null;
+        StateHasChanged();
+
+        try
         {
-            new TempDisplaySchema { Id="game-char", Name = "游戏角色", Description = "定义游戏中的角色属性和特征，例如姓名、职业、等级、技能等。", FieldCount = 12, RecordCount = 48, LastModified = DateTime.Parse("2023-05-01") },
-            new TempDisplaySchema { Id="game-item", Name = "游戏道具", Description = "定义游戏中的各类道具及其属性，包括武器、防具、消耗品。", FieldCount = 8, RecordCount = 156, LastModified = DateTime.Parse("2023-04-28") },
-            new TempDisplaySchema { Id="game-quest", Name = "游戏任务", Description = "定义游戏中的任务结构、目标、奖励和NPC对话。这是一个比较长的描述为了测试卡片的高度和内容截断效果，应该能够正常显示省略号。", FieldCount = 10, RecordCount = 32, LastModified = DateTime.Parse("2023-04-25") },
-            new TempDisplaySchema { Id="game-scene", Name = "游戏场景", Description = "定义游戏中的场景、地图区域、环境特效和可交互对象。", FieldCount = 15, RecordCount = 24, LastModified = DateTime.Parse("2023-04-20") },
-            new TempDisplaySchema { Id="blog-post", Name = "博客文章", Description = "内容管理系统的标准文章格式，包含标题、正文、作者、分类和标签。", FieldCount = 7, RecordCount = 112, LastModified = DateTime.Now.AddDays(-3) },
-            new TempDisplaySchema { Id="product-info", Name = "产品信息", Description = "电子商务平台的产品详细信息，包括规格、价格、库存。", FieldCount = 20, RecordCount = 1250, LastModified = DateTime.Now.AddDays(-1) },
-            new TempDisplaySchema { Id="customer-data", Name = "客户数据", Description = "CRM系统中的客户联系信息和交互历史。", FieldCount = 18, RecordCount = 870, LastModified = DateTime.Now.AddDays(-5) },
-            new TempDisplaySchema { Id="employee-records", Name = "员工档案", Description = "人力资源管理系统中的员工基本信息和合同。", FieldCount = 25, RecordCount = 300, LastModified = DateTime.Now.AddDays(-15) },
-            new TempDisplaySchema { Id="project-tasks", Name = "项目任务", Description = "项目管理工具中的任务分配、截止日期和状态。", FieldCount = 10, RecordCount = 56, LastModified = DateTime.Now.AddDays(-2) },
-        };
-        ApplyFilterAndPagination();
+            var schemasFromService = await SchemaService.GetAllSchemasAsync();
+            _allSchemas = schemasFromService?.OrderByDescending(s => s.UpdatedAt).ToList() ?? new List<SchemaDefinition>();
+            ApplyFilterAndPagination();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"加载数据结构失败: {ex.Message}", Severity.Error);
+            _allSchemas = new List<SchemaDefinition>();
+            ApplyFilterAndPagination();
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
     }
 
     private void ApplyFilterAndPagination()
     {
-        if (_schemas == null) 
+        if (_allSchemas == null) 
         {
-            _filteredSchemas = null;
-            InvokeAsync(StateHasChanged);
+            _pagedSchemas = null;
+            _totalPages = 1;
+            _currentPage = 1;
             return;
         }
 
-        var tempFiltered = _schemas.AsEnumerable();
+        var tempFiltered = _allSchemas.AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(_searchTerm))
         {
@@ -245,12 +260,12 @@
         if (_currentPage > _totalPages) _currentPage = _totalPages;
         if (_currentPage < 1) _currentPage = 1;
 
-        _filteredSchemas = tempFiltered
+        _pagedSchemas = tempFiltered
             .Skip((_currentPage - 1) * PageSize)
             .Take(PageSize)
             .ToList();
         
-        InvokeAsync(StateHasChanged); 
+        StateHasChanged();
     }
 
     private string SearchTerm
@@ -260,8 +275,9 @@
         {
             if (_searchTerm == value) return;
             _searchTerm = value;
-            _currentPage = 1; 
+            _currentPage = 1;
             ApplyFilterAndPagination();
+            StateHasChanged();
         }
     }
     
@@ -273,6 +289,7 @@
             if (_currentPage == value) return;
             _currentPage = value;
             ApplyFilterAndPagination();
+            StateHasChanged();
         }
     }
 
@@ -281,7 +298,7 @@
         NavigationManager.NavigateTo("/schema-management/create");
     }
 
-    private void NavigateToDetails(string schemaId)
+    private void NavigateToDetails(int schemaId)
     {
         NavigationManager.NavigateTo($"/schema-management/details/{schemaId}");
     }
@@ -289,5 +306,40 @@
     private void NavigateToDataEntry(string schemaName) 
     {
         NavigationManager.NavigateTo($"/data-entry/manual/{schemaName}"); 
+    }
+
+    private void NavigateToEditPage(int schemaId)
+    {
+        NavigationManager.NavigateTo($"/schema-management/edit/{schemaId}"); // Placeholder for edit page
+    }
+
+    private async Task DeleteSchemaAsync(SchemaDefinition schemaToDelete)
+    {
+        var parameters = new DialogParameters<ConfirmationDialog> 
+        { 
+            { nameof(ConfirmationDialog.ContentText), $"确定要删除数据结构 '{schemaToDelete.Name}' 吗？此操作不可恢复。"} ,
+            { nameof(ConfirmationDialog.OkButtonText), "确定删除" },
+            { nameof(ConfirmationDialog.OkButtonColor), Color.Error }
+        };
+
+        var options = new DialogOptions() { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall };
+
+        var dialog = await DialogService.ShowAsync<ConfirmationDialog>("确认删除", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                Snackbar.Add($"正在删除 '{schemaToDelete.Name}'...", Severity.Info);
+                await SchemaService.DeleteSchemaAsync(schemaToDelete.Id);
+                Snackbar.Add($"数据结构 '{schemaToDelete.Name}' 已删除。", Severity.Success);
+                await LoadSchemasAsync();
+            }
+            catch (Exception ex)
+            {
+                 Snackbar.Add($"删除失败: {ex.Message}", Severity.Error, config => { config.RequireInteraction = true; });
+            }
+        }
     }
 }
