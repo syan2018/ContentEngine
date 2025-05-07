@@ -1,0 +1,177 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.AI.Services 
+@using System.ComponentModel.DataAnnotations 
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@inject ISchemaSuggestionService SchemaSuggestionService
+@inject ISnackbar Snackbar
+
+<MudForm @ref="_form" Model="@_viewModel" OnValidSubmit="GenerateSchema">
+    <MudStack Spacing="4">
+
+        <MudText Typo="Typo.subtitle2">首先，请描述您希望创建的数据结构，并可以选择提供一些样例数据以帮助 AI 理解。</MudText>
+        
+        <MudGrid Spacing="3">
+             <MudItem xs="12">
+                <MudTextField @bind-Value="_viewModel.Name" Label="数据结构名称 (Schema Name)" Required="true" For="@(() => _viewModel.Name)" HelperText="为您的数据结构命名" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_viewModel.Description" Label="描述 (Description)" Lines="2" For="@(() => _viewModel.Description)" HelperText="(可选) 简要描述其用途" />
+            </MudItem>
+        </MudGrid>
+
+        <MudTextField @bind-Value="_viewModel.Prompt" Label="描述您需要的数据结构"
+                      Lines="5" Required="true" For="@(() => _viewModel.Prompt)"
+                      Placeholder="例如：我需要一个游戏角色的数据结构，包含姓名、种族、职业、等级、生命值、技能列表和背景故事描述" />
+
+        <MudTextField @bind-Value="_viewModel.SampleData" Label="样例数据 (可选)"
+                      Lines="6" For="@(() => _viewModel.SampleData)"
+                      HelperText="提供一段样例数据可以帮助 AI 更准确地理解您的需求"
+                      Placeholder="粘贴一段包含相关信息的文本或表格数据..." />
+
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" 
+                   StartIcon="@Material.Filled.AutoAwesome" Disabled="_isGenerating" FullWidth="true" Size="Size.Large">
+            @if (_isGenerating)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                <span>正在生成...</span>
+            }
+            else
+            {
+                <span>AI 智能生成数据结构</span>
+            }
+        </MudButton>
+
+        @if (_generatedSchema != null)
+        {
+            <MudCard Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">AI 生成结果</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">AI 根据您的描述生成了以下数据结构，您可以进行修改和调整。</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudTable Items="@_generatedSchema.Fields" Dense="true" Hover="true" Bordered="true" Striped="true">
+                        <HeaderContent>
+                            <MudTh>字段名</MudTh>
+                            <MudTh>类型</MudTh>
+                            <MudTh>必填</MudTh>
+                            <MudTh>注释</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="字段名">@context.Name</MudTd>
+                            <MudTd DataLabel="类型">@context.Type</MudTd>
+                            <MudTd DataLabel="必填"> <MudCheckBox T="bool" Checked="@context.IsRequired" ReadOnly="true" Dense="true" /> </MudTd>
+                            <MudTd DataLabel="注释">@context.Comment</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudCardContent>
+                <MudCardActions Class="justify-end">
+                     <MudButton Variant="Variant.Outlined" OnClick="OnCancel">取消</MudButton>
+                     @* Edit button would likely populate the Manual form or a similar editor *@
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Disabled="true">编辑字段 (待实现)</MudButton> 
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="SaveGeneratedSchema">使用此结构</MudButton>
+                </MudCardActions>
+            </MudCard>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+        }
+
+    </MudStack>
+</MudForm>
+
+
+@code {
+    [Parameter] public EventCallback<SchemaDefinition> OnAiSchemaGenerated { get; set; }
+    [Parameter] public EventCallback OnCancelClicked { get; set; } 
+
+    // Simple view model to hold form state
+    private class AiFormViewModel
+    {
+        [Required(ErrorMessage = "数据结构名称不能为空")]
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        
+        [Required(ErrorMessage = "请描述您的数据需求")]
+        public string Prompt { get; set; } = string.Empty;
+        public string? SampleData { get; set; }
+    }
+
+    private MudForm? _form;
+    private AiFormViewModel _viewModel = new();
+    private bool _isGenerating = false;
+    private string? _errorMessage;
+    private SchemaDefinition? _generatedSchema;
+
+    private async Task GenerateSchema()
+    {       
+        await _form!.Validate();
+        if (!_form.IsValid) return;
+
+        _isGenerating = true;
+        _errorMessage = null;
+        _generatedSchema = null; 
+        StateHasChanged();
+
+        try
+        {
+            // *** Placeholder for AI Service Call ***
+            // In real implementation, call:
+            // _generatedSchema = await SchemaSuggestionService.SuggestSchemaAsync(_viewModel.Prompt, _viewModel.Name, _viewModel.Description, _viewModel.SampleData);
+            
+            // Simulate AI call delay and result
+            await Task.Delay(1500);
+            _generatedSchema = CreateDummySchemaResult(); 
+             // *** End Placeholder ***
+
+            if (_generatedSchema == null || !_generatedSchema.Fields.Any())
+            {
+                _errorMessage = "AI 未能生成有效的字段定义，请尝试调整您的描述或样例数据。";
+                _generatedSchema = null; // Ensure result area is hidden if generation failed
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log exception properly
+            _errorMessage = $"AI 生成过程中出错: {ex.Message}";
+            _generatedSchema = null;
+        }
+        finally
+        {
+            _isGenerating = false;
+            StateHasChanged();
+        }
+    }
+
+    private SchemaDefinition CreateDummySchemaResult()
+    {
+        // Create a plausible dummy result based on the view model name/desc if possible
+        return new SchemaDefinition
+        {
+            Name = string.IsNullOrWhiteSpace(_viewModel.Name) ? "AI生成示例" : _viewModel.Name,
+            Description = string.IsNullOrWhiteSpace(_viewModel.Description) ? "由AI根据提示生成的示例结构" : _viewModel.Description,
+            Fields = new List<FieldDefinition>
+            {
+                new FieldDefinition { Name = "title", Type = FieldType.Text, IsRequired = true, Comment = "主要标题" },
+                new FieldDefinition { Name = "content", Type = FieldType.Text, IsRequired = true },
+                new FieldDefinition { Name = "publish_date", Type = FieldType.Date, IsRequired = false },
+            }
+        };
+    }
+
+    private async Task SaveGeneratedSchema()
+    {
+        if (_generatedSchema != null)
+        {
+            await OnAiSchemaGenerated.InvokeAsync(_generatedSchema);
+        }
+    }
+
+    private async Task OnCancel()
+    {
+         await OnCancelClicked.InvokeAsync();
+    }
+} 

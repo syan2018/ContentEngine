@@ -1,0 +1,94 @@
+@page "/schema-management/create"
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@using ContentEngine.Core.DataPipeline.Models 
+@inject ISchemaDefinitionService SchemaService 
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
+    <MudStack Spacing="4">
+        <div>
+            <MudText Typo="Typo.h3" GutterBottom="true" Class="page-main-title">创建数据结构</MudText>
+            <MudText Typo="Typo.subtitle1" Class="mud-text-secondary page-sub-title">定义新的数据结构 (Schema) 以组织和管理您的内容。</MudText>
+        </div>
+
+        <MudTabs Elevation="2" Rounded="true" PanelClass="pa-4 mt-4">
+            <MudTabPanel Text="手动创建">
+                <ManualSchemaCreationForm @ref="_manualForm" OnValidSchemaSubmit="HandleManualSubmit" OnCancelClicked="NavigateBackToList" /> 
+            </MudTabPanel>
+            <MudTabPanel Text="AI 辅助创建">
+                <AiAssistedSchemaCreationForm OnAiSchemaGenerated="HandleAiSubmit" OnCancelClicked="NavigateBackToList" /> 
+            </MudTabPanel>
+        </MudTabs>
+
+         @* Buttons are now handled within each form component *@
+
+    </MudStack>
+</MudContainer>
+
+<style>
+    .page-main-title {
+        font-weight: 600; /* Matching .page-title from Index.razor.css */
+    }
+    .page-sub-title {
+        margin-bottom: 24px; /* Add some space below subtitle */
+    }
+</style>
+
+@code {
+    private ManualSchemaCreationForm? _manualForm;
+    private bool _isSaving = false;
+
+    // Handles submission from the Manual form
+    private async Task HandleManualSubmit(SchemaDefinition schema)
+    {
+        await SaveSchema(schema, "手动");
+        // Optionally reset the form after successful save
+        _manualForm?.ResetForm(); 
+    }
+
+    // Handles submission from the AI form
+    private async Task HandleAiSubmit(SchemaDefinition schema)
+    {
+        await SaveSchema(schema, "AI生成");
+        // Resetting AI form might need a public method similar to Manual form if required
+    }
+
+    // Common save logic
+    private async Task SaveSchema(SchemaDefinition schema, string sourceType)
+    {
+        if (_isSaving) return;
+        _isSaving = true;
+
+        Snackbar.Add($"({sourceType}) 正在保存数据结构...", Severity.Info);
+        
+        try
+        {
+            // InternalKey removed as it doesn't exist on the model
+            
+            await SchemaService.CreateSchemaAsync(schema);
+            Snackbar.Add($"数据结构 '{schema.Name}' ({sourceType}) 保存成功!", Severity.Success);
+            
+            // Navigate back to the list after save
+            await Task.Delay(1000); // Give user time to see success message
+            NavigateBackToList();
+        }
+        catch (Exception ex)
+        {
+            // Log the exception properly
+            Console.Error.WriteLine($"Error saving schema from {sourceType}: {ex}"); 
+            Snackbar.Add($"({sourceType}) 保存失败: {ex.Message}", Severity.Error, config => { config.RequireInteraction = true; });
+        }
+        finally
+        {
+            _isSaving = false;
+            // This might be needed if the saving state itself should update the UI immediately
+            // StateHasChanged(); 
+        }
+    }
+
+    private void NavigateBackToList()
+    {
+        if (_isSaving) return; // Prevent navigation while saving
+        NavigationManager.NavigateTo("/schema-management");
+    }
+} 

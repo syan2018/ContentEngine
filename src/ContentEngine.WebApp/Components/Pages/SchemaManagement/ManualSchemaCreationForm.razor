@@ -1,0 +1,162 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using CoreFieldType = ContentEngine.Core.DataPipeline.Models.FieldType 
+
+<MudForm @ref="_form" Model="@_schema" OnValidSubmit="SubmitForm">
+    <MudGrid Spacing="4">
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_schema.Name" Label="数据结构名称 (Schema Name)" Required="true" For="@(() => _schema.Name)" HelperText="例如：游戏角色" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_schema.Description" Label="描述 (Description)" Lines="3" For="@(() => _schema.Description)" HelperText="描述这个数据结构的用途和包含的信息..." />
+        </MudItem>
+    </MudGrid>
+
+    <MudDivider Class="my-6" />
+
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h6">字段定义</MudText>
+        <MudButton OnClick="AddField" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Material.Filled.Add" Class="add-field-button">添加字段</MudButton>
+    </div>
+
+    @if (_schema.Fields.Any()){
+        <MudStack Spacing="3">
+            @foreach (var field in _schema.Fields)
+            {
+                <MudPaper Outlined="true" Class="pa-4 field-card" @key="field">
+                    <MudGrid AlignItems="AlignItems.Start">
+                        <MudItem xs="12" Class="d-flex justify-space-between align-center mb-2">
+                            <MudText Typo="Typo.subtitle1" Style="font-weight:500;">字段</MudText>
+                            <MudIconButton Icon="@Material.Filled.DeleteOutline" Size="Size.Small" OnClick="() => RemoveField(field)" Edge="Edge.False" Title="删除此字段" />
+                        </MudItem>
+
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="field.Name" Label="字段名 (Field Name)" Required="true" For="@(() => field.Name)" HelperText="程序中使用的名称，必须唯一" Dense="true" />
+                        </MudItem>
+                        
+                        <MudItem xs="12" sm="6">
+                             <MudSelect T="CoreFieldType" @bind-Value="field.Type" Label="数据类型 (Data Type)" Required="true" For="@(() => field.Type)" Dense="true">
+                                @foreach (CoreFieldType type in Enum.GetValues(typeof(CoreFieldType)))
+                                {
+                                    <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                         <MudItem xs="12" sm="6" md="6" Class="d-flex align-center mt-sm-4 pt-1">
+                            <MudSwitch T="bool" @bind-Checked="field.IsRequired" Color="Color.Primary" LabelPosition="LabelPosition.End">
+                                <LabelContent>
+                                    <MudText Typo="Typo.body2">必填字段</MudText>
+                                </LabelContent>
+                            </MudSwitch>
+                        </MudItem>
+
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="field.Comment" Label="字段描述/注释 (Comment)" Lines="2" For="@(() => field.Comment)" HelperText="描述这个字段的用途、格式要求或UI提示..." Dense="true" />
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+            }
+        </MudStack>
+    }
+    else
+    {
+        <MudText Color="Color.Warning" Class="my-4">请至少添加一个字段定义。</MudText>
+    }
+
+    <MudDivider Class="my-6" />
+
+    <div class="d-flex justify-end mt-4">
+        <MudButton Variant="Variant.Outlined" OnClick="OnCancel" Class="mr-2">取消</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="create-schema-button">保存数据结构</MudButton>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+    }
+
+</MudForm>
+
+<style>
+    .add-field-button {
+        border-radius: 8px;
+        text-transform: none;
+    }
+    .field-card {
+        border-radius: 8px;
+    }
+</style>
+
+@code {
+    [Parameter] public EventCallback<SchemaDefinition> OnValidSchemaSubmit { get; set; }
+    [Parameter] public EventCallback OnCancelClicked { get; set; }
+
+    private MudForm? _form;
+    private SchemaDefinition _schema = new() { Fields = new List<FieldDefinition>() };
+    private string? _errorMessage;
+
+    protected override void OnInitialized()
+    {
+        if (!_schema.Fields.Any())
+        {
+            AddField(); // Start with one empty field
+        }
+    }
+
+    private void AddField()
+    {
+        _schema.Fields.Add(new FieldDefinition());
+        StateHasChanged(); 
+    }
+
+    private void RemoveField(FieldDefinition fieldToRemove)
+    {
+        _schema.Fields.Remove(fieldToRemove);
+        StateHasChanged();
+    }
+
+    private async Task SubmitForm()
+    {
+        await _form!.Validate();
+        if (!_form.IsValid)
+        {
+            _errorMessage = "请修正表单中的错误。";
+            return;
+        }
+
+        _errorMessage = null;
+        _schema.Fields.RemoveAll(f => string.IsNullOrWhiteSpace(f.Name));
+
+        if (!_schema.Fields.Any())
+        {
+            _errorMessage = "数据结构必须至少包含一个有效字段定义。";
+            AddField(); // Add an empty field back for user to fill
+            return;
+        }
+
+        var duplicateFields = _schema.Fields
+                                .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                                .Where(g => g.Count() > 1)
+                                .Select(g => g.Key);
+        if (duplicateFields.Any())
+        {
+            _errorMessage = $"发现重复的字段名: {string.Join(", ", duplicateFields)}。字段名必须唯一（不区分大小写）。";
+            return;
+        }
+        
+        await OnValidSchemaSubmit.InvokeAsync(_schema);
+    }
+
+    private async Task OnCancel()
+    {
+        await OnCancelClicked.InvokeAsync();
+    }
+
+    // Public method to reset the form if needed from parent
+    public void ResetForm()
+    {
+        _schema = new SchemaDefinition() { Fields = new List<FieldDefinition>() };
+        AddField();
+        _errorMessage = null;
+        StateHasChanged();
+    }
+} 
