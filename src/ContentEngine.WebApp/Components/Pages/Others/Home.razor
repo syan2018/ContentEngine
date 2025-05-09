@@ -37,7 +37,12 @@ Welcome to your new app.
 
     protected override async Task OnInitializedAsync()
     {
+        _isLoading = false;
+
+        /*
         _isLoading = true;
+
+
         try
         {
             var kernel = await AiKernelFactory.BuildKernelAsync("SimpleChat");
@@ -46,7 +51,7 @@ Welcome to your new app.
             {
                 throw new InvalidOperationException("Failed to create the AI Kernel for agent 'SimpleChat'.");
             }
-            
+
             if (!kernel.Plugins.Contains("TestPlugin"))
             {
                 Console.WriteLine("Warning: TestPlugin was not found in the loaded kernel plugins.");
@@ -100,5 +105,6 @@ Welcome to your new app.
         {
             _isLoading = false;
         }
+        */
     }
 }

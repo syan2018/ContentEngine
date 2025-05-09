@@ -1,75 +1,23 @@
-@using ContentEngine.Core.DataPipeline.Models
 @using Microsoft.Extensions.Logging
+@using ContentEngine.WebApp.Components.Shared 
 @inject ILogger<ManualSchemaCreationForm> _logger
-@using CoreFieldType = ContentEngine.Core.DataPipeline.Models.FieldType 
 
-<MudForm @ref="_form" Model="@_schema" OnValidSubmit="SubmitForm">
-    <MudGrid Spacing="4">
-        <MudItem xs="12">
-            <MudTextField @bind-Value="_schema.Name" Label="数据结构名称 (Schema Name)" Required="true" For="@(() => _schema.Name)" HelperText="例如：游戏角色" />
-        </MudItem>
-        <MudItem xs="12">
-            <MudTextField @bind-Value="_schema.Description" Label="描述 (Description)" Lines="3" For="@(() => _schema.Description)" HelperText="描述这个数据结构的用途和包含的信息..." />
-        </MudItem>
-    </MudGrid>
+<MudForm @ref="_form" Model="_schema" OnValidSubmit="SubmitInternalForm">
+    
+    <MudText Typo="Typo.h6" Class="mb-4 mt-2">字段定义</MudText> 
+    <FieldDefinitionTable Fields="_schema.Fields" 
+                          ReadOnly="false" 
+                          ShowAddButton="true" 
+                          ShowRemoveButton="true" 
+                          OnAddField="AddField" 
+                          OnRemoveField="RemoveField" />
 
-    <MudDivider Class="my-6" />
-
-    <div class="d-flex justify-space-between align-center mb-4">
-        <MudText Typo="Typo.h6">字段定义</MudText>
-        <MudButton OnClick="AddField" Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Material.Filled.Add" Class="add-field-button">添加字段</MudButton>
-    </div>
-
-    @if (_schema.Fields.Any()){
-        <MudStack Spacing="3">
-            @foreach (var field in _schema.Fields)
-            {
-                <MudPaper Outlined="true" Class="pa-4 field-card" @key="field">
-                    <MudGrid AlignItems="AlignItems.Start">
-                        <MudItem xs="12" Class="d-flex justify-space-between align-center mb-2">
-                            <MudText Typo="Typo.subtitle1" Style="font-weight:500;">字段</MudText>
-                            <MudIconButton Icon="@Material.Filled.DeleteOutline" Size="Size.Small" OnClick="() => RemoveField(field)" Edge="Edge.False" Title="删除此字段" />
-                        </MudItem>
-
-                        <MudItem xs="12" sm="6">
-                            <MudTextField @bind-Value="field.Name" Label="字段名 (Field Name)" Required="true" For="@(() => field.Name)" HelperText="程序中使用的名称，必须唯一" Dense="true" />
-                        </MudItem>
-                        
-                        <MudItem xs="12" sm="6">
-                             <MudSelect T="CoreFieldType" @bind-Value="field.Type" Label="数据类型 (Data Type)" Required="true" For="@(() => field.Type)" Dense="true">
-                                @foreach (CoreFieldType type in Enum.GetValues(typeof(CoreFieldType)))
-                                {
-                                    <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
-                                }
-                            </MudSelect>
-                        </MudItem>
-                         <MudItem xs="12" sm="6" md="6" Class="d-flex align-center mt-sm-4 pt-1">
-                            <MudSwitch T="bool" @bind-Checked="field.IsRequired" Color="Color.Primary" LabelPosition="LabelPosition.End">
-                                <LabelContent>
-                                    <MudText Typo="Typo.body2">必填字段</MudText>
-                                </LabelContent>
-                            </MudSwitch>
-                        </MudItem>
-
-                        <MudItem xs="12">
-                            <MudTextField @bind-Value="field.Comment" Label="字段描述/注释 (Comment)" Lines="2" For="@(() => field.Comment)" HelperText="描述这个字段的用途、格式要求或UI提示..." Dense="true" />
-                        </MudItem>
-                    </MudGrid>
-                </MudPaper>
-            }
-        </MudStack>
-    }
-    else
+    @if (!_schema.Fields.Any() && _form != null && _form.IsValid) // Show only if form is validated AND no fields exist, to avoid premature warning
     {
         <MudText Color="Color.Warning" Class="my-4">请至少添加一个字段定义。</MudText>
     }
-
-    <MudDivider Class="my-6" />
-
-    <div class="d-flex justify-end mt-4">
-        <MudButton Variant="Variant.Outlined" OnClick="OnCancel" Class="mr-2">取消</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="create-schema-button" OnClick="HandleSaveClicked">保存数据结构</MudButton>
-    </div>
+    
+    @* Submit and Cancel buttons are handled by CreatePage.razor via TriggerSubmitAsync *@
 
     @if (!string.IsNullOrWhiteSpace(_errorMessage))
     {
@@ -78,35 +26,28 @@
 
 </MudForm>
 
-<style>
-    .add-field-button {
-        border-radius: 8px;
-        text-transform: none;
-    }
-    .field-card {
-        border-radius: 8px;
-    }
-</style>
 
 @code {
-    [Parameter] public EventCallback<SchemaDefinition> OnValidSchemaSubmit { get; set; }
+    [Parameter] public EventCallback<List<FieldDefinition>> OnValidSchemaSubmit { get; set; }
     [Parameter] public EventCallback OnCancelClicked { get; set; }
 
     private MudForm? _form;
-    private SchemaDefinition _schema = new() { Fields = new List<FieldDefinition>() };
+    private SchemaDefinition _schema = new() { Fields = new List<FieldDefinition>() }; 
     private string? _errorMessage;
 
     protected override void OnInitialized()
     {
         if (!_schema.Fields.Any())
         {
-            AddField(); // Start with one empty field
+
+            AddField(); 
         }
     }
 
+    // AddField and RemoveField are now primarily to be called by the FieldDefinitionTable's callbacks
     private void AddField()
     {
-        _schema.Fields.Add(new FieldDefinition());
+        _schema.Fields.Add(new FieldDefinition() { IsRequired = false }); // Default IsRequired to false
         StateHasChanged(); 
     }
 
@@ -119,35 +60,36 @@
     private async Task ProcessSchemaSubmission()
     {
         _logger.LogInformation("[ManualForm] ProcessSchemaSubmission started.");
-        if (_form == null) 
-        { 
-            _logger.LogError("[ManualForm] _form is null in ProcessSchemaSubmission."); 
-            return; 
-        }
+        if (_form == null) { /* ... logging ... */ return; }
 
-        await _form.Validate();
-        _logger.LogInformation("[ManualForm] Form validation result: IsValid = {IsValid}", _form.IsValid);
-
-        if (!_form.IsValid)
-        {
-            _errorMessage = "请修正表单中的错误。";
-            _logger.LogWarning("[ManualForm] Form is invalid. Error message set.");
-            return;
-        }
+        await _form.Validate(); 
+        _logger.LogInformation("[ManualForm] Form validation (MudForm level for potential top-level form items - though none exist now): IsValid = {IsValid}", _form.IsValid);
+        
+        // Additional validation for fields themselves (e.g., required names within FieldDefinitionTable is handled internally by MudTextField)
+        // We still need to check for at least one field and duplicate names here before submitting the list.
 
         _errorMessage = null;
-        _schema.Fields.RemoveAll(f => string.IsNullOrWhiteSpace(f.Name));
-        _logger.LogInformation("[ManualForm] Fields after removing empty ones: {FieldCount}", _schema.Fields.Count);
-
-        if (!_schema.Fields.Any())
+        var validFields = _schema.Fields.Where(f => !string.IsNullOrWhiteSpace(f.Name)).ToList();
+        
+        if (!validFields.Any())
         {
             _errorMessage = "数据结构必须至少包含一个有效字段定义。";
-            _logger.LogWarning("[ManualForm] No fields defined. Error message set.");
-            AddField(); // Add an empty field back for user to fill
+            _logger.LogWarning("[ManualForm] No valid fields defined. Error message set.");
             return;
         }
 
-        var duplicateFields = _schema.Fields
+        // Check for empty names in the fields that are supposed to be part of the schema
+        if (_schema.Fields.Any(f => string.IsNullOrWhiteSpace(f.Name)))
+        {
+            // This check is a bit tricky because FieldDefinitionTable's MudTextField handles Required for field.Name.
+            // If _form.Validate() passed, it implies all *visible and active* MudTextFields marked Required are filled.
+            // However, a user could have added a field, not filled its name, and it might not trigger _form validation if not setup for deep validation.
+            // The .Where(f => !string.IsNullOrWhiteSpace(f.Name)) above already filters these out for submission.
+            // The main concern is if a field was added but its name is empty, it shouldn't prevent submission if other valid fields exist.
+            // The current logic correctly submits only `validFields`.
+        }
+
+        var duplicateFields = validFields
                                 .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
                                 .Where(g => g.Count() > 1)
                                 .Select(g => g.Key);
@@ -158,29 +100,36 @@
             _logger.LogWarning("[ManualForm] Duplicate fields found: {DuplicateFields}", duplicates);
             return;
         }
-        
-        _logger.LogInformation("[ManualForm] All checks passed. Invoking OnValidSchemaSubmit.");
-        await OnValidSchemaSubmit.InvokeAsync(_schema);
+
+        _logger.LogInformation("[ManualForm] All checks passed. Invoking OnValidSchemaSubmit with {FieldCount} fields.", validFields.Count);
+        await OnValidSchemaSubmit.InvokeAsync(validFields);
         _logger.LogInformation("[ManualForm] OnValidSchemaSubmit invoked.");
     }
 
-    private async Task HandleSaveClicked()
+    private async Task SubmitInternalForm()
     {
-        _logger.LogInformation("[ManualForm] Save button clicked, calling ProcessSchemaSubmission.");
+        _logger.LogInformation("[ManualForm] SubmitInternalForm called by MudForm, now calling ProcessSchemaSubmission.");
+        await ProcessSchemaSubmission();
+    }
+    
+    public async Task TriggerSubmitAsync()
+    {
+        _logger.LogInformation("[ManualForm] TriggerSubmitAsync called by parent, calling ProcessSchemaSubmission.");
         await ProcessSchemaSubmission();
     }
 
-    private async Task OnCancel()
+    private async Task OnCancelInternal()
     {
         await OnCancelClicked.InvokeAsync();
     }
 
-    // Public method to reset the form if needed from parent
     public void ResetForm()
     {
         _schema = new SchemaDefinition() { Fields = new List<FieldDefinition>() };
-        AddField();
+        AddField(); 
         _errorMessage = null;
+        _form?.ResetValidation(); 
         StateHasChanged();
+        _logger.LogInformation("[ManualForm] Form has been reset.");
     }
 } 

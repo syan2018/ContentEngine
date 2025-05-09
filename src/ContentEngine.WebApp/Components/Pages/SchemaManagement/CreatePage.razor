@@ -1,10 +1,11 @@
 @page "/schema-management/create"
+@using System.ComponentModel.DataAnnotations
 @using Microsoft.Extensions.Logging
 @inject ILogger<CreatePage> _logger
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
-@using ContentEngine.Core.DataPipeline.Models 
-@inject ISchemaDefinitionService SchemaService 
+@using ContentEngine.Core.DataPipeline.Models
+@inject ISchemaDefinitionService SchemaService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
     <MudStack Spacing="4">
@@ -13,81 +14,166 @@
             <MudText Typo="Typo.subtitle1" Class="mud-text-secondary page-sub-title">定义新的数据结构 (Schema) 以组织和管理您的内容。</MudText>
         </div>
 
-        <MudTabs Elevation="2" Rounded="true" PanelClass="pa-4 mt-4" Justify="Justify.Center">
-            <MudTabPanel Text="AI 辅助创建">
-                <AiAssistedSchemaCreationForm OnValidSchemaSubmit="HandleSubmit" OnCancelClicked="NavigateBackToList" /> 
+        <MudForm @ref="_pageForm" Model="@_schemaMeta" OnValidSubmit="() => {}">
+            <MudGrid Spacing="3" Class="mb-4">
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_schemaMeta.Name" Label="数据结构名称 (Schema Name)" Required="true" For="@(() => _schemaMeta.Name)" HelperText="为您的数据结构命名，例如：Product, Article, GameCharacter" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="_schemaMeta.Description" Label="描述 (Description)" Lines="1" For="@(() => _schemaMeta.Description)" HelperText="(可选) 简要描述其用途" Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+
+        <MudTabs Elevation="2" Centered="true" Rounded="true" PanelClass="pa-0" Justify="Justify.Center" @bind-ActivePanelIndex="_activeTabIndex">
+            <MudTabPanel Text="AI 辅助" Class="pa-4">
+                <AiAssistedSchemaCreationForm @ref="_aiFormInstance" OnValidSchemaSubmit="HandleFieldsSubmit" OnCancelClicked="NavigateBackToList" />
             </MudTabPanel>
-            <MudTabPanel Text="手动创建">
-                <ManualSchemaCreationForm @ref="_manualForm" OnValidSchemaSubmit="HandleSubmit" OnCancelClicked="NavigateBackToList" /> 
+            <MudTabPanel Text="手动创建" Class="pa-4">
+                <ManualSchemaCreationForm @ref="_manualFormInstance" OnValidSchemaSubmit="HandleFieldsSubmit" OnCancelClicked="NavigateBackToList" />
             </MudTabPanel>
         </MudTabs>
 
-         @* Buttons are now handled within each form component *@
+        <MudPaper Elevation="0" Class="d-flex justify-end ga-2 mt-6 pa-4" Style="border-top: 1px solid;">
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="NavigateBackToList" Disabled="@_isSaving" Size="Size.Large">取消创建</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="TriggerActiveFormSubmit" Disabled="@_isSaving" Size="Size.Large">
+                @if (_isSaving)
+                {
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                    <span>正在保存...</span>
+                }
+                else
+                {
+                    <span>保存数据结构</span>
+                }
+            </MudButton>
+        </MudPaper>
 
     </MudStack>
 </MudContainer>
 
 <style>
     .page-main-title {
-        font-weight: 600; /* Matching .page-title from Index.razor.css */
+        font-weight: 600;
     }
     .page-sub-title {
-        margin-bottom: 24px; /* Add some space below subtitle */
+        margin-bottom: 24px;
     }
 </style>
 
 @code {
-    private ManualSchemaCreationForm? _manualForm;
+    private class SchemaMetadata
+    {
+        [Required(ErrorMessage = "数据结构名称不能为空")]
+        [RegularExpression(@"^[a-zA-Z_][a-zA-Z0-9_]*$", ErrorMessage = "名称只能包含字母、数字和下划线，且不能以数字开头")]
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+    }
+
+    private MudForm? _pageForm;
+    private SchemaMetadata _schemaMeta = new();
+    private AiAssistedSchemaCreationForm? _aiFormInstance;
+    private ManualSchemaCreationForm? _manualFormInstance;
+    
+    private int _activeTabIndex = 0; // 0 for AI, 1 for Manual
     private bool _isSaving = false;
 
-    // Handles submission from the Manual form
-    private async Task HandleSubmit(SchemaDefinition schema)
+    private async Task HandleFieldsSubmit(List<FieldDefinition> fields)
     {
-        _logger.LogInformation("[CreatePage] HandleSubmit called for schema: {SchemaName}", schema.Name);
-        if (_isSaving) 
+        _logger.LogInformation("[CreatePage] HandleFieldsSubmit called.");
+        await _pageForm!.Validate();
+        if (!_pageForm.IsValid)
         {
-            _logger.LogWarning("[CreatePage] HandleSubmit: Already saving, returning.");
+            Snackbar.Add("请填写数据结构名称和描述。", Severity.Warning);
+            _logger.LogWarning("[CreatePage] Page form is invalid (Name/Description).");
+            return;
+        }
+
+        if (fields == null || !fields.Any())
+        {
+            Snackbar.Add("数据结构必须至少包含一个字段。", Severity.Error);
+            _logger.LogWarning("[CreatePage] No fields submitted.");
+            return;
+        }
+
+        if (_isSaving)
+        {
+            _logger.LogWarning("[CreatePage] HandleFieldsSubmit: Already saving, returning.");
             return;
         }
         _isSaving = true;
-        Snackbar.Add($"(手动) 正在保存数据结构...", Severity.Info);
+        StateHasChanged(); 
+
+        var schemaToSave = new SchemaDefinition
+        {
+            Name = _schemaMeta.Name,
+            Description = _schemaMeta.Description,
+            Fields = fields
+        };
+        
+        var sourceForm = _activeTabIndex == 0 ? "AI辅助" : "手动";
+        Snackbar.Add($"({sourceForm}) 正在保存数据结构 '{schemaToSave.Name}'...", Severity.Info);
+
         try
         {
-            await SaveSchema(schema);
-            Snackbar.Add($"数据结构 '{schema.Name}' 保存成功!", Severity.Success);
-            _manualForm?.ResetForm(); 
-            _logger.LogInformation("[CreatePage] Form reset called after HandleSubmit.");
+            await SchemaService.CreateSchemaAsync(schemaToSave);
+            Snackbar.Add($"数据结构 '{schemaToSave.Name}' 保存成功!", Severity.Success);
+            
+            _schemaMeta = new SchemaMetadata(); // Reset page form model
+            _pageForm?.ResetValidation();
+
+
+            if (_activeTabIndex == 0 && _aiFormInstance != null)
+            {
+                // _aiFormInstance.ResetFormState(); // AI form will reset itself internally upon successful submission
+            }
+            else if (_activeTabIndex == 1 && _manualFormInstance != null)
+            {
+                _manualFormInstance.ResetForm();
+            }
+            
             _logger.LogInformation("[CreatePage] Navigating back to list after 1 second delay.");
-            await Task.Delay(1000); 
+            await Task.Delay(1000);
             NavigateBackToList();
         }
         catch (Exception ex)
-        { 
-            _logger.LogError(ex, "[CreatePage] Error saving schema {SchemaName} from submission.", schema.Name); 
+        {
+            _logger.LogError(ex, "[CreatePage] Error saving schema {SchemaName} from {SourceForm} submission.", schemaToSave.Name, sourceForm);
             Snackbar.Add($"保存失败: {ex.Message}", Severity.Error, config => { config.RequireInteraction = true; });
         }
         finally
         {
             _isSaving = false;
+            StateHasChanged();
         }
     }
-
-
-    // Common save logic - sourceType parameter removed
-    private async Task SaveSchema(SchemaDefinition schema)
+    
+    private async Task TriggerActiveFormSubmit()
     {
-        _logger.LogInformation("[CreatePage] SaveSchema called. Schema Name: {SchemaName}", schema.Name);
-        // Snackbar messages are also handled by the calling methods
-        
-        _logger.LogInformation("[CreatePage] SaveSchema: Calling SchemaService.CreateSchemaAsync for schema {SchemaName}.", schema.Name);
-        await SchemaService.CreateSchemaAsync(schema);
-        _logger.LogInformation("[CreatePage] SaveSchema: CreateSchemaAsync completed for schema {SchemaName}.", schema.Name);
-        // Success Snackbar and navigation are handled by the calling methods
+        await _pageForm!.Validate();
+        if (!_pageForm.IsValid)
+        {
+            Snackbar.Add("请填写数据结构名称。", Severity.Warning);
+            return;
+        }
+
+        if (_activeTabIndex == 0 && _aiFormInstance != null)
+        {
+            // The AI form's final step button will call PrepareAndSubmitFinalSchemaAsync,
+            // which in turn calls OnValidSchemaSubmit (HandleFieldsSubmit here)
+            // So, we need a way for this page's save button to trigger that internal AI form submission.
+            // This might require the AI form to expose a public method like 'SubmitAsync()'
+            await _aiFormInstance.TriggerSubmitAsync(); 
+        }
+        else if (_activeTabIndex == 1 && _manualFormInstance != null)
+        {
+            await _manualFormInstance.TriggerSubmitAsync();
+        }
     }
 
     private void NavigateBackToList()
     {
-        if (_isSaving) return; // Prevent navigation while saving
+        if (_isSaving) return;
         NavigationManager.NavigateTo("/schema-management");
     }
 } 

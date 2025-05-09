@@ -1,0 +1,106 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+
+@if (Fields != null && Fields.Any())
+{
+    <MudTable Items="@Fields" Dense="true" Hover="true" Bordered="true" Striped="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+        <HeaderContent>
+            <MudTh Style="width: 25%;">字段名</MudTh>
+            <MudTh Style="width: 20%;">类型</MudTh>
+            <MudTh Style="width: 10%; text-align:center;">必填</MudTh>
+            <MudTh Style="width: 35%;">注释</MudTh>
+            @if (ShowRemoveButton && !ReadOnly)
+            {
+                <MudTh Style="width: 10%; text-align:center;">操作</MudTh>
+            }
+        </HeaderContent>
+        <RowTemplate Context="field">
+            <MudTd DataLabel="字段名">
+                @if (ReadOnly)
+                {
+                    <MudText Typo="Typo.body2">@field.Name</MudText>
+                }
+                else
+                {
+                    <MudTextField @bind-Value="field.Name" Margin="Margin.Dense" Required="true" ErrorText="字段名不能为空" Variant="Variant.Text"/>
+                }
+            </MudTd>
+            <MudTd DataLabel="类型">
+                @if (ReadOnly)
+                {
+                    <MudText Typo="Typo.body2">@field.Type.ToString()</MudText>
+                }
+                else
+                {
+                    <MudSelect T="FieldType" @bind-Value="field.Type" Margin="Margin.Dense" Variant="Variant.Text">
+                        @foreach (FieldType type in Enum.GetValues(typeof(FieldType)))
+                        {
+                            <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            </MudTd>
+            <MudTd DataLabel="必填" Style="text-align:center;">
+                @if (ReadOnly)
+                {
+                    <MudCheckBox T="bool" @bind-Value="field.IsRequired" ReadOnly="true" Dense="true" />
+                }
+                else
+                {
+                    <MudCheckBox T="bool" @bind-Value="field.IsRequired" Dense="true" />
+                }
+            </MudTd>
+            <MudTd DataLabel="注释">
+                 @if (ReadOnly)
+                {
+                    <MudText Typo="Typo.body2">@field.Comment</MudText>
+                }
+                else
+                {
+                    <MudTextField @bind-Value="field.Comment" Margin="Margin.Dense" Lines="1" Variant="Variant.Text"/>
+                }
+            </MudTd>
+            @if (ShowRemoveButton && !ReadOnly)
+            {
+                <MudTd DataLabel="操作" Style="text-align:center;">
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" OnClick="() => HandleRemoveField(field)" />
+                </MudTd>
+            }
+        </RowTemplate>
+    </MudTable>
+}
+else
+{
+    <MudAlert Severity="Severity.Info" Class="mt-2">@(ReadOnly ? "没有可供预览的字段。" : "请添加字段定义。")</MudAlert>
+}
+
+@if (ShowAddButton && !ReadOnly)
+{
+    <MudButton OnClick="HandleAddField" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" Class="align-self-start mt-3">添加字段</MudButton>
+}
+
+@code {
+    [Parameter] public List<FieldDefinition> Fields { get; set; } = new List<FieldDefinition>();
+    [Parameter] public bool ReadOnly { get; set; } = false;
+    [Parameter] public bool ShowAddButton { get; set; } = false;
+    [Parameter] public bool ShowRemoveButton { get; set; } = false;
+
+    [Parameter] public EventCallback OnAddField { get; set; }
+    [Parameter] public EventCallback<FieldDefinition> OnRemoveField { get; set; }
+
+    private async Task HandleRemoveField(FieldDefinition field)
+    {
+        if (OnRemoveField.HasDelegate)
+        {
+            await OnRemoveField.InvokeAsync(field);
+        }
+    }
+
+    private async Task HandleAddField()
+    {
+        if (OnAddField.HasDelegate)
+        {
+            await OnAddField.InvokeAsync();
+        }
+    }
+} 

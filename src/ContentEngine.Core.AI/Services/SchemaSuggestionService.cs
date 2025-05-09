@@ -158,7 +158,7 @@ namespace ContentEngine.Core.AI.Services
                 {
                     Name = name,
                     Type = fieldType,
-                    IsRequired = requiredStr.Contains("必填") || requiredStr.Equals("Required", StringComparison.OrdinalIgnoreCase),
+                    IsRequired = requiredStr.Equals("Required", StringComparison.OrdinalIgnoreCase),
                     Comment = comment
                 };
                 fields.Add(fieldDef);

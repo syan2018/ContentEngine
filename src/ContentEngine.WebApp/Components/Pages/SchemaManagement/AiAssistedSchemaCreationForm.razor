@@ -2,176 +2,434 @@
 @using ContentEngine.Core.AI.Services 
 @using System.ComponentModel.DataAnnotations 
 @using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@using ContentEngine.WebApp.Components.Shared
 @inject ISchemaSuggestionService SchemaSuggestionService
 @inject ISnackbar Snackbar
 
-<MudForm @ref="_form" Model="@_viewModel" OnValidSubmit="GenerateSchema">
-    <MudStack Spacing="4">
-
+@* Schema Name and Description are now handled by CreatePage.razor *@
+<MudForm @ref="_currentForm" Model="@_viewModel" Style="width: 100%;" OnValidSubmit="HandleAiFormSubmitEntryPoint">
+    <MudStepper @ref="_stepper" @bind-ActiveIndex="_currentLogicalStepIndex" Linear="true" HeaderNavigation="false" OnPreviewInteraction="HandleStepperPreviewInteraction">
+        @* FooterTemplate removed to use default stepper buttons if available and not disabled by other means *@
+        @* DisableDefaultExitedStepButtons is removed to see default buttons initially *@
+        <MudStep Icon="@Icons.Material.Filled.Description" Title="1. 描述需求" StepContentStyle="width:100%;" Completed="_isStep1CompletedLogically">
+            <MudStack Spacing="4" Class="pa-2">
         <MudText Typo="Typo.subtitle2">首先，请描述您希望创建的数据结构，并可以选择提供一些样例数据以帮助 AI 理解。</MudText>
         
-        <MudGrid Spacing="3">
-             <MudItem xs="12">
-                <MudTextField @bind-Value="_viewModel.Name" Label="数据结构名称 (Schema Name)" Required="true" For="@(() => _viewModel.Name)" HelperText="为您的数据结构命名" />
-            </MudItem>
-            <MudItem xs="12">
-                <MudTextField @bind-Value="_viewModel.Description" Label="描述 (Description)" Lines="2" For="@(() => _viewModel.Description)" HelperText="(可选) 简要描述其用途" />
-            </MudItem>
-        </MudGrid>
-
-        <MudTextField @bind-Value="_viewModel.Prompt" Label="描述您需要的数据结构"
+                <MudTextField @bind-Value="_viewModel.Prompt" Label="描述您需要的数据结构 (Prompt)" 
+                              Variant="Variant.Outlined"
                       Lines="5" Required="true" For="@(() => _viewModel.Prompt)"
                       Placeholder="例如：我需要一个游戏角色的数据结构，包含姓名、种族、职业、等级、生命值、技能列表和背景故事描述" />
 
         <MudTextField @bind-Value="_viewModel.SampleData" Label="样例数据 (可选)"
-                      Lines="6" For="@(() => _viewModel.SampleData)"
+                              Variant="Variant.Outlined"
+                              Lines="4" For="@(() => _viewModel.SampleData)"
                       HelperText="提供一段样例数据可以帮助 AI 更准确地理解您的需求"
                       Placeholder="粘贴一段包含相关信息的文本或表格数据..." />
 
-        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" 
-                   StartIcon="@Material.Filled.AutoAwesome" Disabled="_isGenerating" FullWidth="true" Size="Size.Large">
-            @if (_isGenerating)
+                @* This button is specific to Step 1 for fetching AI suggestions before allowing "Next" via Stepper *@
+                <MudButton OnClick="RequestAiSuggestionAsync" Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Material.Filled.AutoAwesome" Disabled="_isGeneratingAiSuggestion" FullWidth="true" Size="Size.Large" Class="mt-2 mb-2">
+                    @if (_isGeneratingAiSuggestion)
             {
                 <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
-                <span>正在生成...</span>
+                        <span>正在生成初步建议...</span>
             }
             else
             {
-                <span>AI 智能生成数据结构</span>
+                        <span>获取 AI 初步建议</span>
             }
         </MudButton>
 
-        @if (_generatedSchema != null)
+                @if (_isGeneratingAiSuggestion)
         {
-            <MudCard Class="mt-4">
-                <MudCardHeader>
-                    <CardHeaderContent>
-                        <MudText Typo="Typo.h6">AI 生成结果</MudText>
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">AI 根据您的描述生成了以下数据结构，您可以进行修改和调整。</MudText>
-                    </CardHeaderContent>
-                </MudCardHeader>
-                <MudCardContent>
-                    <MudTable Items="@_generatedSchema.Fields" Dense="true" Hover="true" Bordered="true" Striped="true">
-                        <HeaderContent>
-                            <MudTh>字段名</MudTh>
-                            <MudTh>类型</MudTh>
-                            <MudTh>必填</MudTh>
-                            <MudTh>注释</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd DataLabel="字段名">@context.Name</MudTd>
-                            <MudTd DataLabel="类型">@context.Type</MudTd>
-                            <MudTd DataLabel="必填"> <MudCheckBox T="bool" Checked="@context.IsRequired" ReadOnly="true" Dense="true" /> </MudTd>
-                            <MudTd DataLabel="注释">@context.Comment</MudTd>
-                        </RowTemplate>
-                    </MudTable>
-                </MudCardContent>
-                <MudCardActions Class="justify-end">
-                     <MudButton Variant="Variant.Outlined" OnClick="OnCancel">取消</MudButton>
-                     @* Edit button would likely populate the Manual form or a similar editor *@
-                    <MudButton Variant="Variant.Text" Color="Color.Primary" Disabled="true">编辑字段 (待实现)</MudButton> 
-                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="SaveGeneratedSchema">使用此结构</MudButton>
-                </MudCardActions>
-            </MudCard>
-        }
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-2" />
+                }
 
-        @if (!string.IsNullOrWhiteSpace(_errorMessage))
-        {
-            <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
-        }
+                @if (_suggestedSchemaForStep1Preview != null && _suggestedSchemaForStep1Preview.Fields.Any())
+                {
+                    <MudDivider Class="my-4" />
+                    <MudText Typo="Typo.h6">AI 初步建议结果 (预览):</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">AI 根据您的描述生成了以下字段。检查后，请使用下方的Steppper导航按钮进入下一步进行编辑。</MudText>
+                    
+                    <FieldDefinitionTable Fields="_suggestedSchemaForStep1Preview.Fields" ReadOnly="true" />
+                }
+            </MudStack>
+        </MudStep>
 
-    </MudStack>
+        <MudStep Icon="@Icons.Material.Filled.EditNote" Title="2. 编辑与优化字段" StepContentStyle="width:100%;" Completed="_isStep2CompletedLogically">
+            <MudStack Spacing="4" Class="pa-2">
+                @if (_editableFields.Any())
+                {
+                    <MudText Typo="Typo.h6">编辑字段</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">请检查并修改 AI 生成的字段，或添加新的字段。完成后请使用下方的Steppper导航按钮进入下一步。</MudText>
+
+                    <FieldDefinitionTable Fields="_editableFields" 
+                                          ReadOnly="false" 
+                                          ShowAddButton="true" 
+                                          ShowRemoveButton="true" 
+                                          OnAddField="AddField" 
+                                          OnRemoveField="RemoveField" />
+
+                    <MudExpansionPanels Dense="true" Class="mt-3">
+                        <MudExpansionPanel Text="AI 进一步优化 (可选)">
+                             <MudTextField @bind-Value="_userFeedbackForRefinement" Label="优化指令或补充说明" Lines="3" Placeholder="例如：将所有日期字段改为DateTime类型，为'作者'字段添加注释说明其是一个用户ID..." Variant="Variant.Outlined"/>
+                             <MudButton OnClick="RefineFieldsWithAiAsync" Variant="Variant.Text" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.AutoFixHigh" Disabled="_isRefiningFields" Class="mt-2">
+                                @if (_isRefiningFields)
+                                {
+                                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                                    <span>正在优化...</span>
+                                }
+                                else
+                                {
+                                    <span>请求 AI 优化当前字段</span>
+                                }
+                            </MudButton>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                }
+                else
+                {
+                     <MudAlert Severity="Severity.Info" Class="mt-2">请先返回第一步获取AI建议，或确保AI建议已成功加载。</MudAlert>
+                }
+            </MudStack>
+        </MudStep>
+        
+        <MudStep Icon="@Icons.Material.Filled.CheckCircle" Title="3. 确认与提交" StepContentStyle="width:100%;">
+            <MudStack Spacing="3" Class="pa-2">
+                <MudText Typo="Typo.h6">最终确认字段</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">请最后检查数据结构的字段。确认无误后，点击Steppper的"完成"或"提交"按钮。</MudText>
+                
+                <FieldDefinitionTable Fields="_editableFields" ReadOnly="true" />
+            </MudStack>
+        </MudStep>
+    </MudStepper>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+    }
 </MudForm>
 
-
 @code {
-    [Parameter] public EventCallback<SchemaDefinition> OnValidSchemaSubmit { get; set; }
+    [Parameter] public EventCallback<List<FieldDefinition>> OnValidSchemaSubmit { get; set; }
     [Parameter] public EventCallback OnCancelClicked { get; set; } 
 
-    // Simple view model to hold form state
-    private class AiFormViewModel
+    private class AiPromptViewModel
     {
-        [Required(ErrorMessage = "数据结构名称不能为空")]
-        public string Name { get; set; } = string.Empty;
-        public string? Description { get; set; }
-        
         [Required(ErrorMessage = "请描述您的数据需求")]
         public string Prompt { get; set; } = string.Empty;
         public string? SampleData { get; set; }
     }
 
-    private MudForm? _form;
-    private AiFormViewModel _viewModel = new();
-    private bool _isGenerating = false;
+    private MudForm? _currentForm; // Form for step 1 prompt inputs
+    private MudStepper? _stepper; 
+    private int _currentLogicalStepIndex = 0; 
+    private AiPromptViewModel _viewModel = new();
+
+    private bool _isGeneratingAiSuggestion = false;
+    private bool _isRefiningFields = false;
+    private bool _isSubmittingFinalSchema = false;
     private string? _errorMessage;
-    private SchemaDefinition? _generatedSchema;
 
-    private async Task GenerateSchema()
+    private SchemaDefinition? _suggestedSchemaForStep1Preview;
+    private List<FieldDefinition> _editableFields = new();
+    private string? _userFeedbackForRefinement;
+
+    // State flags for logical completion of steps for Stepper interaction control
+    private bool _isStep1CompletedLogically = false; // True when AI suggestion is fetched and valid
+    private bool _isStep2CompletedLogically = false; // True when fields are edited and valid for confirmation
+
+    // Entry point for MudForm's OnValidSubmit, if needed for step 1's prompt form.
+    // Currently, main action for step 1 is via the "Get AI Suggestion" button.
+    private async Task HandleAiFormSubmitEntryPoint()
+    {
+        _logger.LogInformation("[AI Form] HandleAiFormSubmitEntryPoint called. Current logical step: {_currentLogicalStepIndex}");
+        if (_currentLogicalStepIndex == 0 && !_isGeneratingAiSuggestion) // If on the first step and not already generating
+        {
+            await RequestAiSuggestionAsync(); // Allow Enter key on form to trigger AI suggestion
+        }
+    }
+
+    private async Task RequestAiSuggestionAsync()
     {       
-        await _form!.Validate();
-        if (!_form.IsValid) return;
+        if (_currentForm == null) return;
+        await _currentForm.Validate();
+        if (!_currentForm.IsValid)
+        {
+            Snackbar.Add("请填写AI提示描述您的数据需求。", Severity.Warning);
+            return;
+        }
 
-        _isGenerating = true;
+        _isGeneratingAiSuggestion = true;
         _errorMessage = null;
-        _generatedSchema = null; 
+        _suggestedSchemaForStep1Preview = null; 
+        _editableFields.Clear();
+        _isStep1CompletedLogically = false; // Reset completion state before fetching
         StateHasChanged();
 
         try
         {
-            // *** Placeholder for AI Service Call ***
-            // In real implementation, call:
-            // _generatedSchema = await SchemaSuggestionService.SuggestSchemaAsync(_viewModel.Prompt, _viewModel.Name, _viewModel.Description, _viewModel.SampleData);
-            
-            // Simulate AI call delay and result
-            await Task.Delay(1500);
-            _generatedSchema = CreateDummySchemaResult(); 
-             // *** End Placeholder ***
+            string schemaNameFromParent = "AI_Generated"; 
+            string schemaDescFromParent = ""; 
 
-            if (_generatedSchema == null || !_generatedSchema.Fields.Any())
+            _suggestedSchemaForStep1Preview = await SchemaSuggestionService.SuggestSchemaAsync(_viewModel.Prompt, schemaNameFromParent, schemaDescFromParent, _viewModel.SampleData);
+            
+            if (_suggestedSchemaForStep1Preview == null || !_suggestedSchemaForStep1Preview.Fields.Any())
             {
-                _errorMessage = "AI 未能生成有效的字段定义，请尝试调整您的描述或样例数据。";
-                _generatedSchema = null; // Ensure result area is hidden if generation failed
+                _errorMessage = "AI 未能生成有效的字段定义。请尝试调整您的描述或样例数据。";
+                _suggestedSchemaForStep1Preview = null;
+            }
+            else
+            {
+                Snackbar.Add("AI 已生成初步建议。请查看下方结果，然后使用 Stepper 按钮进入下一步编辑。", Severity.Info);
+                // Note: _isStep1CompletedLogically is NOT set to true here yet.
+                // It will be set when user clicks Stepper's NEXT from step 0, after reviewing.
+                // However, the Stepper's "Next" button for step 0 should probably be enabled now.
             }
         }
         catch (Exception ex)
         {
-            // Log exception properly
-            _errorMessage = $"AI 生成过程中出错: {ex.Message}";
-            _generatedSchema = null;
+            _errorMessage = $"AI 生成初步建议过程中出错: {ex.Message}";
+            _suggestedSchemaForStep1Preview = null;
         }
         finally
         {
-            _isGenerating = false;
+            _isGeneratingAiSuggestion = false;
             StateHasChanged();
         }
     }
 
-    private SchemaDefinition CreateDummySchemaResult()
+    private async Task HandleStepperPreviewInteraction(StepperInteractionEventArgs arg)
     {
-        // Create a plausible dummy result based on the view model name/desc if possible
-        return new SchemaDefinition
-        {
-            Name = string.IsNullOrWhiteSpace(_viewModel.Name) ? "AI生成示例" : _viewModel.Name,
-            Description = string.IsNullOrWhiteSpace(_viewModel.Description) ? "由AI根据提示生成的示例结构" : _viewModel.Description,
-            Fields = new List<FieldDefinition>
+        _logger.LogInformation($"[AI Form] HandleStepperPreviewInteraction: StepIndex={arg.StepIndex}, Action={arg.Action}");
+
+        if (arg.Action == StepAction.Complete) // User clicked "Next" on the current step (arg.StepIndex refers to the step being completed)
+    {
+            switch (arg.StepIndex) // This is the index of the step the user is trying to complete and move FROM
             {
-                new FieldDefinition { Name = "title", Type = FieldType.Text, IsRequired = true, Comment = "主要标题" },
-                new FieldDefinition { Name = "content", Type = FieldType.Text, IsRequired = true },
-                new FieldDefinition { Name = "publish_date", Type = FieldType.Date, IsRequired = false },
+                case 0: // Trying to complete Step 1 (Description & AI Suggestion Preview) and move to Step 2 (Edit)
+                    if (_suggestedSchemaForStep1Preview == null || !_suggestedSchemaForStep1Preview.Fields.Any())
+                    {
+                        _errorMessage = "请先成功获取AI初步建议，然后再进入下一步。";
+                        Snackbar.Add(_errorMessage, Severity.Warning);
+                        arg.Cancel = true; // Prevent moving to next step
+                    }
+                    else
+                    {
+                        // Copy previewed fields to editable list for Step 2
+                        _editableFields = _suggestedSchemaForStep1Preview.Fields.Select(f => new FieldDefinition
+                        {
+                            Name = f.Name,
+                            Type = f.Type,
+                            IsRequired = f.IsRequired,
+                            Comment = f.Comment,
+                            ReferenceSchemaName = f.ReferenceSchemaName
+                        }).ToList();
+                        _isStep1CompletedLogically = true;
+                        _errorMessage = null;
+                        _logger.LogInformation("Step 1 completed logically, proceeding to Step 2.");
+                    }
+                    break;
+
+                case 1: // Trying to complete Step 2 (Edit & Optimize) and move to Step 3 (Confirm)
+                    if (!_editableFields.Any() || _editableFields.All(f => string.IsNullOrWhiteSpace(f.Name)))
+                    {
+                        _errorMessage = "至少需要一个有效命名的字段才能进入确认步骤。";
+                        Snackbar.Add(_errorMessage, Severity.Error);
+                        arg.Cancel = true; // Prevent moving to next step
+                    }
+                    else if (_editableFields.Any(f => string.IsNullOrWhiteSpace(f.Name)))
+                    {
+                        _errorMessage = "所有已添加的字段都必须有名称。";
+                        Snackbar.Add(_errorMessage, Severity.Error);
+                        arg.Cancel = true;
+                    }
+                    else
+                    {
+                        _isStep2CompletedLogically = true;
+                        _errorMessage = null;
+                        _logger.LogInformation("Step 2 completed logically, proceeding to Step 3.");
+                    }
+                    break;
+
+                case 2: // Trying to complete Step 3 (Final Confirm) - This is the final submission
+                    _logger.LogInformation("Attempting to submit from Step 3 completion.");
+                    await SubmitFinalSchemaAsync(); 
+                    // If SubmitFinalSchemaAsync is successful, it will invoke OnValidSchemaSubmit.
+                    // If it fails, _errorMessage will be set. We might need to prevent stepper completion if submit fails.
+                    if (!string.IsNullOrWhiteSpace(_errorMessage)) // Check if SubmitFinalSchemaAsync set an error
+                    {
+                        arg.Cancel = true; // Prevent stepper from marking as fully complete if our submission logic failed
+                    }
+                    else
+                    {
+                        // Consider if stepper should be marked as 'completed' visually by MudBlazor
+                        // This might happen automatically if arg.Cancel is not true.
+                         _logger.LogInformation("Schema submission process triggered from Step 3 completion.");
+                    }
+                    break;
             }
-        };
+        }
+        else if (arg.Action == StepAction.Activate) // User clicked a step header or an inactive step
+        {
+            // arg.StepIndex here refers to the step the user is trying to navigate TO (the target step)
+            if (arg.StepIndex > _currentLogicalStepIndex) // Trying to jump forward to a step beyond the current one
+            {
+                if (arg.StepIndex == 1 && !_isStep1CompletedLogically)
+                {
+                    Snackbar.Add("请先完成第一步 (获取AI建议)。", Severity.Warning);
+                    arg.Cancel = true;
+                }
+                else if (arg.StepIndex == 2 && (!_isStep1CompletedLogically || !_isStep2CompletedLogically))
+                {
+                    Snackbar.Add("请先完成第一步和第二步。", Severity.Warning);
+                    arg.Cancel = true;
+                }
+            }
+            // Allow jumping backwards freely. If specific checks are needed for backward navigation, they can be added here.
+            // If navigation is not cancelled, _currentLogicalStepIndex will be updated by @bind-ActiveIndex automatically by the stepper to arg.StepIndex.
+        }
+        StateHasChanged(); // Ensure UI reflects any changes like error messages or step completion status
     }
 
-    private async Task SaveGeneratedSchema()
+
+    private void AddField()
     {
-        if (_generatedSchema != null)
+        _editableFields.Add(new FieldDefinition { Name = "new_field", Type = FieldType.Text, IsRequired = false });
+    }
+
+    private void RemoveField(FieldDefinition fieldToRemove)
+    {
+        _editableFields.Remove(fieldToRemove);
+    }
+    
+    private async Task RefineFieldsWithAiAsync()
+    {
+        if (!_editableFields.Any())
         {
-            await OnValidSchemaSubmit.InvokeAsync(_generatedSchema);
+            Snackbar.Add("没有可供优化的字段。", Severity.Info);
+            return;
+        }
+        _isRefiningFields = true;
+        _errorMessage = null;
+        StateHasChanged();
+        try
+        {
+            var refinedList = await SchemaSuggestionService.RefineSchemaAsync(
+                _editableFields, 
+                _viewModel.Prompt, 
+                _userFeedbackForRefinement);
+
+            if (refinedList != null && refinedList.Any())
+            {
+                _editableFields = refinedList.Select(f => new FieldDefinition
+                {
+                    Name = f.Name,
+                    Type = f.Type,
+                    IsRequired = f.IsRequired,
+                    Comment = f.Comment,
+                    ReferenceSchemaName = f.ReferenceSchemaName
+                }).ToList();
+                Snackbar.Add("AI 已优化字段列表。", Severity.Success);
+                _userFeedbackForRefinement = string.Empty; 
+            }
+            else
+            {
+                Snackbar.Add("AI 未能进一步优化字段，或返回了空列表。", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"AI 优化过程中出错: {ex.Message}";
+        }
+        finally
+        {
+            _isRefiningFields = false;
+            StateHasChanged();
         }
     }
 
-    private async Task OnCancel()
+    private async Task SubmitFinalSchemaAsync()
     {
+        _logger.LogInformation("SubmitFinalSchemaAsync called.");
+        if (!_editableFields.Any() || _editableFields.All(f => string.IsNullOrWhiteSpace(f.Name)))
+        {
+            _errorMessage = "至少需要一个有效命名的字段才能创建数据结构。";
+            Snackbar.Add(_errorMessage, Severity.Error);
+            _isSubmittingFinalSchema = false; // Ensure flag is reset if validation fails early
+            StateHasChanged();
+            return;
+        }
+        
+        _isSubmittingFinalSchema = true;
+        _errorMessage = null; // Clear previous errors before attempting submission
+        StateHasChanged();
+
+        try
+        {
+            await OnValidSchemaSubmit.InvokeAsync(new List<FieldDefinition>(_editableFields));
+            Snackbar.Add($"AI辅助生成的字段列表已提交。", Severity.Info);
+            // ResetFormState(false); // Parent page (CreatePage) will handle navigation/reset of this component via its own state or by re-rendering.
+                                   // Let this component reset its core state upon successful callback.
+            _isStep1CompletedLogically = false;
+            _isStep2CompletedLogically = false;
+            // _currentLogicalStepIndex remains on the last step or an invalid one if stepper completes/hides.
+            // If we want to go back to step 0: ResetFormState(false) would do it.
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"提交数据结构时出错: {ex.Message}";
+            Snackbar.Add($"提交失败: {ex.Message}", Severity.Error);
+    }
+        finally
+        {
+            _isSubmittingFinalSchema = false;
+            StateHasChanged();
+        }
+    }
+    
+    // This public method is still needed by CreatePage if its main Save button is to trigger this form's submission process.
+    // However, with Stepper's own navigation, this might become less critical if user always uses Stepper buttons.
+    public async Task TriggerSubmitAsync()
+    {
+        _logger.LogInformation("[AI Form] TriggerSubmitAsync called by parent. Current logical step: {_currentLogicalStepIndex}");
+        if (_currentLogicalStepIndex == 2 && _isStep1CompletedLogically && _isStep2CompletedLogically) 
+        {
+             _logger.LogInformation("TriggerSubmitAsync: Conditions met, calling SubmitFinalSchemaAsync.");
+            await SubmitFinalSchemaAsync();
+        }
+        else
+        {
+            Snackbar.Add("请使用Stepper逐步完成AI辅助创建流程，并在最后一步通过Stepper按钮提交。", Severity.Warning);
+            _logger.LogWarning("TriggerSubmitAsync: Not on final step or prerequisites not met. Step1Done: {_isStep1CompletedLogically}, Step2Done: {_isStep2CompletedLogically}", _isStep1CompletedLogically, _isStep2CompletedLogically);
+        }
+    }
+
+    private void ResetFormState(bool clearPromptViewModel = true)
+    {
+        if(clearPromptViewModel) _viewModel = new AiPromptViewModel();
+        _suggestedSchemaForStep1Preview = null;
+        _editableFields.Clear();
+        _userFeedbackForRefinement = string.Empty;
+        _errorMessage = null;
+        _isGeneratingAiSuggestion = false;
+        _isRefiningFields = false;
+        _isSubmittingFinalSchema = false;
+        
+        _isStep1CompletedLogically = false;
+        _isStep2CompletedLogically = false;
+        _currentLogicalStepIndex = 0; // This will navigate stepper to first step due to @bind-ActiveIndex
+        
+        _currentForm?.ResetValidation(); 
+        StateHasChanged();
+        _logger.LogInformation("[AI Form] Form state has been reset.");
+    }
+
+    private async Task HandleCancel()
+    {
+        ResetFormState(); 
          await OnCancelClicked.InvokeAsync();
     }
-} 
+
+    [Inject] private ILogger<AiAssistedSchemaCreationForm> _logger { get; set; } = default!;
+}
