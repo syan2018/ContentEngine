@@ -43,7 +43,7 @@ export default function QuickActions() {
       <Card>
         <CardHeader className="space-y-1">
           <CardTitle className="text-lg">数据洞察</CardTitle>
-          <CardDescription>浏览和查询结构化数据</CardDescription>
+          <CardDescription>浏览和查询结构化数据内容</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex justify-center py-4">

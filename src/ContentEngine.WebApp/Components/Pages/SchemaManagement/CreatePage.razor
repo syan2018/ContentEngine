@@ -34,19 +34,27 @@
             </MudTabPanel>
         </MudTabs>
 
-        <MudPaper Elevation="0" Class="d-flex justify-end ga-2 mt-6 pa-4" Style="border-top: 1px solid;">
-            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="NavigateBackToList" Disabled="@_isSaving" Size="Size.Large">取消创建</MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="TriggerActiveFormSubmit" Disabled="@_isSaving" Size="Size.Large">
-                @if (_isSaving)
-                {
-                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
-                    <span>正在保存...</span>
-                }
-                else
-                {
-                    <span>保存数据结构</span>
-                }
-            </MudButton>
+        <MudPaper Elevation="0" Class="mt-6 pa-4" Style="border-top: 1px solid;">
+            <MudGrid>
+                <MudItem xs="6" class="d-flex justify-start">
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="NavigateBackToList" Disabled="@_isSaving" Size="Size.Large">
+                        取消创建
+                    </MudButton>
+                </MudItem>
+                <MudItem xs="6" class="d-flex justify-end">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="TriggerActiveFormSubmit" Disabled="@_isSaving" Size="Size.Large">
+                        @if (_isSaving)
+                        {
+                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                            <span>正在保存...</span>
+                        }
+                        else
+                        {
+                            <span>保存数据结构</span>
+                        }
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
         </MudPaper>
 
     </MudStack>
