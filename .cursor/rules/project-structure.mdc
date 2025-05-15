@@ -9,7 +9,7 @@ This document outlines the recommended project structure for the ContentEngine a
 
 *   **`[/src/ContentEngine.WebApp/ContentEngine.WebApp.csproj](mdc:src/ContentEngine.WebApp/ContentEngine.WebApp.csproj)`**: The main Blazor Server project file, responsible for the User Interface (UI) layer and application hosting.
 *   **`[/src/ContentEngine.WebApp/Program.cs](mdc:src/ContentEngine.WebApp/Program.cs)`**: Application entry point, dependency injection (DI) container setup, middleware configuration, and application startup logic.
-*   **`[/src/ContentEngine.WebApp/Components/](mdc:src/ContentEngine.WebApp/Components)`**: Contains Blazor UI components (`.razor`) and pages, organized by feature area (e.g., `DataPipeline`). UI logic should primarily call services from Core and Core.AI.
+*   **`[/src/ContentEngine.WebApp/Components/](mdc:src/ContentEngine.WebApp/Components)`**: Contains Blazor UI components (`.razor`) and pages, organized by feature area (e.g., `SchemaManagement`). UI logic should primarily call services from Core and Core.AI.
 *   **`[/src/ContentEngine.WebApp/wwwroot/](mdc:src/ContentEngine.WebApp/wwwroot)`**: Holds static web assets like CSS, JavaScript, and images.
 *   **`[/src/ContentEngine.WebApp/Resources/](mdc:src/ContentEngine.WebApp/Resources)`**: Contains localization resource files (`.resx`) for the UI layer.
 *   **`[/src/ContentEngine.WebApp/appsettings.json](mdc:src/ContentEngine.WebApp/appsettings.json)`**: Main application configuration file.

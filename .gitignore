@@ -74,3 +74,8 @@ Refs/
 
 # Ignore environment-specific configuration files in Profiles
 /Profiles/*.dev.yaml
+
+# In ContentEngine/.gitignore or ContentEngine/SupportServices/MARKITDOWN/.gitignore
+.venv/
+__pycache__/
+*.pyc
