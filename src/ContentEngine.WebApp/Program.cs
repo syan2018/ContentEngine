@@ -34,6 +34,12 @@ builder.Services.AddConfigurableAIProvider(builder.Configuration);
 // 注册 Schema 建议服务
 builder.Services.AddScoped<ISchemaSuggestionService, SchemaSuggestionService>();
 
+// 注册文件转换服务
+builder.Services.AddHttpClient<IFileConversionService, FileConversionService>();
+
+// 注册数据结构化服务
+builder.Services.AddScoped<IDataStructuringService, DataStructuringService>();
+
 // 2. 配置请求本地化选项 (可选，但推荐)
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {

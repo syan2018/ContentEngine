@@ -1,0 +1,118 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.DataPipeline.Services
+@using ContentEngine.Core.AI.Services
+@inject IFileConversionService FileConversionService
+@inject IDataStructuringService DataStructuringService
+@inject IDataEntryService DataEntryService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<MudCard>
+    <MudCardContent>
+        <MudStepper @ref="stepper" @bind-ActiveStepIndex="activeStepIndex">
+            <!-- 步骤1: 选择数据源 -->
+            <MudStep Title="选择数据源" Icon="Icons.Material.Filled.CloudUpload">
+                <ChildContent>
+                    <SourceSelectionStep OnComplete="@HandleSourcesSelected" />
+                </ChildContent>
+            </MudStep>
+
+            <!-- 步骤2: 配置映射 -->
+            <MudStep Title="配置映射" Icon="Icons.Material.Filled.Settings">
+                <ChildContent>
+                    <MappingConfigStep Schema="Schema" 
+                                      DataSources="dataSources" 
+                                      ExtractionMode="extractionMode"
+                                      OnComplete="HandleMappingConfigured" />
+                </ChildContent>
+            </MudStep>
+
+            <!-- 步骤3: AI 提取预览 -->
+            <MudStep Title="AI 提取预览" Icon="Icons.Material.Filled.AutoAwesome">
+                <ChildContent>
+                    <ExtractionPreviewStep Schema="Schema"
+                                          DataSources="dataSources"
+                                          FieldMappings="fieldMappings"
+                                          ExtractionMode="extractionMode"
+                                          OnComplete="HandleExtractionComplete" />
+                </ChildContent>
+            </MudStep>
+
+            <!-- 步骤4: 确认保存 -->
+            <MudStep Title="确认保存" Icon="Icons.Material.Filled.Save">
+                <ChildContent>
+                    <ResultsReviewStep Schema="Schema" 
+                                      Records="finalRecords"
+                                      OnSave="HandleSaveRecords" />
+                </ChildContent>
+            </MudStep>
+        </MudStepper>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter] public SchemaDefinition Schema { get; set; } = null!;
+
+    private MudStepper stepper = null!;
+    private int activeStepIndex = 0;
+    private List<DataSource> dataSources = new();
+    private ExtractionMode extractionMode = ExtractionMode.OneToOne;
+    private Dictionary<string, string> fieldMappings = new();
+    private List<ExtractionResult> extractionResults = new();
+    private List<LiteDB.BsonDocument> finalRecords = new();
+
+    private async Task HandleSourcesSelected((List<DataSource> sources, ExtractionMode mode) args)
+    {
+        dataSources = args.sources;
+        extractionMode = args.mode;
+        
+        Snackbar.Add($"已选择 {args.sources.Count} 个数据源", Severity.Success);
+        activeStepIndex++;
+    }
+
+    private async Task HandleMappingConfigured(Dictionary<string, string> mappings)
+    {
+        fieldMappings = mappings;
+        
+        Snackbar.Add("字段映射配置完成", Severity.Success);
+        activeStepIndex++;
+    }
+
+    private async Task HandleExtractionComplete(List<ExtractionResult> results)
+    {
+        extractionResults = results;
+        
+        // 合并所有成功提取的记录
+        finalRecords = results
+            .Where(r => r.Status == ExtractionStatus.Success)
+            .SelectMany(r => r.Records)
+            .ToList();
+
+        var successCount = results.Count(r => r.Status == ExtractionStatus.Success);
+        var totalRecords = finalRecords.Count;
+        
+        Snackbar.Add($"提取完成：{successCount}/{results.Count} 个数据源成功，共 {totalRecords} 条记录", Severity.Success);
+        activeStepIndex++;
+    }
+
+    private async Task HandleSaveRecords()
+    {
+        try
+        {
+            // 保存所有记录到数据库
+            foreach (var record in finalRecords)
+            {
+                await DataEntryService.CreateDataAsync(Schema.Name, record);
+            }
+            
+            Snackbar.Add($"成功保存 {finalRecords.Count} 条记录到 {Schema.Name}", Severity.Success);
+            
+            // 导航回数据录入页面
+            Navigation.NavigateTo("/data-entry");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"保存失败: {ex.Message}", Severity.Error);
+        }
+    }
+} 

@@ -1,0 +1,141 @@
+@page "/test-data-entry"
+@using ContentEngine.Core.DataPipeline.Services
+@using ContentEngine.Core.DataPipeline.Models
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@inject ISchemaDefinitionService SchemaService
+@inject ISnackbar Snackbar
+
+<PageTitle>测试数据录入 - ContentEngine</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h3" Class="mb-4">测试数据录入功能</MudText>
+    
+    <MudButton Variant="Variant.Filled" 
+              Color="Color.Primary"
+              OnClick="CreateTestSchema"
+              Class="mb-4">
+        创建测试Schema
+    </MudButton>
+
+    @if (testSchema != null)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-4">
+            测试Schema已创建: @testSchema.Name (ID: @testSchema.Id)
+        </MudAlert>
+        
+        <MudButton Variant="Variant.Filled" 
+                  Color="Color.Secondary"
+                  Href="@($"/data-entry/ai/{testSchema.Id}")"
+                  Class="mb-4">
+            开始AI辅助录入测试
+        </MudButton>
+    }
+
+    <MudCard Class="mt-4">
+        <MudCardContent>
+            <MudText Typo="Typo.h6" Class="mb-2">测试数据示例</MudText>
+            <MudText Typo="Typo.body2" Class="mb-3">
+                您可以使用以下示例文本来测试AI提取功能：
+            </MudText>
+            <MudTextField Value="@sampleText"
+                         Label="示例文本"
+                         Variant="Variant.Outlined"
+                         Lines="10"
+                         ReadOnly="true" />
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private SchemaDefinition? testSchema;
+    
+    private readonly string sampleText = @"角色信息记录
+
+姓名：艾莉亚·史塔克
+种族：人类
+职业：刺客
+等级：15
+技能：剑术、潜行、变脸术
+所属：无面者
+
+姓名：提利昂·兰尼斯特
+种族：人类
+职业：贵族/谋士
+等级：12
+技能：智谋、外交、酒量
+所属：兰尼斯特家族
+
+姓名：丹妮莉丝·坦格利安
+种族：人类
+职业：女王/龙骑士
+等级：20
+技能：龙语、领导力、火焰免疫
+所属：坦格利安家族";
+
+    private async Task CreateTestSchema()
+    {
+        try
+        {
+            var schema = new SchemaDefinition
+            {
+                Name = "角色信息",
+                Description = "游戏或小说中的角色基本信息",
+                Fields = new List<FieldDefinition>
+                {
+                    new FieldDefinition
+                    {
+                        Name = "姓名",
+                        Type = FieldType.Text,
+                        IsRequired = true,
+                        Comment = "角色的姓名"
+                    },
+                    new FieldDefinition
+                    {
+                        Name = "种族",
+                        Type = FieldType.Text,
+                        IsRequired = false,
+                        Comment = "角色的种族"
+                    },
+                    new FieldDefinition
+                    {
+                        Name = "职业",
+                        Type = FieldType.Text,
+                        IsRequired = false,
+                        Comment = "角色的职业或身份"
+                    },
+                    new FieldDefinition
+                    {
+                        Name = "等级",
+                        Type = FieldType.Number,
+                        IsRequired = false,
+                        Comment = "角色的等级"
+                    },
+                    new FieldDefinition
+                    {
+                        Name = "技能",
+                        Type = FieldType.Text,
+                        IsRequired = false,
+                        Comment = "角色的主要技能"
+                    },
+                    new FieldDefinition
+                    {
+                        Name = "所属",
+                        Type = FieldType.Text,
+                        IsRequired = false,
+                        Comment = "角色所属的组织或家族"
+                    }
+                }
+            };
+
+            var schemaId = await SchemaService.CreateSchemaAsync(schema);
+            schema.Id = schemaId;
+            testSchema = schema;
+            
+            Snackbar.Add("测试Schema创建成功！", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"创建测试Schema失败: {ex.Message}", Severity.Error);
+        }
+    }
+} 

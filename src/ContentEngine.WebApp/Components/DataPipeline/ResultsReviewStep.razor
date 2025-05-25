@@ -1,0 +1,264 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using LiteDB
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+
+<div class="mb-6">
+    <MudText Typo="Typo.h5" Class="mb-2">确认保存</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        检查提取的数据并确认保存到数据库
+    </MudText>
+</div>
+
+<!-- 数据概览 -->
+<MudCard Class="mb-4">
+    <MudCardContent>
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="Icons.Material.Filled.Schema" Color="Color.Primary" Class="mr-2" />
+                    <div>
+                        <MudText Typo="Typo.h6">@Schema.Name</MudText>
+                        <MudText Typo="Typo.caption">目标数据结构</MudText>
+                    </div>
+                </div>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="Icons.Material.Filled.DataObject" Color="Color.Success" Class="mr-2" />
+                    <div>
+                        <MudText Typo="Typo.h6">@Records.Count</MudText>
+                        <MudText Typo="Typo.caption">待保存记录</MudText>
+                    </div>
+                </div>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="Icons.Material.Filled.TableRows" Color="Color.Secondary" Class="mr-2" />
+                    <div>
+                        <MudText Typo="Typo.h6">@Schema.Fields.Count</MudText>
+                        <MudText Typo="Typo.caption">字段数量</MudText>
+                    </div>
+                </div>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+@if (Records.Any())
+{
+    <!-- 数据预览表格 -->
+    <MudCard Class="mb-4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">数据预览</MudText>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudButton Variant="Variant.Text" 
+                          StartIcon="Icons.Material.Filled.Visibility"
+                          OnClick="TogglePreviewMode">
+                    @(showAllRecords ? "显示前5条" : "显示全部")
+                </MudButton>
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTable Items="@previewRecords" 
+                     Hover="true" 
+                     Striped="true"
+                     Dense="true"
+                     FixedHeader="true"
+                     Height="400px">
+                <HeaderContent>
+                    <MudTh>序号</MudTh>
+                    @foreach (var field in Schema.Fields)
+                    {
+                        <MudTh>
+                            @field.Name
+                            @if (field.IsRequired)
+                            {
+                                <MudIcon Icon="Icons.Material.Filled.Star" 
+                                        Color="Color.Warning" 
+                                        Size="Size.Small" />
+                            }
+                        </MudTh>
+                    }
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="序号">@(Records.IndexOf(context) + 1)</MudTd>
+                    @foreach (var field in Schema.Fields)
+                    {
+                        <MudTd DataLabel="@field.Name">
+                            @GetFieldDisplayValue(context, field)
+                        </MudTd>
+                    }
+                </RowTemplate>
+            </MudTable>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- 数据质量检查 -->
+    <MudCard Class="mb-4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">数据质量检查</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                @foreach (var field in Schema.Fields)
+                {
+                    var stats = GetFieldStats(field);
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Outlined="true">
+                            <MudCardContent Class="pa-3">
+                                <MudText Typo="Typo.subtitle2" Class="mb-2">@field.Name</MudText>
+                                <div class="d-flex justify-space-between">
+                                    <MudText Typo="Typo.caption">填充率:</MudText>
+                                    <MudText Typo="Typo.caption" Color="@GetFillRateColor(stats.FillRate)">
+                                        @stats.FillRate.ToString("P0")
+                                    </MudText>
+                                </div>
+                                <div class="d-flex justify-space-between">
+                                    <MudText Typo="Typo.caption">有效值:</MudText>
+                                    <MudText Typo="Typo.caption">@stats.ValidCount/@Records.Count</MudText>
+                                </div>
+                                @if (field.IsRequired && stats.FillRate < 1.0)
+                                {
+                                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                                        必填字段缺失值
+                                    </MudAlert>
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- 保存选项 -->
+    <MudCard Class="mb-4">
+        <MudCardContent>
+            <MudText Typo="Typo.h6" Class="mb-3">保存选项</MudText>
+            <MudCheckBox T="bool" @bind-Checked="skipValidation" 
+                        Label="跳过数据验证 (不推荐)"
+                        Color="Color.Warning" />
+            <MudCheckBox T="bool" @bind-Checked="allowPartialSave" 
+                        Label="允许部分保存 (跳过无效记录)"
+                        Color="Color.Primary" />
+        </MudCardContent>
+    </MudCard>
+
+    <!-- 操作按钮 -->
+    <div class="d-flex justify-space-between">
+        <MudButton Variant="Variant.Outlined" 
+                  OnClick="ExportData"
+                  StartIcon="Icons.Material.Filled.Download">
+            导出数据
+        </MudButton>
+        <div>
+            <MudButton Variant="Variant.Outlined" 
+                      OnClick="GoBack"
+                      Class="mr-3">
+                返回修改
+            </MudButton>
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary"
+                      OnClick="SaveData"
+                      Disabled="@(isSaving || (!allowPartialSave && hasValidationErrors))"
+                      StartIcon="@(isSaving ? Icons.Material.Filled.HourglassEmpty : Icons.Material.Filled.Save)">
+                @(isSaving ? "保存中..." : $"保存 {Records.Count} 条记录")
+            </MudButton>
+        </div>
+    </div>
+}
+else
+{
+    <MudAlert Severity="Severity.Warning">
+        没有可保存的记录。请返回上一步检查提取结果。
+    </MudAlert>
+}
+
+@code {
+    [Parameter] public SchemaDefinition Schema { get; set; } = null!;
+    [Parameter] public List<BsonDocument> Records { get; set; } = new();
+    [Parameter] public EventCallback OnSave { get; set; }
+
+    private bool showAllRecords = false;
+    private bool skipValidation = false;
+    private bool allowPartialSave = true;
+    private bool isSaving = false;
+
+    private IEnumerable<BsonDocument> previewRecords => 
+        showAllRecords ? Records : Records.Take(5);
+
+    private bool hasValidationErrors => 
+        Schema.Fields.Any(f => f.IsRequired && GetFieldStats(f).FillRate < 1.0);
+
+    private void TogglePreviewMode()
+    {
+        showAllRecords = !showAllRecords;
+    }
+
+    private async Task SaveData()
+    {
+        if (OnSave.HasDelegate)
+        {
+            isSaving = true;
+            try
+            {
+                await OnSave.InvokeAsync();
+            }
+            finally
+            {
+                isSaving = false;
+            }
+        }
+    }
+
+    private void GoBack()
+    {
+        // TODO: 实现返回上一步的逻辑
+    }
+
+    private void ExportData()
+    {
+        // TODO: 实现数据导出功能
+    }
+
+    private string GetFieldDisplayValue(BsonDocument record, FieldDefinition field)
+    {
+        if (record.TryGetValue(field.Name, out var value))
+        {
+            if (value == null || value.IsNull)
+                return "-";
+
+            return field.Type switch
+            {
+                FieldType.Date => value.IsDateTime ? value.AsDateTime.ToString("yyyy-MM-dd") : value.ToString(),
+                FieldType.Boolean => value.IsBoolean ? (value.AsBoolean ? "是" : "否") : value.ToString(),
+                FieldType.Number => (value.IsInt32 || value.IsInt64 || value.IsDouble || value.IsDecimal) ? value.ToString() : value.ToString(),
+                _ => value.ToString()
+            };
+        }
+        return "-";
+    }
+
+    private (double FillRate, int ValidCount) GetFieldStats(FieldDefinition field)
+    {
+        var validCount = Records.Count(r => 
+            r.TryGetValue(field.Name, out var value) && 
+            value != null && 
+            !value.IsNull && 
+            !string.IsNullOrWhiteSpace(value.ToString()));
+
+        var fillRate = Records.Count > 0 ? (double)validCount / Records.Count : 0;
+        return (fillRate, validCount);
+    }
+
+    private Color GetFillRateColor(double fillRate) => fillRate switch
+    {
+        >= 0.9 => Color.Success,
+        >= 0.7 => Color.Warning,
+        _ => Color.Error
+    };
+} 

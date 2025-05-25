@@ -1,0 +1,274 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.DataPipeline.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject IFileConversionService FileConversionService
+@inject ISnackbar Snackbar
+
+<div class="mb-6">
+    <MudText Typo="Typo.h5" Class="mb-2">选择数据源</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        选择要处理的文件、网页或文本内容
+    </MudText>
+</div>
+
+<MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" Class="mb-4">
+    <MudTabPanel Text="文件" Icon="Icons.Material.Filled.UploadFile">
+        <div class="pa-4">
+            <MudFileUpload T="IReadOnlyList<IBrowserFile>" 
+                          @ref="fileUpload"
+                          OnFilesChanged="OnFilesChanged"
+                          Hidden="false" 
+                          Class="flex-1" 
+                          InputClass="absolute mud-width-full mud-height-full overflow-hidden z-20"
+                          InputStyle="opacity:0"
+                          @ondragenter="@SetDragClass"
+                          @ondragleave="@ClearDragClass"
+                          @ondragend="@ClearDragClass"
+                          Accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.html,.htm,.json,.xml,.csv,.rtf"
+                          MaximumFileCount="10">
+                <ButtonTemplate>
+                    <MudPaper Height="200px" 
+                             Outlined="true" 
+                             Class="@dragClass">
+                        <div class="d-flex flex-column align-center justify-center mud-width-full mud-height-full">
+                            <MudIcon Icon="Icons.Material.Filled.CloudUpload" Style="font-size: 3rem;" />
+                            <MudText Typo="Typo.h6" Class="mt-2">上传文件</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                拖放文件到此处，或点击选择文件
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                                支持 PDF, Word, Excel, PowerPoint, 文本文件等
+                            </MudText>
+                        </div>
+                    </MudPaper>
+                </ButtonTemplate>
+            </MudFileUpload>
+        </div>
+    </MudTabPanel>
+
+    <MudTabPanel Text="网页 URL" Icon="Icons.Material.Filled.Link">
+        <div class="pa-4">
+            <MudTextField @bind-Value="urlInput"
+                         Label="输入网页 URL"
+                         Placeholder="https://example.com/page"
+                         Variant="Variant.Outlined"
+                         Class="mb-4" />
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary"
+                      OnClick="AddUrl"
+                      Disabled="string.IsNullOrWhiteSpace(urlInput)"
+                      StartIcon="Icons.Material.Filled.Add">
+                添加 URL
+            </MudButton>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                添加网页 URL，系统将自动抓取内容并提取数据
+            </MudText>
+        </div>
+    </MudTabPanel>
+
+    <MudTabPanel Text="文本内容" Icon="Icons.Material.Filled.TextFields">
+        <div class="pa-4">
+            <MudTextField @bind-Value="textInput"
+                         Label="输入文本内容"
+                         Placeholder="粘贴包含目标数据的文本内容..."
+                         Variant="Variant.Outlined"
+                         Lines="8"
+                         Class="mb-4" />
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary"
+                      OnClick="AddText"
+                      Disabled="string.IsNullOrWhiteSpace(textInput)"
+                      StartIcon="Icons.Material.Filled.Add">
+                添加文本
+            </MudButton>
+        </div>
+    </MudTabPanel>
+</MudTabs>
+
+@if (dataSources.Any())
+{
+    <div class="mb-6">
+        <MudText Typo="Typo.h6" Class="mb-3">已添加的数据源</MudText>
+        <MudGrid>
+            @foreach (var source in dataSources)
+            {
+                <MudItem xs="12">
+                    <MudCard Outlined="true">
+                        <MudCardContent Class="pa-3">
+                            <div class="d-flex align-center justify-space-between">
+                                <div class="d-flex align-center">
+                                    @GetSourceIcon(source.Type)
+                                    <div class="ml-3">
+                                        <MudText Typo="Typo.subtitle1">@source.Name</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @GetSourceDescription(source)
+                                        </MudText>
+                                    </div>
+                                </div>
+                                <MudIconButton Icon="Icons.Material.Filled.Delete"
+                                              Color="Color.Error"
+                                              Size="Size.Small"
+                                              OnClick="() => RemoveSource(source.Id)" />
+                            </div>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    </div>
+
+    <div class="mb-6">
+        <MudText Typo="Typo.h6" Class="mb-3">提取模式</MudText>
+        <MudRadioGroup T="ExtractionMode" @bind-SelectedOption="extractionMode">
+            <MudRadio T="ExtractionMode" Option="ExtractionMode.OneToOne" Color="Color.Primary">
+                <MudText>一对一提取 (每个数据源生成一条记录)</MudText>
+            </MudRadio>
+            <MudRadio T="ExtractionMode" Option="ExtractionMode.Batch" Color="Color.Primary">
+                <MudText>批量提取 (从每个数据源提取多条记录)</MudText>
+            </MudRadio>
+        </MudRadioGroup>
+    </div>
+
+    <MudButton Variant="Variant.Filled" 
+              Color="Color.Primary"
+              OnClick="ContinueToNext"
+              StartIcon="Icons.Material.Filled.ArrowForward">
+        继续下一步
+    </MudButton>
+}
+
+@code {
+    [Parameter] public EventCallback<(List<DataSource> sources, ExtractionMode mode)> OnComplete { get; set; }
+
+    private MudFileUpload<IReadOnlyList<IBrowserFile>> fileUpload = null!;
+    private List<DataSource> dataSources = new();
+    private ExtractionMode extractionMode = ExtractionMode.OneToOne;
+    private string urlInput = string.Empty;
+    private string textInput = string.Empty;
+    private string dragClass = string.Empty;
+    private readonly string defaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full z-10";
+
+    private async Task OnFilesChanged(InputFileChangeEventArgs e)
+    {
+        ClearDragClass();
+        
+        foreach (var file in e.GetMultipleFiles())
+        {
+            try
+            {
+                if (!FileConversionService.IsFileSupported(file.Name, file.ContentType))
+                {
+                    Snackbar.Add($"不支持的文件类型: {file.Name}", Severity.Warning);
+                    continue;
+                }
+
+                var content = await FileConversionService.ConvertFileToTextAsync(file);
+                
+                var dataSource = new DataSource
+                {
+                    Type = DataSourceType.File,
+                    Name = file.Name,
+                    Content = content,
+                    Size = file.Size,
+                    MimeType = file.ContentType
+                };
+
+                dataSources.Add(dataSource);
+                Snackbar.Add($"文件 {file.Name} 添加成功", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"处理文件 {file.Name} 失败: {ex.Message}", Severity.Error);
+            }
+        }
+
+        await fileUpload.ClearAsync();
+        StateHasChanged();
+    }
+
+    private async Task AddUrl()
+    {
+        if (string.IsNullOrWhiteSpace(urlInput))
+            return;
+
+        try
+        {
+            var content = await FileConversionService.GetContentFromUrlAsync(urlInput);
+            
+            var dataSource = new DataSource
+            {
+                Type = DataSourceType.Url,
+                Name = urlInput,
+                Content = content,
+                Url = urlInput
+            };
+
+            dataSources.Add(dataSource);
+            urlInput = string.Empty;
+            
+            Snackbar.Add("URL 添加成功", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"获取 URL 内容失败: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void AddText()
+    {
+        if (string.IsNullOrWhiteSpace(textInput))
+            return;
+
+        var textCount = dataSources.Count(s => s.Type == DataSourceType.Text) + 1;
+        var dataSource = new DataSource
+        {
+            Type = DataSourceType.Text,
+            Name = $"文本 {textCount}",
+            Content = textInput
+        };
+
+        dataSources.Add(dataSource);
+        textInput = string.Empty;
+        
+        Snackbar.Add("文本内容添加成功", Severity.Success);
+    }
+
+    private void RemoveSource(string sourceId)
+    {
+        dataSources.RemoveAll(s => s.Id == sourceId);
+    }
+
+    private async Task ContinueToNext()
+    {
+        if (OnComplete.HasDelegate)
+        {
+            await OnComplete.InvokeAsync((dataSources, extractionMode));
+        }
+    }
+
+    private void SetDragClass()
+    {
+        dragClass = $"{defaultDragClass} mud-border-primary";
+    }
+
+    private void ClearDragClass()
+    {
+        dragClass = defaultDragClass;
+    }
+
+    private RenderFragment GetSourceIcon(DataSourceType type) => type switch
+    {
+        DataSourceType.File => @<MudIcon Icon="Icons.Material.Filled.InsertDriveFile" Color="Color.Primary" />,
+        DataSourceType.Url => @<MudIcon Icon="Icons.Material.Filled.Link" Color="Color.Success" />,
+        DataSourceType.Text => @<MudIcon Icon="Icons.Material.Filled.TextFields" Color="Color.Secondary" />,
+        _ => @<MudIcon Icon="Icons.Material.Filled.Help" />
+    };
+
+    private string GetSourceDescription(DataSource source) => source.Type switch
+    {
+        DataSourceType.File => $"{(source.Size.HasValue ? $"{source.Size.Value / 1024:F1} KB" : "未知大小")}",
+        DataSourceType.Url => source.Url ?? "URL",
+        DataSourceType.Text => $"{source.Content.Length} 字符",
+        _ => "未知类型"
+    };
+} 

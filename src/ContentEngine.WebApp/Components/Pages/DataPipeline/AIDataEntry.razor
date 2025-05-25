@@ -1,0 +1,70 @@
+@page "/data-entry/ai/{SchemaId}"
+@using ContentEngine.Core.DataPipeline.Services
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.AI.Services
+@using ContentEngine.WebApp.Components.DataPipeline
+@inject ISchemaDefinitionService SchemaService
+@inject IFileConversionService FileConversionService
+@inject IDataStructuringService DataStructuringService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>AI 辅助录入 - ContentEngine</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudBreadcrumbs Items="breadcrumbItems" Class="mb-4" />
+
+    @if (schema != null)
+    {
+        <div class="mb-6">
+            <MudText Typo="Typo.h3" Class="mb-2">@schema.Name</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">@schema.Description</MudText>
+        </div>
+
+        <AIDataEntryWizard Schema="schema" />
+    }
+    else if (isLoading)
+    {
+        <div class="d-flex justify-center align-center" style="height: 200px;">
+            <MudProgressCircular Indeterminate="true" />
+        </div>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Error">
+            未找到指定的数据结构定义。
+        </MudAlert>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string SchemaId { get; set; } = string.Empty;
+
+    private SchemaDefinition? schema;
+    private bool isLoading = true;
+
+    private List<BreadcrumbItem> breadcrumbItems = new()
+    {
+        new BreadcrumbItem("信息注入", href: "/data-entry", icon: Icons.Material.Filled.Input),
+        new BreadcrumbItem("AI 辅助录入", href: null, disabled: true)
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(SchemaId) && int.TryParse(SchemaId, out var id))
+            {
+                schema = await SchemaService.GetSchemaByIdAsync(id);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"加载数据结构失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+} 

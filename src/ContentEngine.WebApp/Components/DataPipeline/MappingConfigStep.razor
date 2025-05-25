@@ -1,0 +1,202 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+
+<div class="mb-6">
+    <MudText Typo="Typo.h5" Class="mb-2">字段映射配置</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        设置字段映射规则
+    </MudText>
+</div>
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h6">映射模式</MudText>
+    <MudSwitch T="bool" @bind-Checked="isManualMapping" 
+               Label="@(isManualMapping ? "手动映射" : "自动映射")"
+               Color="Color.Primary" />
+</div>
+
+@if (!isManualMapping)
+{
+    <!-- 自动映射模式 -->
+    <MudCard Outlined="true" Class="mb-4">
+        <MudCardContent>
+            <div class="d-flex align-center mb-3">
+                <MudIcon Icon="Icons.Material.Filled.AutoAwesome" Color="Color.Primary" Class="mr-2" />
+                <MudText Typo="Typo.subtitle1">AI 自动映射</MudText>
+            </div>
+            <MudTextField @bind-Value="customInstructions"
+                         Label="自定义提取指令 (可选)"
+                         Placeholder="@GetPlaceholderText()"
+                         Variant="Variant.Outlined"
+                         Lines="5"
+                         Class="mb-3" />
+            <MudAlert Severity="Severity.Info" Class="mb-0">
+                AI 将自动分析数据源内容，并尝试提取与 <strong>@Schema.Name</strong> 相关的所有字段。
+                @if (ExtractionMode == ExtractionMode.Batch)
+                {
+                    <text>如果数据源包含多条记录，AI 将尝试提取所有记录。</text>
+                }
+            </MudAlert>
+        </MudCardContent>
+    </MudCard>
+}
+else
+{
+    <!-- 手动映射模式 -->
+    @if (DataSources.Count > 1)
+    {
+        <MudSelect @bind-Value="selectedSourceId" 
+                  Label="选择数据源预览"
+                  Variant="Variant.Outlined"
+                  Class="mb-4">
+            @foreach (var source in DataSources)
+            {
+                <MudSelectItem Value="source.Id">
+                    <div class="d-flex align-center">
+                        @GetSourceIcon(source.Type)
+                        <span class="ml-2">@source.Name</span>
+                    </div>
+                </MudSelectItem>
+            }
+        </MudSelect>
+    }
+
+    @if (selectedSource != null)
+    {
+        <MudCard Outlined="true" Class="mb-4">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">数据源预览</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudTextField Value="@GetSourcePreview(selectedSource)"
+                             Variant="Variant.Outlined"
+                             Lines="6"
+                             ReadOnly="true" />
+            </MudCardContent>
+        </MudCard>
+    }
+
+    <MudText Typo="Typo.h6" Class="mb-3">字段映射规则</MudText>
+    <MudGrid>
+        @foreach (var field in Schema.Fields)
+        {
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="fieldMappings[field.Name]"
+                             Label="@field.Name"
+                             Placeholder="@GetFieldPlaceholder(field)"
+                             Variant="Variant.Outlined"
+                             Class="mb-2">
+                    <MudInputAdornment AdornmentIcon="@(field.IsRequired ? Icons.Material.Filled.Star : "")" 
+                                      AdornmentColor="Color.Warning" />
+                </MudTextField>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">
+                    @GetFieldHint(field)
+                </MudText>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+<div class="d-flex justify-end mt-6">
+    <MudButton Variant="Variant.Filled" 
+              Color="Color.Primary"
+              OnClick="ContinueToNext"
+              StartIcon="Icons.Material.Filled.AutoAwesome">
+        @(isManualMapping ? "应用映射规则" : "使用 AI 自动映射")
+    </MudButton>
+</div>
+
+@code {
+    [Parameter] public SchemaDefinition Schema { get; set; } = null!;
+    [Parameter] public List<DataSource> DataSources { get; set; } = new();
+    [Parameter] public ExtractionMode ExtractionMode { get; set; }
+    [Parameter] public EventCallback<Dictionary<string, string>> OnComplete { get; set; }
+
+    private bool isManualMapping = false;
+    private string customInstructions = string.Empty;
+    private Dictionary<string, string> fieldMappings = new();
+    private string selectedSourceId = string.Empty;
+
+    private DataSource? selectedSource => 
+        DataSources.FirstOrDefault(s => s.Id == selectedSourceId);
+
+    protected override void OnInitialized()
+    {
+        if (DataSources.Any())
+        {
+            selectedSourceId = DataSources.First().Id;
+        }
+
+        // 初始化字段映射
+        foreach (var field in Schema.Fields)
+        {
+            fieldMappings[field.Name] = string.Empty;
+        }
+    }
+
+    private async Task ContinueToNext()
+    {
+        var mappings = new Dictionary<string, string>();
+
+        if (isManualMapping)
+        {
+            mappings = fieldMappings.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        }
+        else
+        {
+            mappings["_autoMapping"] = string.IsNullOrWhiteSpace(customInstructions) 
+                ? "自动提取所有字段" 
+                : customInstructions;
+        }
+
+        if (OnComplete.HasDelegate)
+        {
+            await OnComplete.InvokeAsync(mappings);
+        }
+    }
+
+    private string GetPlaceholderText()
+    {
+        return ExtractionMode == ExtractionMode.OneToOne
+            ? "例如：从文档中提取角色的名称、种族、职业和等级信息。如果找不到确切的等级，请根据描述估计一个合理的值。"
+            : "例如：从文档中提取所有角色信息，每个角色应包含名称、种族、职业和等级。如果找到多个角色，请分别提取。";
+    }
+
+    private string GetSourcePreview(DataSource source)
+    {
+        if (source.Type == DataSourceType.Url)
+        {
+            return source.Url ?? "";
+        }
+
+        var content = source.Content;
+        return content.Length > 500 ? content.Substring(0, 500) + "..." : content;
+    }
+
+    private string GetFieldPlaceholder(FieldDefinition field)
+    {
+        return $"提取 {field.Name} 的指令或路径";
+    }
+
+    private string GetFieldHint(FieldDefinition field)
+    {
+        return field.Type switch
+        {
+            FieldType.Text => "文本字段，例如：'提取角色名称' 或 '$.name'",
+            FieldType.Number => "数字字段，例如：'提取角色等级' 或 '$.level'",
+            FieldType.Boolean => "布尔字段，例如：'提取是否激活状态' 或 '$.active'",
+            FieldType.Date => "日期字段，例如：'提取创建日期' 或 '$.createdAt'",
+            _ => "字段提取指令或JSON路径"
+        };
+    }
+
+    private RenderFragment GetSourceIcon(DataSourceType type) => type switch
+    {
+        DataSourceType.File => @<MudIcon Icon="Icons.Material.Filled.InsertDriveFile" Color="Color.Primary" Size="Size.Small" />,
+        DataSourceType.Url => @<MudIcon Icon="Icons.Material.Filled.Link" Color="Color.Success" Size="Size.Small" />,
+        DataSourceType.Text => @<MudIcon Icon="Icons.Material.Filled.TextFields" Color="Color.Secondary" Size="Size.Small" />,
+        _ => @<MudIcon Icon="Icons.Material.Filled.Help" Size="Size.Small" />
+    };
+} 

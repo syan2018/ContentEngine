@@ -1,0 +1,312 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.AI.Services
+@using LiteDB
+@inject IDataStructuringService DataStructuringService
+@inject ISnackbar Snackbar
+
+<div class="mb-6">
+    <MudText Typo="Typo.h5" Class="mb-2">AI 提取预览</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        AI 正在分析数据源并提取结构化数据
+    </MudText>
+</div>
+
+@if (isProcessing)
+{
+    <MudCard Outlined="true" Class="mb-4">
+        <MudCardContent>
+            <div class="d-flex align-center justify-center pa-6">
+                <MudProgressCircular Indeterminate="true" Size="Size.Large" Class="mr-4" />
+                <div>
+                    <MudText Typo="Typo.h6">AI 正在处理数据...</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        @currentStatus
+                    </MudText>
+                </div>
+            </div>
+        </MudCardContent>
+    </MudCard>
+}
+else if (extractionResults.Any())
+{
+    <!-- 提取结果概览 -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" sm="4">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="Icons.Material.Filled.CheckCircle" Color="Color.Success" Class="mr-2" />
+                        <div>
+                            <MudText Typo="Typo.h6">@successCount</MudText>
+                            <MudText Typo="Typo.caption">成功提取</MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="Icons.Material.Filled.Error" Color="Color.Error" Class="mr-2" />
+                        <div>
+                            <MudText Typo="Typo.h6">@errorCount</MudText>
+                            <MudText Typo="Typo.caption">提取失败</MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudCard>
+                <MudCardContent>
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="Icons.Material.Filled.DataObject" Color="Color.Primary" Class="mr-2" />
+                        <div>
+                            <MudText Typo="Typo.h6">@totalRecords</MudText>
+                            <MudText Typo="Typo.caption">总记录数</MudText>
+                        </div>
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <!-- 详细结果 -->
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true">
+        @foreach (var result in extractionResults)
+        {
+            <MudTabPanel Text="@GetTabTitle(result)" Icon="@GetTabIcon(result.Status)">
+                <div class="pa-4">
+                    @if (result.Status == ExtractionStatus.Success)
+                    {
+                        @if (result.Records.Any())
+                        {
+                            <MudText Typo="Typo.h6" Class="mb-3">
+                                提取到 @result.Records.Count 条记录
+                            </MudText>
+                            
+                            @foreach (var (record, index) in result.Records.Select((r, i) => (r, i)))
+                            {
+                                <MudCard Outlined="true" Class="mb-3">
+                                    <MudCardHeader>
+                                        <CardHeaderContent>
+                                            <MudText Typo="Typo.subtitle1">记录 @(index + 1)</MudText>
+                                        </CardHeaderContent>
+                                        <CardHeaderActions>
+                                            <MudIconButton Icon="Icons.Material.Filled.Edit" 
+                                                          Size="Size.Small"
+                                                          OnClick="() => EditRecord(result.SourceId, index)" />
+                                        </CardHeaderActions>
+                                    </MudCardHeader>
+                                    <MudCardContent>
+                                        <MudGrid>
+                                            @foreach (var field in Schema.Fields)
+                                            {
+                                                <MudItem xs="12" sm="6" md="4">
+                                                    <MudTextField Value="@GetFieldValue(record, field.Name)"
+                                                                 Label="@field.Name"
+                                                                 Variant="Variant.Outlined"
+                                                                 ReadOnly="true"
+                                                                 Class="mb-2" />
+                                                </MudItem>
+                                            }
+                                        </MudGrid>
+                                    </MudCardContent>
+                                </MudCard>
+                            }
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Warning">
+                                该数据源未提取到任何记录
+                            </MudAlert>
+                        }
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Error">
+                            <strong>提取失败:</strong> @result.Error
+                        </MudAlert>
+                        <MudButton Variant="Variant.Outlined" 
+                                  Color="Color.Primary"
+                                  OnClick="() => RetryExtraction(result.SourceId)"
+                                  StartIcon="Icons.Material.Filled.Refresh"
+                                  Class="mt-3">
+                            重新提取
+                        </MudButton>
+                    }
+                </div>
+            </MudTabPanel>
+        }
+    </MudTabs>
+
+    <div class="d-flex justify-space-between mt-6">
+        <MudButton Variant="Variant.Outlined" 
+                  OnClick="RestartExtraction"
+                  StartIcon="Icons.Material.Filled.Refresh">
+            重新提取全部
+        </MudButton>
+        <MudButton Variant="Variant.Filled" 
+                  Color="Color.Primary"
+                  OnClick="ContinueToNext"
+                  Disabled="@(successCount == 0)"
+                  StartIcon="Icons.Material.Filled.ArrowForward">
+            继续下一步 (@totalRecords 条记录)
+        </MudButton>
+    </div>
+}
+
+@if (!isProcessing && !extractionResults.Any())
+{
+    <div class="d-flex justify-center">
+        <MudButton Variant="Variant.Filled" 
+                  Color="Color.Primary"
+                  OnClick="StartExtraction"
+                  StartIcon="Icons.Material.Filled.AutoAwesome">
+            开始 AI 提取
+        </MudButton>
+    </div>
+}
+
+@code {
+    [Parameter] public SchemaDefinition Schema { get; set; } = null!;
+    [Parameter] public List<DataSource> DataSources { get; set; } = new();
+    [Parameter] public Dictionary<string, string> FieldMappings { get; set; } = new();
+    [Parameter] public ExtractionMode ExtractionMode { get; set; }
+    [Parameter] public EventCallback<List<ExtractionResult>> OnComplete { get; set; }
+
+    private bool isProcessing = false;
+    private string currentStatus = string.Empty;
+    private List<ExtractionResult> extractionResults = new();
+
+    private int successCount => extractionResults.Count(r => r.Status == ExtractionStatus.Success);
+    private int errorCount => extractionResults.Count(r => r.Status == ExtractionStatus.Error);
+    private int totalRecords => extractionResults.Where(r => r.Status == ExtractionStatus.Success)
+                                                .Sum(r => r.Records.Count);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 自动开始提取
+        await StartExtraction();
+    }
+
+    private async Task StartExtraction()
+    {
+        isProcessing = true;
+        currentStatus = "准备开始提取...";
+        extractionResults.Clear();
+        StateHasChanged();
+
+        try
+        {
+            currentStatus = "AI 正在分析数据源...";
+            StateHasChanged();
+
+            var results = await DataStructuringService.ExtractDataAsync(
+                Schema, 
+                DataSources, 
+                ExtractionMode, 
+                FieldMappings);
+
+            extractionResults = results;
+            
+            Snackbar.Add($"提取完成：{successCount}/{DataSources.Count} 个数据源成功", 
+                        successCount > 0 ? Severity.Success : Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"提取过程出错: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RestartExtraction()
+    {
+        await StartExtraction();
+    }
+
+    private async Task RetryExtraction(string sourceId)
+    {
+        var source = DataSources.FirstOrDefault(s => s.Id == sourceId);
+        if (source == null) return;
+
+        try
+        {
+            currentStatus = $"重新提取 {source.Name}...";
+            isProcessing = true;
+            StateHasChanged();
+
+            var results = await DataStructuringService.ExtractDataAsync(
+                Schema, 
+                new List<DataSource> { source }, 
+                ExtractionMode, 
+                FieldMappings);
+
+            // 更新结果
+            var existingIndex = extractionResults.FindIndex(r => r.SourceId == sourceId);
+            if (existingIndex >= 0 && results.Any())
+            {
+                extractionResults[existingIndex] = results.First();
+            }
+
+            Snackbar.Add($"重新提取完成", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"重新提取失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ContinueToNext()
+    {
+        if (OnComplete.HasDelegate)
+        {
+            await OnComplete.InvokeAsync(extractionResults);
+        }
+    }
+
+    private void EditRecord(string sourceId, int recordIndex)
+    {
+        // TODO: 实现记录编辑功能
+        Snackbar.Add("记录编辑功能待实现", Severity.Info);
+    }
+
+    private string GetTabTitle(ExtractionResult result)
+    {
+        var source = DataSources.FirstOrDefault(s => s.Id == result.SourceId);
+        var sourceName = source?.Name ?? "未知数据源";
+        
+        return result.Status switch
+        {
+            ExtractionStatus.Success => $"{sourceName} ({result.Records.Count})",
+            ExtractionStatus.Error => $"{sourceName} (失败)",
+            _ => sourceName
+        };
+    }
+
+    private string GetTabIcon(ExtractionStatus status) => status switch
+    {
+        ExtractionStatus.Success => Icons.Material.Filled.CheckCircle,
+        ExtractionStatus.Error => Icons.Material.Filled.Error,
+        _ => Icons.Material.Filled.HourglassEmpty
+    };
+
+    private string GetFieldValue(BsonDocument record, string fieldName)
+    {
+        if (record.TryGetValue(fieldName, out var value))
+        {
+            return value?.ToString() ?? "";
+        }
+        return "";
+    }
+} 
