@@ -1,0 +1,143 @@
+@page "/data-explorer"
+@using ContentEngine.Core.DataPipeline.Services
+@using ContentEngine.Core.DataPipeline.Models
+@inject ISchemaDefinitionService SchemaService
+@inject IDataEntryService DataEntryService
+@inject NavigationManager Navigation
+
+<PageTitle>数据洞察 - ContentEngine</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h3" Class="mb-2">数据洞察</MudText>
+    <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-6">
+        浏览和分析您的结构化数据
+    </MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="8">
+            <MudTextField @bind-Value="searchText" 
+                         Placeholder="搜索数据结构..." 
+                         Adornment="Adornment.Start" 
+                         AdornmentIcon="Icons.Material.Filled.Search"
+                         Class="mb-4" />
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudButton Variant="Variant.Outlined" 
+                      StartIcon="Icons.Material.Filled.FilterList"
+                      Class="mb-4">
+                筛选
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.h5" Class="mb-4">选择要浏览的数据结构</MudText>
+
+    @if (isLoading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (schemas?.Any() == true)
+    {
+        <MudGrid>
+            @foreach (var schema in filteredSchemas)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Class="mb-4 cursor-pointer" Style="height: 100%;" @onclick="() => NavigateToDataView(schema.Name)">
+                        <MudCardContent>
+                            <div class="d-flex justify-space-between align-center mb-2">
+                                <MudText Typo="Typo.h6">@schema.Name</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                    @schema.Fields.Count 字段
+                                </MudChip>
+                            </div>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                                @schema.Description
+                            </MudText>
+                            <MudGrid>
+                                <MudItem xs="6">
+                                    <MudText Typo="Typo.caption">记录数:</MudText>
+                                    <MudText Typo="Typo.body2" Class="font-weight-medium">@(GetRecordCount(schema.Name))</MudText>
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudText Typo="Typo.caption">更新于:</MudText>
+                                    <MudText Typo="Typo.body2" Class="font-weight-medium">@schema.UpdatedAt.ToString("MM-dd")</MudText>
+                                </MudItem>
+                            </MudGrid>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Variant="Variant.Text" 
+                                      StartIcon="Icons.Material.Filled.Visibility"
+                                      OnClick="() => NavigateToDataView(schema.Name)"
+                                      Class="flex-grow-1">
+                                浏览数据
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info">
+            暂无可浏览的数据结构。请先创建数据结构并添加数据。
+        </MudAlert>
+    }
+</MudContainer>
+
+@code {
+    private List<SchemaDefinition>? schemas;
+    private bool isLoading = true;
+    private string searchText = string.Empty;
+
+    private IEnumerable<SchemaDefinition> filteredSchemas =>
+        schemas?.Where(s => string.IsNullOrEmpty(searchText) || 
+                           s.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                           s.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)) ?? 
+        Enumerable.Empty<SchemaDefinition>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            schemas = await SchemaService.GetAllSchemasAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"加载Schema失败: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private int GetRecordCount(string schemaName)
+    {
+        try
+        {
+            return (int)DataEntryService.CountDataAsync(schemaName).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private void NavigateToDataView(string schemaName)
+    {
+        Navigation.NavigateTo($"/data/{schemaName}");
+    }
+}
+
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+        transition: transform 0.2s ease-in-out;
+    }
+    
+    .cursor-pointer:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+</style> 

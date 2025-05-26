@@ -1,0 +1,239 @@
+@page "/"
+@using ContentEngine.Core.DataPipeline.Services
+@inject ISchemaDefinitionService SchemaService
+@inject IDataEntryService DataEntryService
+@inject NavigationManager Navigation
+
+<PageTitle>ContentEngine 控制台</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudStack Spacing="6">
+        <!-- 页面标题 -->
+        <div>
+            <MudText Typo="Typo.h3" Class="mb-2">ContentEngine 控制台</MudText>
+            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">
+                欢迎使用 ContentEngine，您的 AI 驱动内容结构化与推理引擎
+            </MudText>
+        </div>
+
+        <!-- 统计卡片 -->
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center">
+                            <div>
+                                <MudText Typo="Typo.h4">@totalSchemas</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">数据结构总数</MudText>
+                            </div>
+                            <MudIcon Icon="Icons.Material.Filled.Schema" Color="Color.Primary" Size="Size.Large" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center">
+                            <div>
+                                <MudText Typo="Typo.h4">@totalRecords</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">数据记录总数</MudText>
+                            </div>
+                            <MudIcon Icon="Icons.Material.Filled.DataObject" Color="Color.Success" Size="Size.Large" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center">
+                            <div>
+                                <MudText Typo="Typo.h4">24</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">AI 推理任务</MudText>
+                            </div>
+                            <MudIcon Icon="Icons.Material.Filled.AutoAwesome" Color="Color.Warning" Size="Size.Large" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center">
+                            <div>
+                                <MudText Typo="Typo.h4">98%</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">系统可用性</MudText>
+                            </div>
+                            <MudIcon Icon="Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- 快捷操作 -->
+        <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true">
+            <MudTabPanel Text="快捷操作" Icon="Icons.Material.Filled.Bolt">
+                <MudGrid Class="mt-4">
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudCard Class="cursor-pointer" Style="height: 200px;" @onclick="@(() => NavigateTo("/schema-management/create"))">
+                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center">
+                                <MudIcon Icon="Icons.Material.Filled.Add" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                                <MudText Typo="Typo.h6" Class="mb-2">创建数据结构</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">定义新的数据结构（Schema）</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                    
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudCard Class="cursor-pointer" Style="height: 200px;" @onclick="@(() => NavigateTo("/data-entry"))">
+                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center">
+                                <MudIcon Icon="Icons.Material.Filled.Input" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                                <MudText Typo="Typo.h6" Class="mb-2">信息注入</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">将原始信息转化为结构化数据</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                    
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudCard Class="cursor-pointer" Style="height: 200px;" @onclick="@(() => NavigateTo("/data-explorer"))">
+                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center">
+                                <MudIcon Icon="Icons.Material.Filled.Search" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                                <MudText Typo="Typo.h6" Class="mb-2">数据洞察</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">浏览和分析您的数据</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                    
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudCard Class="cursor-pointer" Style="height: 200px;" @onclick="@(() => NavigateTo("/ai-inference"))">
+                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center">
+                                <MudIcon Icon="Icons.Material.Filled.AutoAwesome" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                                <MudText Typo="Typo.h6" Class="mb-2">AI 推理坊</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">执行 AI 推理和生成任务</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </MudTabPanel>
+            
+            <MudTabPanel Text="最近活动" Icon="Icons.Material.Filled.History">
+                <MudCard Class="mt-4">
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" Class="mb-4">最近活动</MudText>
+                        @if (recentActivities.Any())
+                        {
+                            <MudList T="ActivityItem">
+                                @foreach (var activity in recentActivities)
+                                {
+                                    <MudListItem T="ActivityItem">
+                                        <div class="d-flex align-center">
+                                            <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-3">
+                                                <MudIcon Icon="@GetActivityIcon(activity.Type)" />
+                                            </MudAvatar>
+                                            <div class="flex-grow-1">
+                                                <MudText Typo="Typo.body1">@activity.Description</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">@activity.Timestamp.ToString("yyyy-MM-dd HH:mm")</MudText>
+                                            </div>
+                                        </div>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+                        else
+                        {
+                            <MudText Color="Color.Secondary">暂无最近活动</MudText>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+        </MudTabs>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private int totalSchemas = 0;
+    private long totalRecords = 0;
+    private List<ActivityItem> recentActivities = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            // 加载统计数据
+            var schemas = await SchemaService.GetAllSchemasAsync();
+            totalSchemas = schemas?.Count ?? 0;
+
+            // 计算总记录数（这里简化处理）
+            totalRecords = 0;
+            if (schemas != null)
+            {
+                foreach (var schema in schemas)
+                {
+                    try
+                    {
+                        var count = await DataEntryService.CountDataAsync(schema.Name);
+                        totalRecords += count;
+                    }
+                    catch
+                    {
+                        // 忽略单个schema的错误
+                    }
+                }
+            }
+
+            // 模拟最近活动数据
+            recentActivities = new List<ActivityItem>
+            {
+                new() { Type = "schema", Description = "创建了新的数据结构：游戏角色", Timestamp = DateTime.Now.AddMinutes(-10) },
+                new() { Type = "data", Description = "添加了新的数据记录", Timestamp = DateTime.Now.AddMinutes(-30) },
+                new() { Type = "ai", Description = "执行了 AI 推理任务", Timestamp = DateTime.Now.AddHours(-1) },
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"加载仪表板数据失败: {ex.Message}");
+        }
+    }
+
+    private void NavigateTo(string url)
+    {
+        Navigation.NavigateTo(url);
+    }
+
+    private string GetActivityIcon(string type) => type switch
+    {
+        "schema" => Icons.Material.Filled.Schema,
+        "data" => Icons.Material.Filled.DataObject,
+        "ai" => Icons.Material.Filled.AutoAwesome,
+        _ => Icons.Material.Filled.Info
+    };
+
+    private class ActivityItem
+    {
+        public string Type { get; set; } = "";
+        public string Description { get; set; } = "";
+        public DateTime Timestamp { get; set; }
+    }
+}
+
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+        transition: transform 0.2s ease-in-out;
+    }
+    
+    .cursor-pointer:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+</style> 
