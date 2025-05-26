@@ -133,11 +133,11 @@
 
     <div class="mb-6">
         <MudText Typo="Typo.h6" Class="mb-3">提取模式</MudText>
-        <MudRadioGroup T="ExtractionMode" @bind-SelectedOption="extractionMode">
-            <MudRadio T="ExtractionMode" Option="ExtractionMode.OneToOne" Color="Color.Primary">
+        <MudRadioGroup T="ExtractionMode" @bind-Value="extractionMode">
+            <MudRadio T="ExtractionMode" Value="ExtractionMode.OneToOne" Color="Color.Primary">
                 <MudText>一对一提取 (每个数据源生成一条记录)</MudText>
             </MudRadio>
-            <MudRadio T="ExtractionMode" Option="ExtractionMode.Batch" Color="Color.Primary">
+            <MudRadio T="ExtractionMode" Value="ExtractionMode.Batch" Color="Color.Primary">
                 <MudText>批量提取 (从每个数据源提取多条记录)</MudText>
             </MudRadio>
         </MudRadioGroup>

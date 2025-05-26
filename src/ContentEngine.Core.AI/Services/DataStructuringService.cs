@@ -42,10 +42,13 @@ public class DataStructuringService : IDataStructuringService
 
             try
             {
-                _logger.LogInformation("开始处理数据源: {SourceName} ({SourceType})", dataSource.Name, dataSource.Type);
+                _logger.LogInformation("开始处理数据源: {SourceName} ({SourceType}), 提取模式: {ExtractionMode}", dataSource.Name, dataSource.Type, extractionMode);
 
                 // 使用语义插件进行数据提取
                 var extractedData = await CallAIForExtractionAsync(schema, dataSource, extractionMode, fieldMappings, cancellationToken);
+                
+                // 保存原始输出用于调试
+                result.RawAIOutput = extractedData;
                 
                 // 解析AI返回的结果
                 var records = ParseExtractionResult(extractedData, schema);
@@ -121,6 +124,11 @@ public class DataStructuringService : IDataStructuringService
         return results;
     }
 
+    public async Task<List<BsonDocument>> ParseRawOutput(string rawOutput, SchemaDefinition schema)
+    {
+        return await Task.FromResult(ParseExtractionResult(rawOutput, schema));
+    }
+
     private async Task<string> CallAIForExtractionAsync(
         SchemaDefinition schema,
         DataSource dataSource,
@@ -165,6 +173,8 @@ public class DataStructuringService : IDataStructuringService
             var functionName = extractionMode == ExtractionMode.OneToOne 
                 ? "ExtractSingleRecord" 
                 : "ExtractMultipleRecords";
+            
+            _logger.LogInformation("使用语义函数: {FunctionName}, 提取模式: {ExtractionMode}", functionName, extractionMode);
             
             var function = kernel.Plugins["DataStructuring"][functionName];
             var result = await kernel.InvokeAsync(function, arguments, cancellationToken);
@@ -237,20 +247,32 @@ public class DataStructuringService : IDataStructuringService
     private List<BsonDocument> ParseExtractionResult(string aiResponse, SchemaDefinition schema)
     {
         var records = new List<BsonDocument>();
+        var cleanResponse = string.Empty;
 
         try
         {
             // 清理AI响应，移除可能的markdown代码块标记
-            var cleanResponse = aiResponse.Trim();
+            cleanResponse = aiResponse.Trim();
+            
+            // 移除各种可能的代码块标记
             if (cleanResponse.StartsWith("```json"))
             {
                 cleanResponse = cleanResponse.Substring(7);
             }
+            else if (cleanResponse.StartsWith("```"))
+            {
+                cleanResponse = cleanResponse.Substring(3);
+            }
+            
             if (cleanResponse.EndsWith("```"))
             {
                 cleanResponse = cleanResponse.Substring(0, cleanResponse.Length - 3);
             }
+            
             cleanResponse = cleanResponse.Trim();
+            
+            // 记录清理后的响应用于调试
+            _logger.LogDebug("清理后的AI响应: {CleanResponse}", cleanResponse);
 
             // 尝试解析JSON
             using var document = JsonDocument.Parse(cleanResponse);
@@ -280,8 +302,13 @@ public class DataStructuringService : IDataStructuringService
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "解析AI响应JSON失败: {Response}", aiResponse);
-            throw new InvalidOperationException("AI返回的数据格式无效", ex);
+            _logger.LogError(ex, "解析AI响应JSON失败。原始响应: {Response}, 清理后响应: {CleanResponse}", aiResponse, cleanResponse);
+            throw new InvalidOperationException($"AI返回的数据格式无效: {ex.Message}。原始响应: {aiResponse}", ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "解析AI响应时发生未知错误。原始响应: {Response}", aiResponse);
+            throw new InvalidOperationException($"解析AI响应时发生错误: {ex.Message}", ex);
         }
 
         return records;

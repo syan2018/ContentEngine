@@ -33,6 +33,14 @@ public interface IDataStructuringService
     Task<List<ValidationResult>> ValidateRecordsAsync(
         SchemaDefinition schema,
         List<BsonDocument> records);
+
+    /// <summary>
+    /// 解析AI原始输出为结构化记录
+    /// </summary>
+    /// <param name="rawOutput">AI原始输出</param>
+    /// <param name="schema">Schema定义</param>
+    /// <returns>解析后的记录列表</returns>
+    Task<List<BsonDocument>> ParseRawOutput(string rawOutput, SchemaDefinition schema);
 }
 
 /// <summary>

@@ -36,6 +36,11 @@ public class ExtractionResult
     /// 处理完成时间
     /// </summary>
     public DateTime? CompletedAt { get; set; }
+
+    /// <summary>
+    /// AI 原始输出（用于调试）
+    /// </summary>
+    public string? RawAIOutput { get; set; }
 }
 
 /// <summary>

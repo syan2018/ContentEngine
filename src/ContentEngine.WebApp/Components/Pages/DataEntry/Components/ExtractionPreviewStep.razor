@@ -78,6 +78,35 @@ else if (extractionResults.Any())
         {
             <MudTabPanel Text="@GetTabTitle(result)" Icon="@GetTabIcon(result.Status)">
                 <div class="pa-4">
+                    <!-- AI 原始输出查看器 -->
+                    <MudExpansionPanels Elevation="0" Class="mb-4">
+                        <MudExpansionPanel Text="查看 AI 原始输出" Icon="Icons.Material.Filled.Code">
+                            <div class="pa-2">
+                                <MudTextField Value="@result.RawAIOutput"
+                                             Label="AI 原始响应"
+                                             Variant="Variant.Outlined"
+                                             Lines="10"
+                                             ReadOnly="true"
+                                             Class="mb-2" />
+                                <div class="d-flex gap-2">
+                                    <MudButton Size="Size.Small" 
+                                              Variant="Variant.Outlined"
+                                              OnClick="() => CopyToClipboard(result.RawAIOutput)"
+                                              StartIcon="Icons.Material.Filled.ContentCopy">
+                                        复制
+                                    </MudButton>
+                                    <MudButton Size="Size.Small" 
+                                              Variant="Variant.Outlined"
+                                              Color="Color.Warning"
+                                              OnClick="() => ReprocessRawOutput(result)"
+                                              StartIcon="Icons.Material.Filled.Refresh">
+                                        重新解析
+                                    </MudButton>
+                                </div>
+                            </div>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+
                     @if (result.Status == ExtractionStatus.Success)
                     {
                         @if (result.Records.Any())
@@ -302,5 +331,34 @@ else if (extractionResults.Any())
             return value?.ToString() ?? "";
         }
         return "";
+    }
+
+    private async Task CopyToClipboard(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        
+        // 简化复制功能，显示提示让用户手动复制
+        Snackbar.Add("请手动选择并复制上方文本", Severity.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task ReprocessRawOutput(ExtractionResult result)
+    {
+        if (string.IsNullOrEmpty(result.RawAIOutput)) return;
+
+        try
+        {
+            // 重新解析原始输出
+            var newRecords = await DataStructuringService.ParseRawOutput(result.RawAIOutput, Schema);
+            result.Records = newRecords;
+            result.Status = ExtractionStatus.Success;
+            
+            Snackbar.Add($"重新解析完成，得到 {newRecords.Count} 条记录", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"重新解析失败: {ex.Message}", Severity.Error);
+        }
     }
 } 
