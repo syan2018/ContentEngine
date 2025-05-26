@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Components.Forms;
+using static ContentEngine.Core.DataPipeline.Services.FileConversionService;
 
 namespace ContentEngine.Core.DataPipeline.Services;
 
@@ -39,4 +40,13 @@ public interface IFileConversionService
     /// <param name="cancellationToken">取消令牌</param>
     /// <returns>网页内容</returns>
     Task<string> GetContentFromUrlAsync(string url, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 使用 Jina Reader API 的高级选项获取URL内容
+    /// </summary>
+    /// <param name="url">URL地址</param>
+    /// <param name="options">Jina Reader 选项</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>网页内容</returns>
+    Task<string> GetContentFromUrlWithOptionsAsync(string url, JinaReaderOptions? options = null, CancellationToken cancellationToken = default);
 } 

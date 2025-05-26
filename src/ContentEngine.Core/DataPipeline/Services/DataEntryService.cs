@@ -51,7 +51,7 @@ public class DataEntryService : IDataEntryService
         return dataList;
     }
 
-     public async Task<long> CountDataAsync(string schemaName)
+    public async Task<long> CountDataAsync(string schemaName)
     {
         await ValidateSchemaExistsAsync(schemaName);
         var collection = _liteDbContext.GetDataCollection(schemaName);

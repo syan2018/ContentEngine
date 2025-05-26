@@ -42,6 +42,12 @@ public class FileConversionService : IFileConversionService
         _httpClient = httpClient;
         _logger = logger;
         _markItDownApiUrl = configuration.GetValue<string>("MarkItDownApi:BaseUrl") ?? "http://localhost:8000";
+        
+        // 为 Jina Reader API 配置 User-Agent
+        if (!_httpClient.DefaultRequestHeaders.Contains("User-Agent"))
+        {
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "ContentEngine/1.0 (Data Processing Tool)");
+        }
     }
 
     public async Task<string> ConvertFileToTextAsync(IFormFile file, CancellationToken cancellationToken = default)
@@ -171,18 +177,141 @@ public class FileConversionService : IFileConversionService
 
         try
         {
-            var response = await _httpClient.GetAsync(uri, cancellationToken);
+            // 使用 Jina Reader API 获取LLM友好的纯文本内容
+            var jinaReaderUrl = $"https://r.jina.ai/{url}";
+            _logger.LogInformation("使用 Jina Reader API 获取URL内容: {JinaUrl}", jinaReaderUrl);
+            
+            var response = await _httpClient.GetAsync(jinaReaderUrl, cancellationToken);
             response.EnsureSuccessStatusCode();
             
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
             
-            // 如果是HTML内容，可以考虑进一步处理提取纯文本
-            // 这里简单返回原始内容，实际项目中可能需要HTML解析
+            // Jina Reader 返回的是 Markdown 格式的纯文本内容，非常适合LLM处理
+            _logger.LogInformation("成功从URL获取内容，长度: {ContentLength} 字符", content.Length);
             return content;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "使用 Jina Reader API 获取URL内容失败: {Url}", url);
+            
+            // 如果 Jina Reader API 失败，回退到直接获取原始内容
+            _logger.LogInformation("回退到直接获取原始URL内容: {Url}", url);
+            try
+            {
+                var fallbackResponse = await _httpClient.GetAsync(uri, cancellationToken);
+                fallbackResponse.EnsureSuccessStatusCode();
+                
+                var fallbackContent = await fallbackResponse.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogWarning("使用回退方式获取到原始HTML内容，长度: {ContentLength} 字符", fallbackContent.Length);
+                return fallbackContent;
+            }
+            catch (Exception fallbackEx)
+            {
+                _logger.LogError(fallbackEx, "回退方式也失败，无法获取URL内容: {Url}", url);
+                throw new HttpRequestException($"无法获取URL内容，Jina Reader API和直接访问都失败: {url}", fallbackEx);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "从URL获取内容失败: {Url}", url);
+            _logger.LogError(ex, "从URL获取内容过程中发生未预期错误: {Url}", url);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 使用 Jina Reader API 的高级选项获取URL内容
+    /// </summary>
+    /// <param name="url">URL地址</param>
+    /// <param name="options">Jina Reader 选项</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>网页内容</returns>
+    public async Task<string> GetContentFromUrlWithOptionsAsync(string url, JinaReaderOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrEmpty(url))
+        {
+            throw new ArgumentException("URL不能为空", nameof(url));
+        }
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            throw new ArgumentException("无效的URL格式", nameof(url));
+        }
+
+        try
+        {
+            // 构建 Jina Reader URL
+            var jinaReaderUrl = $"https://r.jina.ai/{url}";
+            _logger.LogInformation("使用 Jina Reader API 获取URL内容: {JinaUrl}", jinaReaderUrl);
+            
+            // 创建请求消息以添加自定义头部
+            using var request = new HttpRequestMessage(HttpMethod.Get, jinaReaderUrl);
+            
+            // 添加 Jina Reader 特定的头部选项
+            if (options != null)
+            {
+                if (options.WithGeneratedAlt)
+                {
+                    request.Headers.Add("X-With-Generated-Alt", "true");
+                }
+                
+                if (options.NoCache)
+                {
+                    request.Headers.Add("X-No-Cache", "true");
+                }
+                
+                if (options.CacheTolerance.HasValue)
+                {
+                    request.Headers.Add("X-Cache-Tolerance", options.CacheTolerance.Value.ToString());
+                }
+                
+                if (!string.IsNullOrEmpty(options.TargetSelector))
+                {
+                    request.Headers.Add("X-Target-Selector", options.TargetSelector);
+                }
+                
+                if (!string.IsNullOrEmpty(options.WaitForSelector))
+                {
+                    request.Headers.Add("X-Wait-For-Selector", options.WaitForSelector);
+                }
+                
+                if (options.Timeout.HasValue)
+                {
+                    request.Headers.Add("X-Timeout", options.Timeout.Value.ToString());
+                }
+            }
+            
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            
+            _logger.LogInformation("成功从URL获取内容，长度: {ContentLength} 字符", content.Length);
+            return content;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "使用 Jina Reader API 获取URL内容失败: {Url}", url);
+            
+            // 如果 Jina Reader API 失败，回退到直接获取原始内容
+            _logger.LogInformation("回退到直接获取原始URL内容: {Url}", url);
+            try
+            {
+                var fallbackResponse = await _httpClient.GetAsync(uri, cancellationToken);
+                fallbackResponse.EnsureSuccessStatusCode();
+                
+                var fallbackContent = await fallbackResponse.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogWarning("使用回退方式获取到原始HTML内容，长度: {ContentLength} 字符", fallbackContent.Length);
+                return fallbackContent;
+            }
+            catch (Exception fallbackEx)
+            {
+                _logger.LogError(fallbackEx, "回退方式也失败，无法获取URL内容: {Url}", url);
+                throw new HttpRequestException($"无法获取URL内容，Jina Reader API和直接访问都失败: {url}", fallbackEx);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "从URL获取内容过程中发生未预期错误: {Url}", url);
             throw;
         }
     }
@@ -196,5 +325,41 @@ public class FileConversionService : IFileConversionService
         
         [JsonPropertyName("markdown_content")]
         public string? MarkdownContent { get; set; }
+    }
+
+    /// <summary>
+    /// Jina Reader API 选项
+    /// </summary>
+    public class JinaReaderOptions
+    {
+        /// <summary>
+        /// 是否为图片生成alt文本描述
+        /// </summary>
+        public bool WithGeneratedAlt { get; set; } = false;
+        
+        /// <summary>
+        /// 是否绕过缓存
+        /// </summary>
+        public bool NoCache { get; set; } = false;
+        
+        /// <summary>
+        /// 缓存容忍度（秒）
+        /// </summary>
+        public int? CacheTolerance { get; set; }
+        
+        /// <summary>
+        /// 目标CSS选择器，用于提取页面特定部分
+        /// </summary>
+        public string? TargetSelector { get; set; }
+        
+        /// <summary>
+        /// 等待特定元素出现的CSS选择器
+        /// </summary>
+        public string? WaitForSelector { get; set; }
+        
+        /// <summary>
+        /// 超时时间（秒）
+        /// </summary>
+        public int? Timeout { get; set; }
     }
 } 
