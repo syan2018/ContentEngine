@@ -7,3 +7,4 @@ models:
 plugins:
   # 引用 Agent 本地的插件
   - SchemaHelper
+  - DataStructuring

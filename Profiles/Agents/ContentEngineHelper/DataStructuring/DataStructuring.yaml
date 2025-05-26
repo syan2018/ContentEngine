@@ -1,0 +1,5 @@
+description: "Provides functions to help with data extraction and structuring from various data sources."
+functions:
+  semanticFunctions:
+    - path: ./Prompts/ExtractSingleRecord.yaml
+    - path: ./Prompts/ExtractMultipleRecords.yaml

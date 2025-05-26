@@ -44,11 +44,8 @@ public class DataStructuringService : IDataStructuringService
             {
                 _logger.LogInformation("开始处理数据源: {SourceName} ({SourceType})", dataSource.Name, dataSource.Type);
 
-                // 构建提取提示词
-                var prompt = BuildExtractionPrompt(schema, dataSource, extractionMode, fieldMappings);
-                
-                // 调用AI进行数据提取
-                var extractedData = await CallAIForExtractionAsync(prompt, cancellationToken);
+                // 使用语义插件进行数据提取
+                var extractedData = await CallAIForExtractionAsync(schema, dataSource, extractionMode, fieldMappings, cancellationToken);
                 
                 // 解析AI返回的结果
                 var records = ParseExtractionResult(extractedData, schema);
@@ -124,108 +121,54 @@ public class DataStructuringService : IDataStructuringService
         return results;
     }
 
-    private string BuildExtractionPrompt(
+    private async Task<string> CallAIForExtractionAsync(
         SchemaDefinition schema,
         DataSource dataSource,
         ExtractionMode extractionMode,
-        Dictionary<string, string> fieldMappings)
-    {
-        var prompt = new StringBuilder();
-
-        prompt.AppendLine("你是一个专业的数据提取专家。请从以下内容中提取结构化数据。");
-        prompt.AppendLine();
-
-        // Schema信息
-        prompt.AppendLine($"目标数据结构: {schema.Name}");
-        prompt.AppendLine($"描述: {schema.Description}");
-        prompt.AppendLine();
-
-        // 字段定义
-        prompt.AppendLine("字段定义:");
-        foreach (var field in schema.Fields)
-        {
-            prompt.AppendLine($"- {field.Name} ({field.Type}): {field.Comment ?? "无描述"}");
-            if (field.IsRequired)
-            {
-                prompt.AppendLine("  [必填]");
-            }
-        }
-        prompt.AppendLine();
-
-        // 提取模式
-        if (extractionMode == ExtractionMode.OneToOne)
-        {
-            prompt.AppendLine("提取模式: 一对一 - 从整个数据源提取一条记录");
-        }
-        else
-        {
-            prompt.AppendLine("提取模式: 批量 - 从数据源中提取所有可能的记录");
-        }
-        prompt.AppendLine();
-
-        // 字段映射指令
-        if (fieldMappings.ContainsKey("_autoMapping"))
-        {
-            prompt.AppendLine("特殊指令:");
-            prompt.AppendLine(fieldMappings["_autoMapping"]);
-            prompt.AppendLine();
-        }
-        else if (fieldMappings.Any())
-        {
-            prompt.AppendLine("字段映射指令:");
-            foreach (var mapping in fieldMappings)
-            {
-                prompt.AppendLine($"- {mapping.Key}: {mapping.Value}");
-            }
-            prompt.AppendLine();
-        }
-
-        // 输出格式要求
-        prompt.AppendLine("请以JSON格式返回提取结果，格式如下:");
-        if (extractionMode == ExtractionMode.OneToOne)
-        {
-            prompt.AppendLine("{");
-            foreach (var field in schema.Fields)
-            {
-                prompt.AppendLine($"  \"{field.Name}\": \"提取的值\",");
-            }
-            prompt.AppendLine("}");
-        }
-        else
-        {
-            prompt.AppendLine("[");
-            prompt.AppendLine("  {");
-            foreach (var field in schema.Fields)
-            {
-                prompt.AppendLine($"    \"{field.Name}\": \"提取的值\",");
-            }
-            prompt.AppendLine("  },");
-            prompt.AppendLine("  // 更多记录...");
-            prompt.AppendLine("]");
-        }
-        prompt.AppendLine();
-
-        // 数据源内容
-        prompt.AppendLine("要处理的数据内容:");
-        prompt.AppendLine("---");
-        prompt.AppendLine(dataSource.Content);
-        prompt.AppendLine("---");
-
-        return prompt.ToString();
-    }
-
-    private async Task<string> CallAIForExtractionAsync(string prompt, CancellationToken cancellationToken)
+        Dictionary<string, string> fieldMappings,
+        CancellationToken cancellationToken)
     {
         try
         {
-            // 使用默认的Agent配置，或者可以配置专门的数据提取Agent
+            // 使用 ContentEngineHelper Agent 和 DataStructuring 插件
             var kernel = await _kernelFactory.BuildKernelAsync("ContentEngineHelper");
             if (kernel == null)
             {
                 throw new InvalidOperationException("无法创建AI Kernel");
             }
 
-            var result = await kernel.InvokePromptAsync(prompt, cancellationToken: cancellationToken);
+            // 构建字段定义文本
+            var fieldDefinitions = BuildFieldDefinitionsText(schema.Fields);
+            
+            // 构建字段映射指令
+            var fieldMappingsText = BuildFieldMappingsText(fieldMappings);
+            if (string.IsNullOrEmpty(fieldMappingsText))
+            {
+                fieldMappingsText = "无特殊映射指令，按字段名称直接匹配。";
+            }
+            
+            // 构建输出字段格式
+            var outputFields = BuildOutputFieldsFormat(schema.Fields);
+
+            // 准备参数
+            var arguments = new KernelArguments
+            {
+                ["schemaName"] = schema.Name,
+                ["schemaDescription"] = schema.Description ?? "无描述",
+                ["fieldDefinitions"] = fieldDefinitions,
+                ["fieldMappings"] = fieldMappingsText,
+                ["outputFields"] = outputFields,
+                ["dataContent"] = dataSource.Content
+            };
+
+            // 根据提取模式选择对应的语义函数
+            var functionName = extractionMode == ExtractionMode.OneToOne 
+                ? "ExtractSingleRecord" 
+                : "ExtractMultipleRecords";
+            
+            var function = kernel.Plugins["DataStructuring"][functionName];
+            var result = await kernel.InvokeAsync(function, arguments, cancellationToken);
+            
             return result.GetValue<string>() ?? string.Empty;
         }
         catch (Exception ex)
@@ -233,6 +176,62 @@ public class DataStructuringService : IDataStructuringService
             _logger.LogError(ex, "AI提取调用失败");
             throw new InvalidOperationException("AI数据提取失败", ex);
         }
+    }
+
+    /// <summary>
+    /// 构建字段定义文本
+    /// </summary>
+    private string BuildFieldDefinitionsText(List<FieldDefinition> fields)
+    {
+        var sb = new StringBuilder();
+        foreach (var field in fields)
+        {
+            sb.AppendLine($"- {field.Name} ({field.Type}): {field.Comment ?? "无描述"}");
+            if (field.IsRequired)
+            {
+                sb.AppendLine("  [必填]");
+            }
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// 构建字段映射指令文本
+    /// </summary>
+    private string BuildFieldMappingsText(Dictionary<string, string> fieldMappings)
+    {
+        if (!fieldMappings.Any())
+            return string.Empty;
+
+        var sb = new StringBuilder();
+        if (fieldMappings.ContainsKey("_autoMapping"))
+        {
+            sb.AppendLine("特殊指令:");
+            sb.AppendLine(fieldMappings["_autoMapping"]);
+        }
+        else
+        {
+            foreach (var mapping in fieldMappings)
+            {
+                sb.AppendLine($"- {mapping.Key}: {mapping.Value}");
+            }
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// 构建输出字段格式
+    /// </summary>
+    private string BuildOutputFieldsFormat(List<FieldDefinition> fields)
+    {
+        var sb = new StringBuilder();
+        for (int i = 0; i < fields.Count; i++)
+        {
+            var field = fields[i];
+            var comma = i < fields.Count - 1 ? "," : "";
+            sb.AppendLine($"    \"{field.Name}\": \"提取的值\"{comma}");
+        }
+        return sb.ToString().TrimEnd();
     }
 
     private List<BsonDocument> ParseExtractionResult(string aiResponse, SchemaDefinition schema)

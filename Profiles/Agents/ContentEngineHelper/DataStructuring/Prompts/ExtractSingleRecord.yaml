@@ -1,0 +1,57 @@
+description: "Extract a single structured record from data source based on schema definition."
+prompt: |
+  你是一个专业的数据提取专家。请从以下内容中提取一条结构化数据记录。
+
+  **目标数据结构:** {{$schemaName}}
+  **描述:** {{$schemaDescription}}
+
+  **字段定义:**
+  {{$fieldDefinitions}}
+
+  **字段映射指令:**
+  {{$fieldMappings}}
+
+  **输出格式要求:**
+  请以JSON对象格式返回提取结果，严格按照以下格式：
+  ```json
+  {
+    {{$outputFields}}
+  }
+  ```
+
+  **要处理的数据内容:**
+  ---
+  {{$dataContent}}
+  ---
+
+  **重要提示:**
+  - 只返回一个JSON对象，不要返回数组
+  - 严格按照字段定义提取数据
+  - 如果某个字段在数据中找不到对应值，请设置为null
+  - 不要包含任何额外的解释或markdown标记
+  - 确保JSON格式正确且可解析
+
+inputVariables:
+  parameters:
+    - name: schemaName
+      description: "The name of the target schema"
+      isRequired: true
+    - name: schemaDescription
+      description: "Description of the target schema"
+      isRequired: true
+    - name: fieldDefinitions
+      description: "Field definitions formatted as text"
+      isRequired: true
+    - name: fieldMappings
+      description: "Field mapping instructions (optional)"
+      isRequired: false
+    - name: outputFields
+      description: "Expected JSON fields format example"
+      isRequired: true
+    - name: dataContent
+      description: "The actual data content to extract from"
+      isRequired: true
+executionSettings:
+  default:
+    temperature: 0.1
+    maxTokens: 1500 
