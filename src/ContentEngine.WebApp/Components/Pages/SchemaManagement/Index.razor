@@ -2,6 +2,7 @@
 @using ContentEngine.WebApp.Components.Shared
 @inject NavigationManager NavigationManager
 @inject ISchemaDefinitionService SchemaService
+
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -51,60 +52,14 @@
         else
         {
             <MudGrid Spacing="3">
-                @foreach (var schema in _pagedSchemas)
-                {
-                    <MudItem xs="12" sm="6" md="4" lg="3">
-                        <MudCard Class="d-flex flex-column schema-card" Elevation="0">
-                            <MudCardHeader>
-                                <CardHeaderContent>
-                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                                        <MudText Typo="Typo.h6" Class="schema-card-title" @onclick="() => NavigateToDetails(schema.Id)">@schema.Name</MudText>
-                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="schema-card-chip">
-                                            @($"{schema.Fields?.Count ?? 0} 字段")
-                                        </MudChip>
-                                    </MudStack>
-                                </CardHeaderContent>
-                                <CardHeaderActions>
-                                    <MudMenu Icon="@Material.Filled.MoreVert" Size="Size.Small" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                                        <MudMenuItem OnClick="() => NavigateToEditPage(schema.Id)">编辑</MudMenuItem>
-                                        <MudMenuItem OnClick="() => DeleteSchemaAsync(schema)">删除</MudMenuItem>
-                                    </MudMenu>
-                                </CardHeaderActions>
-                            </MudCardHeader>
-                            <MudCardContent Class="pt-0">
-                                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3 schema-card-description" Lines="2" Title="@schema.Description">@schema.Description</MudText>
-                                <MudStack Spacing="1" Class="schema-card-meta">
-                                    <MudGrid Spacing="1" Justify="Justify.SpaceBetween">
-                                        <MudItem><MudText Typo="Typo.caption">记录数:</MudText></MudItem>
-                                        <MudItem Class="text-right"><MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">N/A</MudText></MudItem>
-                                    </MudGrid>
-                                    <MudGrid Spacing="1" Justify="Justify.SpaceBetween">
-                                        <MudItem><MudText Typo="Typo.caption">更新于:</MudText></MudItem>
-                                        <MudItem Class="text-right"><MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">@schema.UpdatedAt.ToString("yyyy-MM-dd")</MudText></MudItem>
-                                    </MudGrid>
-                                </MudStack>
-                            </MudCardContent>
-                            <MudCardActions Class="mt-auto pa-2">
-                                <MudGrid Spacing="2" Class="ma-0 pa-0">
-                                    <MudItem xs="6" Class="pa-0">
-                                        <MudButton FullWidth="true" Size="Size.Medium" Variant="Variant.Text" 
-                                                   StartIcon="@Material.Filled.Visibility" OnClick="() => NavigateToDetails(schema.Id)" 
-                                                   Class="action-button schema-action-button">
-                                            查看
-                                        </MudButton>
-                                    </MudItem>
-                                    <MudItem xs="6" Class="pa-0">
-                                        <MudButton FullWidth="true" Size="Size.Medium" Variant="Variant.Text" 
-                                                   StartIcon="@Material.Filled.Input" OnClick="() => NavigateToDataEntry(schema.Name)" 
-                                                   Class="action-button schema-action-button">
-                                            注入
-                                        </MudButton>
-                                    </MudItem>
-                                </MudGrid>
-                            </MudCardActions>
-                        </MudCard>
-                    </MudItem>
-                }
+                            @foreach (var schema in _pagedSchemas)
+            {
+                <MudItem xs="12" sm="6" md="4" lg="3">
+                    <SchemaCard Schema="@schema"
+                               Mode="SchemaCard.SchemaCardMode.Management"
+                               OnDeleteRequested="@DeleteSchemaAsync" />
+                </MudItem>
+            }
             </MudGrid>
         }
 
@@ -144,46 +99,6 @@
         font-size: 4rem;
     }
 
-    .schema-card {
-        height: 100%;
-        border: 1px solid #E0E0E0;
-        border-radius: 12px;
-    }
-
-    .schema-card .mud-card-header {
-        padding: 16px;
-    }
-
-    .schema-card-title {
-        font-weight: 600;
-        cursor: pointer;
-    }
-    
-    .schema-card-chip {
-        background-color: #F5F5F5;
-        color: #424242;
-        border-color: #E0E0E0 !important; /* Important to override MudChip's own variant styles */
-        border-radius: 6px;
-        font-size: 0.75rem;
-        height: 24px;
-        padding: 0 8px;
-        line-height: normal; /* For better vertical alignment of text */
-    }
-
-    .schema-card .mud-card-content {
-        padding-left: 16px;
-        padding-right: 16px;
-        padding-bottom: 12px;
-    }
-
-    .schema-card-meta {
-        font-size: 0.875rem;
-    }
-
-    .action-button {
-        /* Shared styles for action buttons if any beyond specific ones below */
-    }
-
     .action-button:hover {
         background-color: #F5F5F5 !important;
     }
@@ -191,7 +106,6 @@
     .schema-action-button {
         color: #424242 !important;
         text-transform: none;
-        /* justify-content: center; Let MudButton handle this with FullWidth */
     }
 </style>
 
@@ -298,20 +212,6 @@
         NavigationManager.NavigateTo("/schema-management/create");
     }
 
-    private void NavigateToDetails(int schemaId)
-    {
-        NavigationManager.NavigateTo($"/schema-management/details/{schemaId}");
-    }
-
-    private void NavigateToDataEntry(string schemaName) 
-    {
-        NavigationManager.NavigateTo($"/data-entry/manual/{schemaName}"); 
-    }
-
-    private void NavigateToEditPage(int schemaId)
-    {
-        NavigationManager.NavigateTo($"/schema-management/edit/{schemaId}"); // Placeholder for edit page
-    }
 
     private async Task DeleteSchemaAsync(SchemaDefinition schemaToDelete)
     {

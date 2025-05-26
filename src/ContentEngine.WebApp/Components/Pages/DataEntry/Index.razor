@@ -1,88 +1,63 @@
 @page "/data-entry"
 @using ContentEngine.Core.DataPipeline.Services
 @using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.WebApp.Components.Shared
 @inject ISchemaDefinitionService SchemaService
 @inject IDataEntryService DataEntryService
 @inject NavigationManager Navigation
 
 <PageTitle>信息注入 - ContentEngine</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    <MudText Typo="Typo.h3" Class="mb-2">信息注入</MudText>
-    <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-6">
-        将原始信息转化为结构化数据并存入系统
-    </MudText>
-
-    <MudGrid>
-        <MudItem xs="12" md="8">
-            <MudTextField @bind-Value="searchText" 
-                         Placeholder="搜索数据结构..." 
-                         Adornment="Adornment.Start" 
-                         AdornmentIcon="Icons.Material.Filled.Search"
-                         Class="mb-4" />
-        </MudItem>
-        <MudItem xs="12" md="4">
-            <MudButton Variant="Variant.Outlined" 
-                      StartIcon="Icons.Material.Filled.FilterList"
-                      Class="mb-4">
-                筛选
-            </MudButton>
-        </MudItem>
-    </MudGrid>
-
-    <MudText Typo="Typo.h5" Class="mb-4">选择目标数据结构</MudText>
-
-    @if (isLoading)
-    {
-        <MudProgressCircular Indeterminate="true" />
-    }
-    else if (schemas?.Any() == true)
-    {
-        <MudGrid>
-            @foreach (var schema in filteredSchemas)
-            {
-                <MudItem xs="12" sm="6" md="4">
-                    <MudCard Class="mb-4" Style="height: 100%;">
-                        <MudCardContent>
-                            <div class="d-flex justify-space-between align-center mb-2">
-                                <MudText Typo="Typo.h6">@schema.Name</MudText>
-                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">
-                                    @schema.Fields.Count 字段
-                                </MudChip>
-                            </div>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                                @schema.Description
-                            </MudText>
-                            <MudText Typo="Typo.caption">
-                                已有记录: <strong>@(GetRecordCount(schema.Name))</strong>
-                            </MudText>
-                        </MudCardContent>
-                        <MudCardActions>
-                            <MudButton Variant="Variant.Outlined" 
-                                      Size="Size.Small"
-                                      OnClick="() => NavigateToManualEntry(schema.Id)"
-                                      Class="flex-grow-1 mr-2">
-                                手动录入
-                            </MudButton>
-                            <MudButton Variant="Variant.Filled" 
-                                      Color="Color.Primary"
-                                      Size="Size.Small"
-                                      OnClick="() => NavigateToAIEntry(schema.Id)"
-                                      Class="flex-grow-1">
-                                AI 辅助录入
-                            </MudButton>
-                        </MudCardActions>
-                    </MudCard>
-                </MudItem>
-            }
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
+    <MudStack Spacing="6">
+        <MudGrid Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudItem xs="12" sm="8">
+                <MudText Typo="Typo.h4" GutterBottom="true" Class="page-title">信息注入</MudText>
+                <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">将原始信息转化为结构化数据并存入系统</MudText>
+            </MudItem>
         </MudGrid>
-    }
-    else
-    {
-        <MudAlert Severity="Severity.Info">
-            暂无可用的数据结构。请先创建数据结构定义。
-        </MudAlert>
-    }
+
+        <MudGrid AlignItems="AlignItems.Center" Spacing="2">
+            <MudItem xs="12" sm="9">
+                <MudTextField T="string" @bind-Value="searchText" Placeholder="搜索数据结构..." Variant="Variant.Outlined" 
+                              Adornment="Adornment.Start" AdornmentIcon="@Material.Filled.Search" Clearable="true" 
+                              Immediate="true" DebounceInterval="300" Class="search-textfield" />
+            </MudItem>
+            <MudItem xs="12" sm="3" Class="d-flex justify-sm-start justify-xs-stretch">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Material.Filled.FilterList" FullWidth="true" Class="filter-button" Disabled="true"> 
+                    筛选 (待实现) 
+                </MudButton> 
+            </MudItem>
+        </MudGrid>
+
+        @if (isLoading)
+        {
+            <MudPaper Class="pa-4 d-flex flex-column align-center justify-center loading-empty-paper" Elevation="0">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                <MudText Class="mt-2">正在加载数据结构列表...</MudText>
+            </MudPaper>
+        }
+        else if (!filteredSchemas?.Any() ?? true)
+        {
+            <MudPaper Class="pa-8 text-center loading-empty-paper" Elevation="0">
+                <MudIcon Icon="@Material.Filled.Input" Size="Size.Large" Color="Color.Default" Class="mb-4 empty-state-icon" />
+                <MudText Typo="Typo.h5" GutterBottom="true">@(string.IsNullOrWhiteSpace(searchText) ? "暂无可用的数据结构" : "未找到匹配的数据结构")</MudText>
+                <MudText Class="mud-text-secondary">@(string.IsNullOrWhiteSpace(searchText) ? "请先创建数据结构定义。" : "尝试修改您的搜索词或清除筛选条件。")</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <MudGrid Spacing="3">
+                @foreach (var schema in filteredSchemas)
+                {
+                    <MudItem xs="12" sm="6" md="4" lg="3">
+                        <SchemaCard Schema="@schema"
+                                   Mode="SchemaCard.SchemaCardMode.DataEntry" />
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </MudStack>
 </MudContainer>
 
 @code {
@@ -100,12 +75,14 @@
     {
         try
         {
-            schemas = await SchemaService.GetAllSchemasAsync();
+            var schemasFromService = await SchemaService.GetAllSchemasAsync();
+            schemas = schemasFromService?.OrderByDescending(s => s.UpdatedAt).ToList() ?? new List<SchemaDefinition>();
         }
         catch (Exception ex)
         {
             // TODO: 显示错误消息
             Console.WriteLine($"加载Schema失败: {ex.Message}");
+            schemas = new List<SchemaDefinition>();
         }
         finally
         {
@@ -113,26 +90,30 @@
         }
     }
 
-    private int GetRecordCount(string schemaName)
-    {
-        try
-        {
-            // 异步调用在同步方法中的简化处理
-            return (int)DataEntryService.CountDataAsync(schemaName).GetAwaiter().GetResult();
-        }
-        catch
-        {
-            return 0;
-        }
+}
+
+<style>
+    .page-title {
+        font-weight: 600;
     }
 
-    private void NavigateToManualEntry(int schemaId)
-    {
-        Navigation.NavigateTo($"/data-entry/manual/{schemaId}");
+    .search-textfield .mud-input-slot {
+        border-radius: 8px;
     }
 
-    private void NavigateToAIEntry(int schemaId)
-    {
-        Navigation.NavigateTo($"/data-entry/ai/{schemaId}");
+    .filter-button {
+        height: 56px;
+        border-color: #E0E0E0;
+        color: #424242;
+        text-transform: none;
+        border-radius: 8px;
     }
-} 
+
+    .loading-empty-paper {
+        min-height: 300px;
+    }
+
+    .empty-state-icon {
+        font-size: 4rem;
+    }
+</style>

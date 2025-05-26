@@ -1,0 +1,535 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.DataPipeline.Services
+@inject NavigationManager Navigation
+@inject IDataEntryService DataEntryService
+
+<MudCard Class="@GetCardClass()" Style="@GetCardStyle()" @onclick="HandleCardClickInternal">
+    @if (_effectiveConfiguration.ShowHeader)
+    {
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <div @onclick="HandleTitleClickInternal" @onclick:stopPropagation="true" style="cursor: pointer;">
+                        <MudText Typo="Typo.h6" Class="schema-card-title">
+                            @Schema.Name
+                        </MudText>
+                    </div>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" Class="schema-card-chip">
+                        @($"{Schema.Fields?.Count ?? 0} 字段")
+                    </MudChip>
+                </MudStack>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                @{
+                    var menuItems = _effectiveConfiguration.MenuItems ?? new List<SchemaCardMenuItem>();
+                }
+                @if (_effectiveConfiguration.ShowMenu && menuItems.Any())
+                {
+                    <MudMenu Icon="@Material.Filled.MoreVert" Size="Size.Small" 
+                            AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                        @foreach (var item in menuItems)
+                        {
+                            <MudMenuItem OnClick="@(() => item.Action?.Invoke(Schema))">
+                                @item.Text
+                            </MudMenuItem>
+                        }
+                    </MudMenu>
+                }
+            </CardHeaderActions>
+        </MudCardHeader>
+    }
+    else
+    {
+        <!-- 简化标题模式 -->
+        <MudCardContent Class="pt-4">
+            <div class="d-flex justify-space-between align-center mb-2">
+                <div @onclick="HandleTitleClickInternal" @onclick:stopPropagation="true" style="cursor: pointer;">
+                    <MudText Typo="Typo.h6" Class="schema-card-title">
+                        @Schema.Name
+                    </MudText>
+                </div>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" Class="schema-card-chip">
+                    @($"{Schema.Fields?.Count ?? 0} 字段")
+                </MudChip>
+            </div>
+        </MudCardContent>
+    }
+
+    <MudCardContent Class="@("pt-0")">
+        @if (_effectiveConfiguration.ShowDescription && !string.IsNullOrEmpty(Schema.Description))
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3 schema-card-description" 
+                    Lines="@_effectiveConfiguration.DescriptionLines" Title="@Schema.Description">
+                @Schema.Description
+            </MudText>
+        }
+
+        @if (_effectiveConfiguration.ShowMetadata)
+        {
+            <MudStack Spacing="1" Class="schema-card-meta">
+                @if (_effectiveConfiguration.ShowRecordCount)
+                {
+                    <MudGrid Spacing="1" Justify="Justify.SpaceBetween">
+                        <MudItem>
+                            <MudText Typo="Typo.caption">记录数:</MudText>
+                        </MudItem>
+                        <MudItem Class="text-right">
+                            <MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">
+                                @GetActualDisplayRecordCount()
+                            </MudText>
+                        </MudItem>
+                    </MudGrid>
+                }
+                @if (_effectiveConfiguration.ShowUpdateTime)
+                {
+                    <MudGrid Spacing="1" Justify="Justify.SpaceBetween">
+                        <MudItem>
+                            <MudText Typo="Typo.caption">更新于:</MudText>
+                        </MudItem>
+                        <MudItem Class="text-right">
+                            <MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">
+                                @Schema.UpdatedAt.ToString("yyyy-MM-dd")
+                            </MudText>
+                        </MudItem>
+                    </MudGrid>
+                }
+            </MudStack>
+        }
+
+        @if (ChildContent != null)
+        {
+            @ChildContent
+        }
+    </MudCardContent>
+
+    @{
+        var actionButtons = _effectiveConfiguration.ActionButtons ?? new List<SchemaCardActionButton>();
+    }
+    @if (actionButtons.Any())
+    {
+        <MudCardActions Class="@GetActionsClass(actionButtons.Count)">
+            @if (actionButtons.Count == 1)
+            {
+                var button = actionButtons.First();
+                <MudButton FullWidth="true" Size="@button.Size" Variant="@button.Variant" 
+                          Color="@button.Color" StartIcon="@button.Icon" 
+                          OnClick="@(() => button.Action?.Invoke(Schema))"
+                          Class="@button.Class">
+                    @button.Text
+                </MudButton>
+            }
+            else
+            {
+                <MudGrid Spacing="2" Class="ma-0 pa-0">
+                    @foreach (var button in actionButtons)
+                    {
+                        <MudItem xs="@(12 / actionButtons.Count)" Class="pa-0">
+                            <MudButton FullWidth="true" Size="@button.Size" Variant="@button.Variant" 
+                                      Color="@button.Color" StartIcon="@button.Icon" 
+                                      OnClick="@(() => button.Action?.Invoke(Schema))"
+                                      Class="@button.Class">
+                                @button.Text
+                            </MudButton>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        </MudCardActions>
+    }
+</MudCard>
+
+@code {
+    /// <summary>
+    /// Schema数据对象
+    /// </summary>
+    [Parameter] public SchemaDefinition Schema { get; set; } = null!;
+
+    /// <summary>
+    /// 卡片模式，决定显示样式和操作按钮。如果提供了 CustomConfiguration，此参数将被忽略部分效果。
+    /// </summary>
+    [Parameter] public SchemaCardMode Mode { get; set; } = SchemaCardMode.Management;
+
+    /// <summary>
+    /// 自定义卡片配置。如果提供，将优先于 Mode 和其他单独的显示参数。
+    /// </summary>
+    [Parameter] public SchemaCardConfiguration? CustomConfiguration { get; set; }
+
+    /// <summary>
+    /// 记录数值（如果不提供，将尝试异步获取）
+    /// </summary>
+    [Parameter] public int? RecordCount { get; set; }
+
+    /// <summary>
+    /// 菜单项列表。如果 CustomConfiguration 未提供，此参数可覆盖 Mode 生成的菜单项。
+    /// </summary>
+    [Parameter] public List<SchemaCardMenuItem>? MenuItems { get; set; }
+
+    /// <summary>
+    /// 是否显示元数据信息（记录数、更新时间等）。如果 CustomConfiguration 未提供，此参数可覆盖 Mode 生成的设置。
+    /// </summary>
+    [Parameter] public bool ShowMetadata { get; set; } = true;
+
+    /// <summary>
+    /// 是否显示记录数。如果 CustomConfiguration 未提供，此参数可覆盖 Mode 生成的设置。
+    /// </summary>
+    [Parameter] public bool ShowRecordCount { get; set; } = true;
+
+    /// <summary>
+    /// 是否显示更新时间。如果 CustomConfiguration 未提供，此参数可覆盖 Mode 生成的设置。
+    /// </summary>
+    [Parameter] public bool ShowUpdateTime { get; set; } = true;
+
+    /// <summary>
+    /// 描述文本显示行数。如果 CustomConfiguration 未提供，此参数可覆盖 Mode 生成的设置。
+    /// </summary>
+    [Parameter] public int DescriptionLines { get; set; } = 2;
+
+    /// <summary>
+    /// 操作按钮列表。如果 CustomConfiguration 未提供，此参数可覆盖 Mode 生成的操作按钮。
+    /// </summary>
+    [Parameter] public List<SchemaCardActionButton>? ActionButtons { get; set; }
+
+    /// <summary>
+    /// 卡片点击事件。优先于内部配置的点击行为。
+    /// </summary>
+    [Parameter] public EventCallback<SchemaDefinition> OnCardClick { get; set; }
+
+    /// <summary>
+    /// 标题点击事件。优先于内部配置的点击行为。
+    /// </summary>
+    [Parameter] public EventCallback<SchemaDefinition> OnTitleClick { get; set; }
+
+    /// <summary>
+    /// 卡片高度
+    /// </summary>
+    [Parameter] public string? Height { get; set; }
+
+    /// <summary>
+    /// 额外的CSS类
+    /// </summary>
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>
+    /// 子内容
+    /// </summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// 删除回调事件
+    /// </summary>
+    [Parameter] public EventCallback<SchemaDefinition> OnDeleteRequested { get; set; }
+
+    private SchemaCardConfiguration _effectiveConfiguration = null!;
+    private int? _currentRecordCount;
+    private bool _isLoadingRecordCount = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        InitializeConfiguration();
+        await LoadRecordCountIfNeededAsync();
+    }
+
+    private void InitializeConfiguration()
+    {
+        if (CustomConfiguration != null)
+        {
+            _effectiveConfiguration = CustomConfiguration;
+        }
+        else
+        {
+            // Mode determines base configuration
+            _effectiveConfiguration = Mode switch
+            {
+                SchemaCardMode.Management => SchemaCardConfiguration.ForManagementMode(this),
+                SchemaCardMode.DataEntry => SchemaCardConfiguration.ForDataEntryMode(this),
+                SchemaCardMode.DataExplorer => SchemaCardConfiguration.ForDataExplorerMode(this),
+                _ => SchemaCardConfiguration.ForManagementMode(this) // Default
+            };
+
+            // Apply overrides from individual parameters
+            if (MenuItems != null && MenuItems.Any())
+            {
+                _effectiveConfiguration.MenuItems = MenuItems;
+            }
+            if (ActionButtons != null && ActionButtons.Any())
+            {
+                _effectiveConfiguration.ActionButtons = ActionButtons;
+            }
+            
+            _effectiveConfiguration.ShowMetadata = ShowMetadata;
+            _effectiveConfiguration.ShowRecordCount = ShowRecordCount;
+            _effectiveConfiguration.ShowUpdateTime = ShowUpdateTime;
+            _effectiveConfiguration.DescriptionLines = DescriptionLines;
+        }
+        _currentRecordCount = RecordCount; // Initialize with parameter, may be overridden by async load
+    }
+
+    private async Task LoadRecordCountIfNeededAsync()
+    {
+        if (_effectiveConfiguration.ShowRecordCount && !_currentRecordCount.HasValue && DataEntryService != null)
+        {
+            _isLoadingRecordCount = true;
+            try
+            {
+                _currentRecordCount = (int?)await DataEntryService.CountDataAsync(Schema.Name);
+            }
+            catch (Exception ex) // Log exception (optional)
+            {
+                // Console.WriteLine($"Error loading record count for {Schema.Name}: {ex.Message}");
+                _currentRecordCount = null; // Indicate N/A or error
+            }
+            finally
+            {
+                _isLoadingRecordCount = false;
+                StateHasChanged();
+            }
+        }
+        else if (!_effectiveConfiguration.ShowRecordCount)
+        {
+             _currentRecordCount = null; // Explicitly set to null if not shown, so "N/A" is accurate
+        }
+    }
+
+    private string GetCardClass()
+    {
+        var classes = new List<string> { "d-flex", "flex-column", "schema-card" };
+        
+        bool isEffectivelyClickable = OnCardClick.HasDelegate || 
+                                     (_effectiveConfiguration.IsCardClickable && _effectiveConfiguration.CardClickAction != null);
+        if (isEffectivelyClickable)
+            classes.Add("cursor-pointer");
+            
+        if (!string.IsNullOrEmpty(Class))
+            classes.Add(Class);
+            
+        return string.Join(" ", classes);
+    }
+
+    private string GetCardStyle()
+    {
+        var styles = new List<string> { !string.IsNullOrEmpty(Height) ? $"height: {Height}" : "height: 100%" };
+
+        return string.Join("; ", styles);
+    }
+
+    private string GetActionsClass(int buttonCount)
+    {
+        return buttonCount == 1 ? "" : "mt-auto pa-2";
+    }
+
+    private async Task HandleCardClickInternal()
+    {
+        if (OnCardClick.HasDelegate)
+        {
+            await OnCardClick.InvokeAsync(Schema);
+        }
+        else if (_effectiveConfiguration is { IsCardClickable: true, CardClickAction: not null })
+        {
+            await _effectiveConfiguration.CardClickAction.Invoke(Schema);
+        }
+    }
+
+    private async Task HandleTitleClickInternal()
+    {
+        if (OnTitleClick.HasDelegate)
+        {
+            await OnTitleClick.InvokeAsync(Schema);
+        }
+        else if (_effectiveConfiguration.TitleClickAction != null)
+        {
+            await _effectiveConfiguration.TitleClickAction.Invoke(Schema);
+        }
+    }
+    
+    private string GetActualDisplayRecordCount()
+    {
+        if (_isLoadingRecordCount) return "加载中...";
+        return _currentRecordCount?.ToString() ?? "N/A";
+    }
+
+    // Internal navigation methods (used by SchemaCardConfiguration factories)
+    internal void NavigateToDetails() => Navigation.NavigateTo($"/schema-management/details/{Schema.Id}");
+    internal void NavigateToEdit() => Navigation.NavigateTo($"/schema-management/edit/{Schema.Id}");
+    internal void NavigateToManualEntry() => Navigation.NavigateTo($"/data-entry/manual/{Schema.Id}");
+    internal void NavigateToAIEntry() => Navigation.NavigateTo($"/data-entry/ai/{Schema.Id}");
+    internal void NavigateToDataView() => Navigation.NavigateTo($"/data/{Schema.Id}");
+}
+
+<style>
+    .schema-card {
+        border: 1px solid #E0E0E0;
+        border-radius: 12px;
+    }
+
+    .schema-card .mud-card-header {
+        padding: 16px;
+    }
+
+    .schema-card-title {
+        font-weight: 600;
+    }
+    
+    .schema-card-chip {
+        background-color: #F5F5F5;
+        color: #424242;
+        border-color: #E0E0E0 !important;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        height: 24px;
+        padding: 0 8px;
+        line-height: normal;
+    }
+
+    .schema-card .mud-card-content {
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-bottom: 12px;
+    }
+
+    .schema-card-meta {
+        font-size: 0.875rem;
+    }
+
+    .cursor-pointer {
+        cursor: pointer;
+        transition: transform 0.2s ease-in-out;
+    }
+    
+    .cursor-pointer:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .schema-card .mud-button:hover {
+        background-color: #F5F5F5 !important;
+    }
+
+    .schema-card .mud-button {
+        color: #424242 !important;
+        text-transform: none;
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// Defines the configuration for the SchemaCard's appearance and behavior.
+    /// </summary>
+    public class SchemaCardConfiguration
+    {
+        public bool ShowHeader { get; set; } = true;
+        public bool ShowMenu { get; set; } = true;
+        public bool IsCardClickable { get; set; } = false;
+        public Func<SchemaDefinition, Task>? CardClickAction { get; set; }
+        public Func<SchemaDefinition, Task>? TitleClickAction { get; set; }
+        public bool ShowDescription { get; set; } = true;
+        public int DescriptionLines { get; set; } = 2;
+        public bool ShowMetadata { get; set; } = true;
+        public bool ShowRecordCount { get; set; } = true;
+        public bool ShowUpdateTime { get; set; } = true;
+        public List<SchemaCardMenuItem>? MenuItems { get; set; }
+        public List<SchemaCardActionButton>? ActionButtons { get; set; }
+
+        public static SchemaCardConfiguration ForManagementMode(SchemaCard component)
+        {
+            return new SchemaCardConfiguration
+            {
+                ShowHeader = true,
+                ShowMenu = true,
+                IsCardClickable = false, 
+                ShowDescription = true,
+                DescriptionLines = 2,
+                ShowMetadata = true,
+                ShowRecordCount = true,
+                ShowUpdateTime = true,
+                MenuItems =
+                [
+                    new SchemaCardMenuItem { Text = "编辑", Action = async _ => component.NavigateToEdit() },
+                    new SchemaCardMenuItem { Text = "删除", Action = async schema => await component.OnDeleteRequested.InvokeAsync(schema) }
+                ],
+                ActionButtons =
+                [
+                    new SchemaCardActionButton { Text = "查看", Icon = Material.Filled.Visibility, Action = async _ => component.NavigateToDetails(), Class = "action-button schema-action-button" },
+                    new SchemaCardActionButton { Text = "注入", Icon = Material.Filled.Input, Action = async _ => component.NavigateToAIEntry(), Class = "action-button schema-action-button" }
+                ],
+                TitleClickAction = async _ => component.NavigateToDetails()
+            };
+        }
+
+        public static SchemaCardConfiguration ForDataEntryMode(SchemaCard component)
+        {
+            return new SchemaCardConfiguration
+            {
+                ShowHeader = false,
+                ShowMenu = false,
+                IsCardClickable = false,
+                ShowDescription = true,
+                DescriptionLines = 2,
+                ShowMetadata = true,
+                ShowRecordCount = true,
+                ShowUpdateTime = false, // Typically not shown in data entry mode
+                ActionButtons =
+                [
+                    new SchemaCardActionButton { Text = "手动录入", Icon = Material.Filled.Edit, Action = async _ => component.NavigateToManualEntry(), Class = "action-button schema-action-button" },
+                    new SchemaCardActionButton { Text = "AI 辅助", Icon = Material.Filled.AutoAwesome, Action = async _ => component.NavigateToAIEntry(), Class = "action-button schema-action-button" }
+                ],
+                // Default title click for data entry might be AI entry or manual entry
+                TitleClickAction = async _ => component.NavigateToAIEntry() 
+            };
+        }
+
+        public static SchemaCardConfiguration ForDataExplorerMode(SchemaCard component)
+        {
+            return new SchemaCardConfiguration
+            {
+                ShowHeader = false,
+                ShowMenu = false,
+                IsCardClickable = true,
+                CardClickAction = async _ => component.NavigateToDataView(),
+                ShowDescription = true,
+                DescriptionLines = 2,
+                ShowMetadata = true,
+                ShowRecordCount = true,
+                ShowUpdateTime = true,
+                ActionButtons = [
+                    new SchemaCardActionButton { Text = "浏览数据", Icon = Icons.Material.Filled.Visibility, Action = async _ => component.NavigateToDataView(), Class = "action-button schema-action-button" }
+                ],
+                TitleClickAction = async _ => component.NavigateToDataView()
+            };
+        }
+    }
+
+    /// <summary>
+    /// 菜单项定义
+    /// </summary>
+    public class SchemaCardMenuItem
+    {
+        public string Text { get; set; } = string.Empty;
+        public Func<SchemaDefinition, Task?>? Action { get; set; } // Changed to Func<SchemaDefinition, Task> for async
+        public string? Icon { get; set; }
+    }
+
+    /// <summary>
+    /// 操作按钮定义
+    /// </summary>
+    public class SchemaCardActionButton
+    {
+        public string Text { get; set; } = string.Empty;
+        public Func<SchemaDefinition, Task>? Action { get; set; } // Changed to Func<SchemaDefinition, Task> for async
+        public string? Icon { get; set; }
+        public Variant Variant { get; set; } = Variant.Text;
+        public Color Color { get; set; } = Color.Default;
+        public Size Size { get; set; } = Size.Medium;
+        public string? Class { get; set; }
+    }
+
+    /// <summary>
+    /// Schema卡片模式枚举
+    /// </summary>
+    public enum SchemaCardMode
+    {
+        Management,  // 管理模式：查看 + 注入
+        DataEntry,   // 数据录入模式：手动录入 + AI辅助录入  
+        DataExplorer // 数据浏览模式：浏览数据
+    }
+} 

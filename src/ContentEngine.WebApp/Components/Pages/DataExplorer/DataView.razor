@@ -1,4 +1,4 @@
-@page "/data/{SchemaName}"
+@page "/data/{SchemaId}"
 
 @rendermode InteractiveServer
 @inject IDataEntryService DataService
@@ -10,9 +10,9 @@
 
 @using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
 
-<PageTitle>Data for @SchemaName</PageTitle>
+<PageTitle>Data for @(schemaDefinition?.Name ?? SchemaId)</PageTitle>
 
-<h1>Data Entries: @SchemaName</h1>
+<h1>Data Entries: @(schemaDefinition?.Name ?? SchemaId)</h1>
 
 @if (isLoading)
 {
@@ -24,7 +24,7 @@ else if (!string.IsNullOrEmpty(errorMessage))
 }
 else if (schemaDefinition == null)
 {
-    <div class="alert alert-warning">Schema '@SchemaName' definition not found.</div>
+    <div class="alert alert-warning">Schema '@SchemaId' definition not found.</div>
 }
 else
 {
@@ -107,7 +107,7 @@ else
 
 @code {
     [Parameter]
-    public string SchemaName { get; set; } = "";
+    public string SchemaId { get; set; } = "";
 
     private SchemaDefinition? schemaDefinition;
     private List<BsonDocument> dataEntries = new();
@@ -140,16 +140,22 @@ else
         ClearFormData(); // Clear the single dictionary
         try
         {
-            schemaDefinition = await SchemaService.GetSchemaByNameAsync(SchemaName);
+            if (!int.TryParse(SchemaId, out var schemaIdInt))
+            {
+                errorMessage = $"Invalid Schema ID: '{SchemaId}'";
+                return;
+            }
+            
+            schemaDefinition = await SchemaService.GetSchemaByIdAsync(schemaIdInt);
             if (schemaDefinition != null)
             {   
                 // Load data for the current page
-                totalEntries = await DataService.CountDataAsync(SchemaName);
-                dataEntries = await DataService.GetDataAsync(SchemaName, (currentPage - 1) * pageSize, pageSize);
+                totalEntries = await DataService.CountDataAsync(schemaDefinition.Name);
+                dataEntries = await DataService.GetDataAsync(schemaDefinition.Name, (currentPage - 1) * pageSize, pageSize);
             }
             else
             {
-                errorMessage = $"Schema '{SchemaName}' not found.";
+                errorMessage = $"Schema with ID '{SchemaId}' not found.";
                 dataEntries.Clear();
                 totalEntries = 0;
             }
@@ -251,11 +257,11 @@ else
             if (isEditing && currentEditId != null)
             {
                 dataToSave["_id"] = currentEditId;
-                await DataService.UpdateDataAsync(SchemaName, currentEditId, dataToSave);
+                await DataService.UpdateDataAsync(schemaDefinition.Name, currentEditId, dataToSave);
             }
             else
             {
-                await DataService.CreateDataAsync(SchemaName, dataToSave);
+                await DataService.CreateDataAsync(schemaDefinition.Name, dataToSave);
             }
             CancelEdit();
             await LoadSchemaAndData();
@@ -272,7 +278,7 @@ else
         // TODO: Implement proper confirmation dialog (e.g., using a modal component)
         try
         {
-            await DataService.DeleteDataAsync(SchemaName, entryToDelete["_id"]);
+            await DataService.DeleteDataAsync(schemaDefinition.Name, entryToDelete["_id"]);
             await LoadSchemaAndData();
         }
         catch (Exception ex)
