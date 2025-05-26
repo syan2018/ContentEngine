@@ -1,0 +1,112 @@
+ @using ContentEngine.Core.DataPipeline.Models
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center">
+            @GetSourceIcon(DataSource.Type)
+            <MudText Typo="Typo.h6" Class="ml-2">预览: @DataSource.Name</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div class="mb-4">
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">数据源信息</MudText>
+            <MudGrid Class="mt-2">
+                <MudItem xs="6">
+                    <MudText Typo="Typo.body2"><strong>类型:</strong> @GetSourceTypeText(DataSource.Type)</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudText Typo="Typo.body2"><strong>大小:</strong> @GetSourceDescription(DataSource)</MudText>
+                </MudItem>
+                @if (!string.IsNullOrEmpty(DataSource.MimeType))
+                {
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.body2"><strong>MIME类型:</strong> @DataSource.MimeType</MudText>
+                    </MudItem>
+                }
+                @if (!string.IsNullOrEmpty(DataSource.Url))
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body2"><strong>URL:</strong> @DataSource.Url</MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+        </div>
+        
+        <MudDivider Class="mb-4" />
+        
+        <div>
+            <div class="d-flex align-center justify-space-between mb-3">
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">提取的文本内容</MudText>
+                <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                    @DataSource.Content.Length 字符
+                </MudChip>
+            </div>
+            
+            <MudPaper Outlined="true" Class="pa-4" Style="max-height: 400px; overflow-y: auto;">
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', monospace;">@DataSource.Content</MudText>
+            </MudPaper>
+            
+            @if (DataSource.Content.Length > 1000)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                    💡 提示：内容较长，建议滚动查看完整内容
+                </MudText>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Color="Color.Primary">关闭</MudButton>
+        <MudButton OnClick="() => CopyToClipboard(DataSource.Content)" 
+                  Color="Color.Secondary" 
+                  StartIcon="Icons.Material.Filled.ContentCopy">
+            复制内容
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public DataSource DataSource { get; set; } = null!;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task CopyToClipboard(string content)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", content);
+            Snackbar.Add("内容已复制到剪贴板", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("复制失败，请手动选择复制", Severity.Warning);
+        }
+    }
+
+    private RenderFragment GetSourceIcon(DataSourceType type) => type switch
+    {
+        DataSourceType.File => @<MudIcon Icon="Icons.Material.Filled.InsertDriveFile" Color="Color.Primary" />,
+        DataSourceType.Url => @<MudIcon Icon="Icons.Material.Filled.Link" Color="Color.Success" />,
+        DataSourceType.Text => @<MudIcon Icon="Icons.Material.Filled.TextFields" Color="Color.Secondary" />,
+        _ => @<MudIcon Icon="Icons.Material.Filled.Help" />
+    };
+
+    private string GetSourceTypeText(DataSourceType type) => type switch
+    {
+        DataSourceType.File => "文件",
+        DataSourceType.Url => "网页URL",
+        DataSourceType.Text => "文本内容",
+        _ => "未知类型"
+    };
+
+    private string GetSourceDescription(DataSource source) => source.Type switch
+    {
+        DataSourceType.File => $"{(source.Size.HasValue ? $"{source.Size.Value / 1024:F1} KB" : "未知大小")}",
+        DataSourceType.Url => source.Url ?? "URL",
+        DataSourceType.Text => $"{source.Content.Length} 字符",
+        _ => "未知类型"
+    };
+}

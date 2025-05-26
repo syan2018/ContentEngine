@@ -3,6 +3,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject IFileConversionService FileConversionService
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <div class="mb-6">
     <MudText Typo="Typo.h5" Class="mb-2">选择数据源</MudText>
@@ -14,35 +15,35 @@
 <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" Class="mb-4">
     <MudTabPanel Text="文件" Icon="Icons.Material.Filled.UploadFile">
         <div class="pa-4">
-            <MudFileUpload T="IReadOnlyList<IBrowserFile>" 
-                          @ref="fileUpload"
-                          OnFilesChanged="OnFilesChanged"
-                          Hidden="false" 
-                          Class="flex-1" 
-                          InputClass="absolute mud-width-full mud-height-full overflow-hidden z-20"
-                          InputStyle="opacity:0"
-                          @ondragenter="@SetDragClass"
-                          @ondragleave="@ClearDragClass"
-                          @ondragend="@ClearDragClass"
-                          Accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.html,.htm,.json,.xml,.csv,.rtf"
-                          MaximumFileCount="10">
-                <ButtonTemplate>
-                    <MudPaper Height="200px" 
-                             Outlined="true" 
-                             Class="@dragClass">
-                        <div class="d-flex flex-column align-center justify-center mud-width-full mud-height-full">
-                            <MudIcon Icon="Icons.Material.Filled.CloudUpload" Style="font-size: 3rem;" />
-                            <MudText Typo="Typo.h6" Class="mt-2">上传文件</MudText>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                拖放文件到此处，或点击选择文件
-                            </MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
-                                支持 PDF, Word, Excel, PowerPoint, 文本文件等
-                            </MudText>
-                        </div>
-                    </MudPaper>
-                </ButtonTemplate>
-            </MudFileUpload>
+            <div class="@GetDragClass()"
+                 @ondragenter="@SetDragClass"
+                 @ondragleave="@ClearDragClass"
+                 @ondragend="@ClearDragClass">
+                <MudFileUpload T="IReadOnlyList<IBrowserFile>" 
+                              @ref="fileUpload"
+                              FilesChanged="OnFilesChanged"
+                              Hidden="false" 
+                              Class="mud-width-full mud-height-full"
+                              Accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.html,.htm,.json,.xml,.csv,.rtf"
+                              MaximumFileCount="10">
+                    <ButtonTemplate>
+                        <MudPaper Height="200px" 
+                                 Outlined="true" 
+                                 Class="mud-width-full cursor-pointer">
+                            <div class="d-flex flex-column align-center justify-center mud-width-full mud-height-full">
+                                <MudIcon Icon="Icons.Material.Filled.CloudUpload" Style="font-size: 3rem;" />
+                                <MudText Typo="Typo.h6" Class="mt-2">上传文件</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    拖放文件到此处，或点击选择文件
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                                    支持 PDF, Word, Excel, PowerPoint, 文本文件等
+                                </MudText>
+                            </div>
+                        </MudPaper>
+                    </ButtonTemplate>
+                </MudFileUpload>
+            </div>
         </div>
     </MudTabPanel>
 
@@ -88,7 +89,7 @@
 @if (dataSources.Any())
 {
     <div class="mb-6">
-        <MudText Typo="Typo.h6" Class="mb-3">已添加的数据源</MudText>
+        <MudText Typo="Typo.h6" Class="mb-3">已添加的数据源 (@dataSources.Count)</MudText>
         <MudGrid>
             @foreach (var source in dataSources)
             {
@@ -105,10 +106,23 @@
                                         </MudText>
                                     </div>
                                 </div>
-                                <MudIconButton Icon="Icons.Material.Filled.Delete"
+                                <div class="d-flex align-center">
+                                    <MudButton StartIcon="Icons.Material.Filled.Visibility"
+                                              Color="Color.Info"
+                                              Size="Size.Small"
+                                              Variant="Variant.Outlined"
+                                              OnClick="() => PreviewSource(source)"
+                                              Class="mr-2">
+                                        预览
+                                    </MudButton>
+                                    <MudButton StartIcon="Icons.Material.Filled.Delete"
                                               Color="Color.Error"
                                               Size="Size.Small"
-                                              OnClick="() => RemoveSource(source.Id)" />
+                                              Variant="Variant.Outlined"
+                                              OnClick="() => RemoveSource(source.Id)">
+                                        删除
+                                    </MudButton>
+                                </div>
                             </div>
                         </MudCardContent>
                     </MudCard>
@@ -137,6 +151,8 @@
     </MudButton>
 }
 
+
+
 @code {
     [Parameter] public EventCallback<(List<DataSource> sources, ExtractionMode mode)> OnComplete { get; set; }
 
@@ -147,12 +163,18 @@
     private string textInput = string.Empty;
     private string dragClass = string.Empty;
     private readonly string defaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full z-10";
+    
+    // 预览对话框相关
+    private DialogOptions dialogOptions = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
 
-    private async Task OnFilesChanged(InputFileChangeEventArgs e)
+    private async Task OnFilesChanged(IReadOnlyList<IBrowserFile>? files)
     {
         ClearDragClass();
         
-        foreach (var file in e.GetMultipleFiles())
+        if (files == null || !files.Any())
+            return;
+        
+        foreach (var file in files)
         {
             try
             {
@@ -271,4 +293,21 @@
         DataSourceType.Text => $"{source.Content.Length} 字符",
         _ => "未知类型"
     };
+
+    private string GetDragClass()
+    {
+        return string.IsNullOrEmpty(dragClass) ? $"{defaultDragClass} mud-width-full" : $"{dragClass} mud-width-full";
+    }
+
+    private async Task PreviewSource(DataSource source)
+    {
+        var parameters = new DialogParameters
+        {
+            ["DataSource"] = source
+        };
+
+        await DialogService.ShowAsync<DataSourcePreviewDialog>("数据源预览", parameters, dialogOptions);
+    }
+
+
 } 
