@@ -143,18 +143,13 @@
         </MudRadioGroup>
     </div>
 
-    <MudButton Variant="Variant.Filled" 
-              Color="Color.Primary"
-              OnClick="ContinueToNext"
-              StartIcon="Icons.Material.Filled.ArrowForward">
-        继续下一步
-    </MudButton>
+    @* 移除独立的继续按钮，改为使用 Stepper 内置按钮 *@
 }
 
 
 
 @code {
-    [Parameter] public EventCallback<(List<DataSource> sources, ExtractionMode mode)> OnComplete { get; set; }
+    // 移除 OnComplete 参数，改为通过 GetSelectionResult() 方法获取结果
 
     private MudFileUpload<IReadOnlyList<IBrowserFile>> fileUpload = null!;
     private List<DataSource> dataSources = new();
@@ -260,12 +255,12 @@
         dataSources.RemoveAll(s => s.Id == sourceId);
     }
 
-    private async Task ContinueToNext()
+    /// <summary>
+    /// 获取当前选择的数据源和提取模式
+    /// </summary>
+    public async Task<(List<DataSource> sources, ExtractionMode mode)> GetSelectionResult()
     {
-        if (OnComplete.HasDelegate)
-        {
-            await OnComplete.InvokeAsync((dataSources, extractionMode));
-        }
+        return (dataSources, extractionMode);
     }
 
     private void SetDragClass()

@@ -155,20 +155,6 @@
                   StartIcon="Icons.Material.Filled.Download">
             导出数据
         </MudButton>
-        <div>
-            <MudButton Variant="Variant.Outlined" 
-                      OnClick="GoBack"
-                      Class="mr-3">
-                返回修改
-            </MudButton>
-            <MudButton Variant="Variant.Filled" 
-                      Color="Color.Primary"
-                      OnClick="SaveData"
-                      Disabled="@(isSaving || (!allowPartialSave && hasValidationErrors))"
-                      StartIcon="@(isSaving ? Icons.Material.Filled.HourglassEmpty : Icons.Material.Filled.Save)">
-                @(isSaving ? "保存中..." : $"保存 {Records.Count} 条记录")
-            </MudButton>
-        </div>
     </div>
 }
 else
@@ -181,7 +167,7 @@ else
 @code {
     [Parameter] public SchemaDefinition Schema { get; set; } = null!;
     [Parameter] public List<BsonDocument> Records { get; set; } = new();
-    [Parameter] public EventCallback OnSave { get; set; }
+    // 移除 OnSave 参数，保存逻辑由父组件处理
 
     private bool showAllRecords = false;
     private bool skipValidation = false;
@@ -199,26 +185,14 @@ else
         showAllRecords = !showAllRecords;
     }
 
-    private async Task SaveData()
+    /// <summary>
+    /// 检查是否可以保存数据
+    /// </summary>
+    public bool CanSave()
     {
-        if (OnSave.HasDelegate)
-        {
-            isSaving = true;
-            try
-            {
-                await OnSave.InvokeAsync();
-            }
-            finally
-            {
-                isSaving = false;
-            }
-        }
+        return !isSaving && (allowPartialSave || !hasValidationErrors);
     }
 
-    private void GoBack()
-    {
-        // TODO: 实现返回上一步的逻辑
-    }
 
     private void ExportData()
     {

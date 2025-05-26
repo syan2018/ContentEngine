@@ -99,20 +99,13 @@ else
     </MudGrid>
 }
 
-<div class="d-flex justify-end mt-6">
-    <MudButton Variant="Variant.Filled" 
-              Color="Color.Primary"
-              OnClick="ContinueToNext"
-              StartIcon="Icons.Material.Filled.AutoAwesome">
-        @(isManualMapping ? "应用映射规则" : "使用 AI 自动映射")
-    </MudButton>
-</div>
+@* 移除独立的继续按钮，改为使用 Stepper 内置按钮 *@
 
 @code {
     [Parameter] public SchemaDefinition Schema { get; set; } = null!;
     [Parameter] public List<DataSource> DataSources { get; set; } = new();
     [Parameter] public ExtractionMode ExtractionMode { get; set; }
-    [Parameter] public EventCallback<Dictionary<string, string>> OnComplete { get; set; }
+    // 移除 OnComplete 参数，改为通过 GetMappingResult() 方法获取结果
 
     private bool isManualMapping = false;
     private string customInstructions = string.Empty;
@@ -136,7 +129,10 @@ else
         }
     }
 
-    private async Task ContinueToNext()
+    /// <summary>
+    /// 获取当前配置的字段映射
+    /// </summary>
+    public async Task<Dictionary<string, string>> GetMappingResult()
     {
         var mappings = new Dictionary<string, string>();
 
@@ -151,10 +147,7 @@ else
                 : customInstructions;
         }
 
-        if (OnComplete.HasDelegate)
-        {
-            await OnComplete.InvokeAsync(mappings);
-        }
+        return mappings;
     }
 
     private string GetPlaceholderText()

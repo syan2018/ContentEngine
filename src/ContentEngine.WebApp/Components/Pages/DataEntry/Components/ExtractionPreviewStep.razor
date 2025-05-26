@@ -147,13 +147,7 @@ else if (extractionResults.Any())
                   StartIcon="Icons.Material.Filled.Refresh">
             重新提取全部
         </MudButton>
-        <MudButton Variant="Variant.Filled" 
-                  Color="Color.Primary"
-                  OnClick="ContinueToNext"
-                  Disabled="@(successCount == 0)"
-                  StartIcon="Icons.Material.Filled.ArrowForward">
-            继续下一步 (@totalRecords 条记录)
-        </MudButton>
+        @* 移除独立的继续按钮，改为使用 Stepper 内置按钮 *@
     </div>
 }
 
@@ -174,7 +168,7 @@ else if (extractionResults.Any())
     [Parameter] public List<DataSource> DataSources { get; set; } = new();
     [Parameter] public Dictionary<string, string> FieldMappings { get; set; } = new();
     [Parameter] public ExtractionMode ExtractionMode { get; set; }
-    [Parameter] public EventCallback<List<ExtractionResult>> OnComplete { get; set; }
+    // 移除 OnComplete 参数，改为通过 GetExtractionResults() 方法获取结果
 
     private bool isProcessing = false;
     private string currentStatus = string.Empty;
@@ -267,12 +261,12 @@ else if (extractionResults.Any())
         }
     }
 
-    private async Task ContinueToNext()
+    /// <summary>
+    /// 获取当前的提取结果
+    /// </summary>
+    public async Task<List<ExtractionResult>> GetExtractionResults()
     {
-        if (OnComplete.HasDelegate)
-        {
-            await OnComplete.InvokeAsync(extractionResults);
-        }
+        return extractionResults;
     }
 
     private void EditRecord(string sourceId, int recordIndex)
