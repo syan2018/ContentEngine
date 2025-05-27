@@ -23,7 +23,7 @@
                 @{
                     var menuItems = _effectiveConfiguration.MenuItems ?? new List<SchemaCardMenuItem>();
                 }
-                @if (_effectiveConfiguration.ShowMenu && menuItems.Any())
+                @if (menuItems.Any())
                 {
                     <MudMenu Icon="@Material.Filled.MoreVert" Size="Size.Small" 
                             AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
@@ -296,7 +296,7 @@
         var classes = new List<string> { "d-flex", "flex-column", "schema-card" };
         
         bool isEffectivelyClickable = OnCardClick.HasDelegate || 
-                                     (_effectiveConfiguration.IsCardClickable && _effectiveConfiguration.CardClickAction != null);
+                                     (_effectiveConfiguration.CardClickAction != null);
         if (isEffectivelyClickable)
             classes.Add("cursor-pointer");
             
@@ -324,7 +324,7 @@
         {
             await OnCardClick.InvokeAsync(Schema);
         }
-        else if (_effectiveConfiguration is { IsCardClickable: true, CardClickAction: not null })
+        else if (_effectiveConfiguration is { CardClickAction: not null })
         {
             await _effectiveConfiguration.CardClickAction.Invoke(Schema);
         }
@@ -418,8 +418,6 @@
     public class SchemaCardConfiguration
     {
         public bool ShowHeader { get; set; } = true;
-        public bool ShowMenu { get; set; } = true;
-        public bool IsCardClickable { get; set; } = false;
         public Func<SchemaDefinition, Task>? CardClickAction { get; set; }
         public Func<SchemaDefinition, Task>? TitleClickAction { get; set; }
         public bool ShowDescription { get; set; } = true;
@@ -435,13 +433,12 @@
             return new SchemaCardConfiguration
             {
                 ShowHeader = true,
-                ShowMenu = true,
-                IsCardClickable = false, 
                 ShowDescription = true,
                 DescriptionLines = 2,
                 ShowMetadata = true,
                 ShowRecordCount = true,
                 ShowUpdateTime = true,
+                TitleClickAction = async _ => component.NavigateToDetails(),
                 MenuItems =
                 [
                     new SchemaCardMenuItem { Text = "编辑", Action = async _ => component.NavigateToEdit() },
@@ -452,7 +449,7 @@
                     new SchemaCardActionButton { Text = "查看", Icon = Material.Filled.Visibility, Action = async _ => component.NavigateToDetails(), Class = "action-button schema-action-button" },
                     new SchemaCardActionButton { Text = "注入", Icon = Material.Filled.Input, Action = async _ => component.NavigateToAIEntry(), Class = "action-button schema-action-button" }
                 ],
-                TitleClickAction = async _ => component.NavigateToDetails()
+                
             };
         }
 
@@ -461,20 +458,19 @@
             return new SchemaCardConfiguration
             {
                 ShowHeader = false,
-                ShowMenu = false,
-                IsCardClickable = false,
                 ShowDescription = true,
                 DescriptionLines = 2,
                 ShowMetadata = true,
                 ShowRecordCount = true,
                 ShowUpdateTime = false, // Typically not shown in data entry mode
+                TitleClickAction = async _ => component.NavigateToDetails(),
                 ActionButtons =
                 [
                     new SchemaCardActionButton { Text = "手动录入", Icon = Material.Filled.Edit, Action = async _ => component.NavigateToManualEntry(), Class = "action-button schema-action-button" },
                     new SchemaCardActionButton { Text = "AI 辅助", Icon = Material.Filled.AutoAwesome, Action = async _ => component.NavigateToAIEntry(), Class = "action-button schema-action-button" }
                 ],
                 // Default title click for data entry might be AI entry or manual entry
-                TitleClickAction = async _ => component.NavigateToAIEntry() 
+
             };
         }
 
@@ -483,18 +479,15 @@
             return new SchemaCardConfiguration
             {
                 ShowHeader = false,
-                ShowMenu = false,
-                IsCardClickable = true,
-                CardClickAction = async _ => component.NavigateToDataView(),
                 ShowDescription = true,
                 DescriptionLines = 2,
                 ShowMetadata = true,
                 ShowRecordCount = true,
                 ShowUpdateTime = true,
+                TitleClickAction = async _ => component.NavigateToDetails(),
                 ActionButtons = [
                     new SchemaCardActionButton { Text = "浏览数据", Icon = Icons.Material.Filled.Visibility, Action = async _ => component.NavigateToDataView(), Class = "action-button schema-action-button" }
-                ],
-                TitleClickAction = async _ => component.NavigateToDataView()
+                ]
             };
         }
     }
