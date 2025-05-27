@@ -85,7 +85,6 @@ graph TD
 1.  用户（通过UI或API）创建一个 `ReasoningTransactionDefinition` 对象。
 2.  在此定义中，用户需指定：
     *   `Name`, `Description`: 事务的元数据。
-    *   `SubjectSchemaName` (可选): 此事务主要关注的核心Schema类型，用于在执行时可能传入一个主体实例ID来限定范围。
     *   `QueryDefinitions`: 一个列表，每个定义了如何获取一个数据视图（源Schema、筛选条件、选择字段、输出视图名）。
     *   `PromptTemplateDefinition`: 包含原始模板字符串和模板期望的输入视图名称。
     *   `DataCombinationRules`: 定义哪些视图需要进行叉积，哪些作为单例上下文。
