@@ -1,0 +1,295 @@
+@using ContentEngine.Core.Inference.Models
+
+<div class="review-step">
+    <!-- 基本信息摘要 -->
+    <MudCard Outlined="true" Class="mb-4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h5">@Definition.Name</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@Definition.Description</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (!string.IsNullOrWhiteSpace(Definition.SubjectSchemaName))
+            {
+                <div class="d-flex align-center">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">主体Schema:</MudText>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">@Definition.SubjectSchemaName</MudChip>
+                </div>
+            }
+        </MudCardContent>
+    </MudCard>
+    
+    <!-- 配置详情标签页 -->
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="mb-6">
+        <MudTabPanel Text="数据查询" Icon="@Icons.Material.Filled.Search">
+            <div class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="mr-2" Color="Color.Primary" />
+                    数据查询定义
+                </MudText>
+                
+                <MudGrid Spacing="3">
+                    @foreach (var query in Definition.QueryDefinitions)
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudCard Outlined="true">
+                                <MudCardContent Class="pa-3">
+                                    <MudText Typo="Typo.subtitle1" Class="mb-2 font-weight-bold">@query.OutputViewName</MudText>
+                                    <div class="d-flex justify-space-between mb-1">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">数据源:</MudText>
+                                        <MudText Typo="Typo.body2">@query.SourceSchemaName</MudText>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(query.FilterExpression))
+                                    {
+                                        <div class="d-flex justify-space-between mb-1">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">筛选条件:</MudText>
+                                            <code class="small-code">@query.FilterExpression</code>
+                                        </div>
+                                    }
+                                    <div class="d-flex justify-space-between">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">选择字段:</MudText>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">@query.SelectFields.Count 个字段</MudChip>
+                                    </div>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </div>
+        </MudTabPanel>
+        
+        <MudTabPanel Text="数据组合" Icon="@Icons.Material.Filled.CallMerge">
+            <div class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.CallMerge" Class="mr-2" Color="Color.Secondary" />
+                    数据组合规则
+                </MudText>
+                
+                @if (Definition.DataCombinationRules.Any())
+                {
+                    var rule = Definition.DataCombinationRules.First();
+                    
+                    <MudGrid Spacing="4">
+                        <MudItem xs="12" md="6">
+                            <MudCard Outlined="true">
+                                <MudCardContent Class="pa-3">
+                                    <MudText Typo="Typo.subtitle1" Class="mb-2">叉积视图</MudText>
+                                    @if (rule.ViewNamesToCrossProduct.Any())
+                                    {
+                                        <div class="d-flex flex-wrap gap-1">
+                                            @foreach (var viewName in rule.ViewNamesToCrossProduct)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">@viewName</MudChip>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">无</MudText>
+                                    }
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        
+                        <MudItem xs="12" md="6">
+                            <MudCard Outlined="true">
+                                <MudCardContent Class="pa-3">
+                                    <MudText Typo="Typo.subtitle1" Class="mb-2">单例上下文视图</MudText>
+                                    @if (rule.SingletonViewNamesForContext.Any())
+                                    {
+                                        <div class="d-flex flex-wrap gap-1">
+                                            @foreach (var viewName in rule.SingletonViewNamesForContext)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Info">@viewName</MudChip>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">无</MudText>
+                                    }
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                        
+                        <MudItem xs="12">
+                            <MudCard Outlined="true">
+                                <MudCardContent Class="pa-3">
+                                    <MudGrid Spacing="2">
+                                        <MudItem xs="6" md="3">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">最大组合数:</MudText>
+                                            <MudText Typo="Typo.body1" Class="font-weight-bold">@rule.MaxCombinations.ToString("N0")</MudText>
+                                        </MudItem>
+                                        <MudItem xs="6" md="3">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">组合策略:</MudText>
+                                            <MudText Typo="Typo.body1" Class="font-weight-bold">
+                                                @(rule.Strategy switch 
+                                                {
+                                                    CombinationStrategy.CrossProduct => "完全叉积",
+                                                    CombinationStrategy.RandomSampling => "随机采样",
+                                                    CombinationStrategy.PrioritySampling => "优先级采样",
+                                                    _ => rule.Strategy.ToString()
+                                                })
+                                            </MudText>
+                                        </MudItem>
+                                    </MudGrid>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    </MudGrid>
+                }
+            </div>
+        </MudTabPanel>
+        
+        <MudTabPanel Text="Prompt模板" Icon="@Icons.Material.Filled.TextSnippet">
+            <div class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.TextSnippet" Class="mr-2" Color="Color.Success" />
+                    Prompt模板
+                </MudText>
+                
+                <MudCard Outlined="true" Class="mb-3">
+                    <MudCardContent Class="pa-3">
+                        <pre class="prompt-template">@Definition.PromptTemplate.TemplateContent</pre>
+                    </MudCardContent>
+                </MudCard>
+                
+                <div class="d-flex align-center">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">预期输入视图:</MudText>
+                    <div class="d-flex flex-wrap gap-1">
+                        @foreach (var viewName in Definition.PromptTemplate.ExpectedInputViewNames)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success">@viewName</MudChip>
+                        }
+                    </div>
+                </div>
+            </div>
+        </MudTabPanel>
+        
+        <MudTabPanel Text="执行约束" Icon="@Icons.Material.Filled.Settings">
+            <div class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-2" Color="Color.Warning" />
+                    执行约束
+                </MudText>
+                
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="4">
+                        <MudCard Outlined="true">
+                            <MudCardContent Class="pa-3 text-center">
+                                <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Color="Color.Success" Class="mb-2" />
+                                <MudText Typo="Typo.h6" Color="Color.Success">$@Definition.ExecutionConstraints.MaxEstimatedCostUSD</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">最大成本限制</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="4">
+                        <MudCard Outlined="true">
+                            <MudCardContent Class="pa-3 text-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Info" Class="mb-2" />
+                                <MudText Typo="Typo.h6" Color="Color.Info">@Definition.ExecutionConstraints.MaxExecutionTimeMinutes</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">最大执行时间（分钟）</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="4">
+                        <MudCard Outlined="true">
+                            <MudCardContent Class="pa-3 text-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Speed" Color="Color.Warning" Class="mb-2" />
+                                <MudText Typo="Typo.h6" Color="Color.Warning">@Definition.ExecutionConstraints.MaxConcurrentAICalls</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">最大并发调用数</MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                    
+                    <MudItem xs="12">
+                        <MudCard Outlined="true">
+                            <MudCardContent Class="pa-3">
+                                <div class="d-flex align-center justify-space-between">
+                                    <MudText Typo="Typo.subtitle1">批处理设置</MudText>
+                                    <MudChip T="string" 
+                                            Size="Size.Small" 
+                                            Color="@(Definition.ExecutionConstraints.EnableBatching ? Color.Success : Color.Secondary)">
+                                        @(Definition.ExecutionConstraints.EnableBatching ? "已启用" : "已禁用")
+                                    </MudChip>
+                                </div>
+                                @if (Definition.ExecutionConstraints.EnableBatching)
+                                {
+                                    <MudText Typo="Typo.body2" Class="mt-2">
+                                        批处理大小: @Definition.ExecutionConstraints.BatchSize
+                                    </MudText>
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+    
+    <!-- 执行预估 -->
+    <MudCard Class="execution-estimate" Outlined="true">
+        <MudCardContent Class="pa-4">
+            <div class="d-flex align-center mb-3">
+                <MudIcon Icon="@Icons.Material.Filled.Analytics" Color="Color.Primary" Class="mr-2" />
+                <MudText Typo="Typo.h6">执行预估</MudText>
+            </div>
+            
+            <MudGrid Spacing="4">
+                <MudItem xs="12" md="4">
+                    <div class="text-center">
+                        <MudText Typo="Typo.h4" Color="Color.Primary">@EstimatedCombinations.ToString("N0")</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">预估组合数</MudText>
+                    </div>
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <div class="text-center">
+                        <MudText Typo="Typo.h4" Color="Color.Success">$@EstimatedCost.ToString("F2")</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">预估成本</MudText>
+                    </div>
+                </MudItem>
+                
+                <MudItem xs="12" md="4">
+                    <div class="text-center">
+                        <MudText Typo="Typo.h4" Color="Color.Info">@EstimatedTime.TotalMinutes.ToString("F0")</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">预估执行时间（分钟）</MudText>
+                    </div>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+</div>
+
+<style>
+.small-code {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    background-color: var(--mud-palette-surface);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.prompt-template {
+    white-space: pre-wrap;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.execution-estimate {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+</style>
+
+@code {
+    [Parameter] public ReasoningTransactionDefinition Definition { get; set; } = new();
+    [Parameter] public decimal EstimatedCost { get; set; } = 0;
+    [Parameter] public TimeSpan EstimatedTime { get; set; } = TimeSpan.Zero;
+    [Parameter] public int EstimatedCombinations { get; set; } = 0;
+} 

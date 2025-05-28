@@ -1,0 +1,93 @@
+@using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.DataPipeline.Models
+
+<div class="basic-info-step">
+    <MudGrid Spacing="6">
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="Definition.Name" 
+                         Label="推理事务名称" 
+                         Placeholder="例如：NPC对话生成"
+                         Required="true"
+                         HelperText="事务的唯一标识名称"
+                         Immediate="true"
+                         OnKeyUp="OnFieldChanged"
+                         Variant="Variant.Outlined" />
+        </MudItem>
+        
+        <MudItem xs="12" md="6">
+            <MudSelect @bind-Value="Definition.SubjectSchemaName" 
+                      Label="主体Schema（可选）"
+                      T="string"
+                      Clearable="true"
+                      Variant="Variant.Outlined"
+                      HelperText="选择推理的主要数据Schema">
+                @foreach (var schema in AvailableSchemas)
+                {
+                    <MudSelectItem Value="@schema.Name">
+                        <div class="d-flex justify-space-between align-center">
+                            <span>@schema.Name</span>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info">@schema.Fields.Count 字段</MudChip>
+                        </div>
+                    </MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        
+        <MudItem xs="12">
+            <MudTextField @bind-Value="Definition.Description" 
+                         Label="描述" 
+                         Placeholder="描述这个推理事务的用途和预期输出..."
+                         Lines="4"
+                         Required="true"
+                         HelperText="详细描述此推理事务的目的、应用场景和预期效果"
+                         Immediate="true"
+                         OnKeyUp="OnFieldChanged"
+                         Variant="Variant.Outlined" />
+        </MudItem>
+    </MudGrid>
+    
+    @if (IsValid)
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-4">
+            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="mr-2" />
+            基本信息已完整填写
+        </MudAlert>
+    }
+    else if (HasAttemptedValidation)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mt-4">
+            <MudIcon Icon="@Icons.Material.Filled.Warning" Class="mr-2" />
+            请完整填写事务名称和描述信息
+        </MudAlert>
+    }
+</div>
+
+@code {
+    [Parameter] public ReasoningTransactionDefinition Definition { get; set; } = new();
+    [Parameter] public List<SchemaDefinition> AvailableSchemas { get; set; } = new();
+    [Parameter] public EventCallback<bool> OnValidationChanged { get; set; }
+    
+    private bool HasAttemptedValidation = false;
+    
+    private bool IsValid => !string.IsNullOrWhiteSpace(Definition.Name) && 
+                           !string.IsNullOrWhiteSpace(Definition.Description);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // 避免在参数设置时触发验证，防止无限循环
+        // 验证将在用户交互时触发
+    }
+
+    private async Task OnFieldChanged()
+    {
+        HasAttemptedValidation = true;
+        await ValidateAndNotify();
+    }
+
+    private async Task ValidateAndNotify()
+    {
+        var isValid = IsValid;
+        await OnValidationChanged.InvokeAsync(isValid);
+        StateHasChanged();
+    }
+} 

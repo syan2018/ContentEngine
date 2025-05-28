@@ -7,190 +7,162 @@
 @inject ISchemaDefinitionService SchemaService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
 
 <PageTitle>创建推理事务 - ContentEngine</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
     <MudBreadcrumbs Items="breadcrumbItems" Class="mb-4" />
     
-    <MudCard>
+    <!-- 步骤指示器 -->
+    <MudStepper @ref="stepper" @bind-ActiveIndex="currentStep" Class="mb-6">
+        <MudStep Title="基本信息" 
+                Icon="@Icons.Material.Filled.Info"
+                StatusChanged="OnStepStatusChanged"
+                Optional="false">
+            <ChildContent>
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+                    <span>定义推理事务的基本信息</span>
+                </div>
+            </ChildContent>
+        </MudStep>
+        
+        <MudStep Title="数据查询" 
+                Icon="@Icons.Material.Filled.Search"
+                StatusChanged="OnStepStatusChanged"
+                Optional="false">
+            <ChildContent>
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" Class="mr-2" />
+                    <span>定义数据视图查询</span>
+                </div>
+            </ChildContent>
+        </MudStep>
+        
+        <MudStep Title="数据组合" 
+                Icon="@Icons.Material.Filled.CallMerge"
+                StatusChanged="OnStepStatusChanged"
+                Optional="false">
+            <ChildContent>
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.CallMerge" Class="mr-2" />
+                    <span>设置数据组合规则</span>
+                </div>
+            </ChildContent>
+        </MudStep>
+        
+        <MudStep Title="Prompt模板" 
+                Icon="@Icons.Material.Filled.TextSnippet"
+                StatusChanged="OnStepStatusChanged"
+                Optional="false">
+            <ChildContent>
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.TextSnippet" Class="mr-2" />
+                    <span>创建Prompt模板</span>
+                </div>
+            </ChildContent>
+        </MudStep>
+        
+        <MudStep Title="执行约束" 
+                Icon="@Icons.Material.Filled.Settings"
+                StatusChanged="OnStepStatusChanged"
+                Optional="false">
+            <ChildContent>
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-2" />
+                    <span>设置执行限制</span>
+                </div>
+            </ChildContent>
+        </MudStep>
+        
+        <MudStep Title="确认" 
+                Icon="@Icons.Material.Filled.CheckCircle"
+                StatusChanged="OnStepStatusChanged"
+                Optional="false">
+            <ChildContent>
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="mr-2" />
+                    <span>确认并保存</span>
+                </div>
+            </ChildContent>
+        </MudStep>
+    </MudStepper>
+    
+    <!-- 步骤内容 -->
+    <MudCard Class="mud-elevation-4">
         <MudCardHeader>
             <CardHeaderContent>
-                <MudText Typo="Typo.h5">创建推理事务定义</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">定义数据查询、组合规则和AI推理模板</MudText>
+                <MudText Typo="Typo.h5">@GetStepTitle()</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@GetStepDescription()</MudText>
             </CardHeaderContent>
         </MudCardHeader>
-        <MudCardContent>
-            <EditForm Model="@definition" OnValidSubmit="SaveDefinition">
-                <DataAnnotationsValidator />
-                
-                <MudGrid>
-                    <!-- 基本信息 -->
-                    <MudItem xs="12">
-                        <MudText Typo="Typo.h6" Class="mb-3">基本信息</MudText>
-                    </MudItem>
-                    
-                    <MudItem xs="12" md="6">
-                        <MudTextField @bind-Value="definition.Name" 
-                                     Label="事务名称" 
-                                     Required="true"
-                                     HelperText="推理事务的唯一名称" />
-                    </MudItem>
-                    
-                    <MudItem xs="12" md="6">
-                        <MudSelect @bind-Value="definition.SubjectSchemaName" 
-                                  Label="主体Schema（可选）"
-                                  T="string"
-                                  Clearable="true">
-                            @foreach (var schema in availableSchemas)
-                            {
-                                <MudSelectItem Value="@schema.Name">@schema.Name</MudSelectItem>
-                            }
-                        </MudSelect>
-                    </MudItem>
-                    
-                    <MudItem xs="12">
-                        <MudTextField @bind-Value="definition.Description" 
-                                     Label="描述" 
-                                     Lines="3"
-                                     HelperText="描述此推理事务的目的和用途" />
-                    </MudItem>
-
-                    <!-- 查询定义 -->
-                    <MudItem xs="12" Class="mt-6">
-                        <div class="d-flex align-center mb-3">
-                            <MudText Typo="Typo.h6" Class="mr-3">数据查询定义</MudText>
-                            <MudButton StartIcon="@Icons.Material.Filled.Add" 
-                                      Color="Color.Primary" 
-                                      Size="Size.Small"
-                                      OnClick="AddQueryDefinition">
-                                添加查询
-                            </MudButton>
-                        </div>
-                        
-                        @if (definition.QueryDefinitions.Any())
-                        {
-                            @for (int i = 0; i < definition.QueryDefinitions.Count; i++)
-                            {
-                                var index = i; // 避免闭包问题
-                                var query = definition.QueryDefinitions[index];
-                                
-                                <MudCard Class="mb-3" Outlined="true">
-                                    <MudCardContent>
-                                        <div class="d-flex justify-space-between align-center mb-3">
-                                            <MudText Typo="Typo.subtitle1">查询 @(index + 1)</MudText>
-                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
-                                                          Color="Color.Error" 
-                                                          Size="Size.Small"
-                                                          OnClick="() => RemoveQueryDefinition(index)" />
-                                        </div>
-                                        
-                                        <MudGrid>
-                                            <MudItem xs="12" md="4">
-                                                <MudTextField @bind-Value="query.OutputViewName" 
-                                                             Label="输出视图名称" 
-                                                             Required="true" />
-                                            </MudItem>
-                                            <MudItem xs="12" md="4">
-                                                <MudSelect @bind-Value="query.SourceSchemaName" 
-                                                          Label="源Schema" 
-                                                          T="string"
-                                                          Required="true">
-                                                    @foreach (var schema in availableSchemas)
-                                                    {
-                                                        <MudSelectItem Value="@schema.Name">@schema.Name</MudSelectItem>
-                                                    }
-                                                </MudSelect>
-                                            </MudItem>
-                                            <MudItem xs="12" md="4">
-                                                <MudTextField @bind-Value="query.FilterExpression" 
-                                                             Label="筛选表达式（可选）" 
-                                                             HelperText="LiteDB查询表达式" />
-                                            </MudItem>
-                                        </MudGrid>
-                                    </MudCardContent>
-                                </MudCard>
-                            }
-                        }
-                        else
-                        {
-                            <MudAlert Severity="Severity.Info">请至少添加一个数据查询定义</MudAlert>
-                        }
-                    </MudItem>
-
-                    <!-- Prompt模板 -->
-                    <MudItem xs="12" Class="mt-6">
-                        <MudText Typo="Typo.h6" Class="mb-3">Prompt模板</MudText>
-                        <MudTextField @bind-Value="definition.PromptTemplate.TemplateContent" 
-                                     Label="模板内容" 
-                                     Lines="8"
-                                     Required="true"
-                                     HelperText="使用 {{ViewName.FieldName}} 格式引用数据字段" />
-                        
-                        <MudAlert Severity="Severity.Info" Class="mt-2">
-                            <strong>模板语法示例：</strong><br/>
-                            描述角色 {{NpcView.Name}} 在 {{ScenarioView.Location}} 的行为。<br/>
-                            角色属性：力量 {{NpcView.Strength}}，智力 {{NpcView.Intelligence}}
-                        </MudAlert>
-                    </MudItem>
-
-                    <!-- 数据组合规则 -->
-                    <MudItem xs="12" Class="mt-6">
-                        <MudText Typo="Typo.h6" Class="mb-3">数据组合规则</MudText>
-                        
-                        <MudGrid>
-                            <MudItem xs="12" md="6">
-                                <MudSelect @bind-Value="selectedCombinationStrategy" 
-                                          Label="组合策略" 
-                                          T="CombinationStrategy">
-                                    <MudSelectItem Value="CombinationStrategy.CrossProduct">完全叉积</MudSelectItem>
-                                    <MudSelectItem Value="CombinationStrategy.RandomSampling">随机采样</MudSelectItem>
-                                    <MudSelectItem Value="CombinationStrategy.PrioritySampling">优先级采样</MudSelectItem>
-                                </MudSelect>
-                            </MudItem>
-                            <MudItem xs="12" md="6">
-                                <MudNumericField @bind-Value="maxCombinations" 
-                                               Label="最大组合数" 
-                                               Min="1" 
-                                               Max="10000"
-                                               HelperText="防止组合爆炸" />
-                            </MudItem>
-                        </MudGrid>
-                    </MudItem>
-
-                    <!-- 执行约束 -->
-                    <MudItem xs="12" Class="mt-6">
-                        <MudText Typo="Typo.h6" Class="mb-3">执行约束</MudText>
-                        
-                        <MudGrid>
-                            <MudItem xs="12" md="4">
-                                <MudNumericField @bind-Value="definition.ExecutionConstraints.MaxEstimatedCostUSD" 
-                                               Label="最大预估成本（美元）" 
-                                               Min="0.01m" 
-                                               Max="1000m"
-                                               Format="F2" />
-                            </MudItem>
-                            <MudItem xs="12" md="4">
-                                <MudNumericField @bind-Value="definition.ExecutionConstraints.MaxExecutionTimeMinutes" 
-                                               Label="最大执行时间（分钟）" 
-                                               Min="1" 
-                                               Max="1440" />
-                            </MudItem>
-                            <MudItem xs="12" md="4">
-                                <MudNumericField @bind-Value="definition.ExecutionConstraints.MaxConcurrentAICalls" 
-                                               Label="最大并发AI调用数" 
-                                               Min="1" 
-                                               Max="20" />
-                            </MudItem>
-                        </MudGrid>
-                    </MudItem>
-                </MudGrid>
-
-                <MudCardActions Class="mt-6">
-                    <MudButton ButtonType="ButtonType.Submit" 
-                              Variant="Variant.Filled" 
+        
+        <MudCardContent Class="pa-6">
+            @switch (currentStep)
+            {
+                case 0:
+                    <BasicInfoStep @ref="basicInfoStep" 
+                                  Definition="@definition" 
+                                  AvailableSchemas="@availableSchemas"
+                                  OnValidationChanged="OnStepValidationChanged" />
+                    break;
+                case 1:
+                    <QueryDefinitionStep @ref="queryDefinitionStep"
+                                        Definition="@definition" 
+                                        AvailableSchemas="@availableSchemas"
+                                        OnValidationChanged="OnStepValidationChanged" />
+                    break;
+                case 2:
+                    <DataCombinationStep @ref="dataCombinationStep"
+                                        Definition="@definition"
+                                        OnValidationChanged="OnStepValidationChanged" />
+                    break;
+                case 3:
+                    <PromptTemplateStep @ref="promptTemplateStep"
+                                       Definition="@definition"
+                                       OnValidationChanged="OnStepValidationChanged" />
+                    break;
+                case 4:
+                    <ExecutionConstraintsStep @ref="executionConstraintsStep"
+                                             Definition="@definition"
+                                             OnValidationChanged="OnStepValidationChanged" />
+                    break;
+                case 5:
+                    <ReviewStep Definition="@definition" 
+                               EstimatedCost="@estimatedCost"
+                               EstimatedTime="@estimatedTime"
+                               EstimatedCombinations="@estimatedCombinations" />
+                    break;
+            }
+        </MudCardContent>
+        
+        <MudCardActions Class="pa-6 d-flex justify-space-between">
+            <MudButton Variant="Variant.Outlined" 
+                      Color="Color.Secondary"
+                      StartIcon="@Icons.Material.Filled.ArrowBack"
+                      OnClick="PreviousStep"
+                      Disabled="@(currentStep == 0 || isSaving)">
+                上一步
+            </MudButton>
+            
+            <div class="d-flex gap-2">
+                @if (currentStep < 5)
+                {
+                    <MudButton Variant="Variant.Filled" 
                               Color="Color.Primary"
+                              EndIcon="@Icons.Material.Filled.ArrowForward"
+                              OnClick="NextStep"
+                              Disabled="@(!CanProceedToNextStep() || isSaving)">
+                        下一步
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Success"
                               StartIcon="@Icons.Material.Filled.Save"
+                              OnClick="SaveDefinition"
                               Disabled="@isSaving">
                         @if (isSaving)
                         {
@@ -199,27 +171,41 @@
                         }
                         else
                         {
-                            <span>保存</span>
+                            <span>保存推理事务</span>
                         }
                     </MudButton>
-                    <MudButton Variant="Variant.Text" 
-                              Color="Color.Secondary"
-                              OnClick="Cancel">
-                        取消
-                    </MudButton>
-                </MudCardActions>
-            </EditForm>
-        </MudCardContent>
+                }
+                
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Secondary"
+                          OnClick="Cancel">
+                    取消
+                </MudButton>
+            </div>
+        </MudCardActions>
     </MudCard>
 </MudContainer>
 
 @code {
+    private MudStepper? stepper;
+    private int currentStep = 0;
+    private bool isSaving = false;
+    private bool[] stepValidations = new bool[6];
+    
     private ReasoningTransactionDefinition definition = new();
     private List<SchemaDefinition> availableSchemas = new();
-    private bool isSaving = false;
     
-    private CombinationStrategy selectedCombinationStrategy = CombinationStrategy.CrossProduct;
-    private int maxCombinations = 1000;
+    // 预估数据
+    private decimal estimatedCost = 0;
+    private TimeSpan estimatedTime = TimeSpan.Zero;
+    private int estimatedCombinations = 0;
+    
+    // 步骤组件引用
+    private BasicInfoStep? basicInfoStep;
+    private QueryDefinitionStep? queryDefinitionStep;
+    private DataCombinationStep? dataCombinationStep;
+    private PromptTemplateStep? promptTemplateStep;
+    private ExecutionConstraintsStep? executionConstraintsStep;
 
     private List<BreadcrumbItem> breadcrumbItems = new()
     {
@@ -231,6 +217,10 @@
     {
         await LoadAvailableSchemas();
         InitializeDefinition();
+        
+        // 初始化完成后进行一次验证
+        await Task.Delay(100); // 等待组件渲染完成
+        TriggerValidationForCurrentStep();
     }
 
     private async Task LoadAvailableSchemas()
@@ -261,8 +251,8 @@
             {
                 new DataCombinationRule
                 {
-                    Strategy = selectedCombinationStrategy,
-                    MaxCombinations = maxCombinations,
+                    Strategy = CombinationStrategy.CrossProduct,
+                    MaxCombinations = 1000,
                     ViewNamesToCrossProduct = new List<string>(),
                     SingletonViewNamesForContext = new List<string>()
                 }
@@ -278,22 +268,99 @@
         };
     }
 
-    private void AddQueryDefinition()
+    private string GetStepTitle()
     {
-        definition.QueryDefinitions.Add(new QueryDefinition
+        return currentStep switch
         {
-            OutputViewName = $"View{definition.QueryDefinitions.Count + 1}",
-            SourceSchemaName = "",
-            FilterExpression = "",
-            SelectFields = new List<string>()
-        });
+            0 => "基本信息",
+            1 => "数据查询定义",
+            2 => "数据组合规则", 
+            3 => "Prompt模板设计",
+            4 => "执行约束设置",
+            5 => "确认推理事务定义",
+            _ => ""
+        };
     }
 
-    private void RemoveQueryDefinition(int index)
+    private string GetStepDescription()
     {
-        if (index >= 0 && index < definition.QueryDefinitions.Count)
+        return currentStep switch
         {
-            definition.QueryDefinitions.RemoveAt(index);
+            0 => "设置推理事务的名称、描述和主体Schema",
+            1 => "定义从哪些数据源获取数据，以及如何筛选和选择字段",
+            2 => "设置如何组合多个数据视图，包括叉积规则和单例上下文",
+            3 => "创建用于AI生成的Prompt模板，使用占位符引用数据视图中的字段",
+            4 => "设置执行限制，如最大成本、执行时间和并发调用数",
+            5 => "确认所有设置并保存推理事务定义",
+            _ => ""
+        };
+    }
+
+    private void OnStepStatusChanged()
+    {
+        StateHasChanged();
+    }
+
+    private void OnStepValidationChanged(bool isValid)
+    {
+        stepValidations[currentStep] = isValid;
+        StateHasChanged();
+    }
+
+    private bool CanProceedToNextStep()
+    {
+        return currentStep switch
+        {
+            0 => !string.IsNullOrWhiteSpace(definition.Name) && !string.IsNullOrWhiteSpace(definition.Description),
+            1 => definition.QueryDefinitions.Any(),
+            2 => definition.DataCombinationRules.Any() && 
+                 (definition.DataCombinationRules[0].ViewNamesToCrossProduct.Any() || 
+                  definition.DataCombinationRules[0].SingletonViewNamesForContext.Any()),
+            3 => !string.IsNullOrWhiteSpace(definition.PromptTemplate.TemplateContent) && 
+                 definition.PromptTemplate.ExpectedInputViewNames.Any(),
+            4 => true, // 执行约束有默认值
+            _ => true
+        };
+    }
+
+    private async Task NextStep()
+    {
+        if (currentStep < 5 && CanProceedToNextStep())
+        {
+            // 在进入确认步骤前进行预估
+            if (currentStep == 4)
+            {
+                await PerformEstimation();
+            }
+            
+            currentStep++;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PreviousStep()
+    {
+        if (currentStep > 0)
+        {
+            currentStep--;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PerformEstimation()
+    {
+        try
+        {
+            estimatedCost = await ReasoningService.EstimateExecutionCostAsync(definition.Id ?? "temp");
+            estimatedTime = await ReasoningService.EstimateExecutionTimeAsync(definition.Id ?? "temp");
+            estimatedCombinations = await ReasoningService.EstimateCombinationCountAsync(definition.Id ?? "temp");
+        }
+        catch
+        {
+            // 使用简单估算作为后备
+            estimatedCombinations = Math.Min(1000, definition.DataCombinationRules.FirstOrDefault()?.MaxCombinations ?? 1000);
+            estimatedCost = estimatedCombinations * 0.02m;
+            estimatedTime = TimeSpan.FromMinutes(Math.Ceiling(estimatedCombinations / (definition.ExecutionConstraints.MaxConcurrentAICalls * 10.0)));
         }
     }
 
@@ -303,33 +370,10 @@
         {
             isSaving = true;
 
-            // 更新组合规则
-            if (definition.DataCombinationRules.Any())
+            // 最终验证
+            if (!CanProceedToNextStep())
             {
-                var rule = definition.DataCombinationRules.First();
-                rule.Strategy = selectedCombinationStrategy;
-                rule.MaxCombinations = maxCombinations;
-                
-                // 自动设置叉积视图名称
-                rule.ViewNamesToCrossProduct = definition.QueryDefinitions.Select(q => q.OutputViewName).ToList();
-            }
-
-            // 验证基本信息
-            if (string.IsNullOrWhiteSpace(definition.Name))
-            {
-                Snackbar.Add("请输入事务名称", Severity.Warning);
-                return;
-            }
-
-            if (!definition.QueryDefinitions.Any())
-            {
-                Snackbar.Add("请至少添加一个查询定义", Severity.Warning);
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(definition.PromptTemplate.TemplateContent))
-            {
-                Snackbar.Add("请输入Prompt模板内容", Severity.Warning);
+                Snackbar.Add("请检查所有必填信息是否完整", Severity.Warning);
                 return;
             }
 
@@ -352,5 +396,13 @@
     private void Cancel()
     {
         Navigation.NavigateTo("/ai-inference");
+    }
+
+    private void TriggerValidationForCurrentStep()
+    {
+        // 手动触发当前步骤的验证，避免循环依赖
+        var isValid = CanProceedToNextStep();
+        stepValidations[currentStep] = isValid;
+        StateHasChanged();
     }
 } 

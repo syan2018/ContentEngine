@@ -1,0 +1,169 @@
+@using ContentEngine.Core.Inference.Models
+
+<div class="execution-constraints-step">
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="mb-4">
+        <MudTabPanel Text="成本控制" Icon="@Icons.Material.Filled.AttachMoney">
+            <div class="pa-4">
+                <MudGrid Spacing="4">
+                    <MudItem xs="12" md="6">
+                        <MudCard Outlined="true" Class="text-center pa-4">
+                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Large" Color="Color.Success" Class="mb-2" />
+                            <MudText Typo="Typo.h4" Color="Color.Success">$@EstimatedCost.ToString("F2")</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">预估总成本</MudText>
+                        </MudCard>
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudSlider @bind-Value="Definition.ExecutionConstraints.MaxEstimatedCostUSD"
+                                  T="decimal"
+                                  Min="1m"
+                                  Max="100m"
+                                  Step="1m"
+                                  Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  TickMarks="true">
+                            最大成本限制: $@Definition.ExecutionConstraints.MaxEstimatedCostUSD
+                        </MudSlider>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                            当预估成本超过此值时，系统将拒绝执行
+                        </MudText>
+                    </MudItem>
+                </MudGrid>
+            </div>
+        </MudTabPanel>
+        
+        <MudTabPanel Text="性能设置" Icon="@Icons.Material.Filled.Speed">
+            <div class="pa-4">
+                <MudGrid Spacing="4">
+                    <MudItem xs="12" md="6">
+                        <MudSlider @bind-Value="Definition.ExecutionConstraints.MaxExecutionTimeMinutes"
+                                  T="int"
+                                  Min="1"
+                                  Max="120"
+                                  Step="1"
+                                  Variant="Variant.Filled"
+                                  Color="Color.Info">
+                            最大执行时间: @Definition.ExecutionConstraints.MaxExecutionTimeMinutes 分钟
+                        </MudSlider>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            任务执行的最大时间限制，超过此时间将自动暂停
+                        </MudText>
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <MudSlider @bind-Value="Definition.ExecutionConstraints.MaxConcurrentAICalls"
+                                  T="int"
+                                  Min="1"
+                                  Max="20"
+                                  Step="1"
+                                  Variant="Variant.Filled"
+                                  Color="Color.Warning">
+                            最大并发AI调用数: @Definition.ExecutionConstraints.MaxConcurrentAICalls
+                        </MudSlider>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            同时向AI模型发送的最大请求数，较高的值可能会导致API限流
+                        </MudText>
+                    </MudItem>
+                </MudGrid>
+            </div>
+        </MudTabPanel>
+        
+        <MudTabPanel Text="批处理设置" Icon="@Icons.Material.Filled.Layers">
+            <div class="pa-4">
+                <MudGrid Spacing="4">
+                    <MudItem xs="12">
+                        <MudCheckBox @bind-Value="Definition.ExecutionConstraints.EnableBatching"
+                                    T="bool"
+                                    Color="Color.Primary"
+                                    Label="启用批处理"
+                                    Size="Size.Large" />
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                            批处理可以减少API调用次数，但可能会增加单次调用的复杂度和延迟
+                        </MudText>
+                    </MudItem>
+                    
+                    @if (Definition.ExecutionConstraints.EnableBatching)
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudSlider @bind-Value="Definition.ExecutionConstraints.BatchSize"
+                                      T="int"
+                                      Min="1"
+                                      Max="50"
+                                      Step="1"
+                                      Variant="Variant.Filled"
+                                      Color="Color.Success">
+                                批处理大小: @Definition.ExecutionConstraints.BatchSize
+                            </MudSlider>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                每批处理的组合数量，较大的值可以减少API调用次数
+                            </MudText>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+    
+    <!-- 执行约束说明 -->
+    <MudGrid Spacing="3" Class="mt-4">
+        <MudItem xs="12" md="4">
+            <MudCard Outlined="true">
+                <MudCardContent Class="pa-3">
+                    <div class="d-flex align-center mb-2">
+                        <MudIcon Icon="@Icons.Material.Filled.Security" Color="Color.Primary" Class="mr-2" />
+                        <MudText Typo="Typo.subtitle1">成本控制</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2">
+                        设置最大成本限制可以防止意外的高额费用。系统会在执行前估算总成本。
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" md="4">
+            <MudCard Outlined="true">
+                <MudCardContent Class="pa-3">
+                    <div class="d-flex align-center mb-2">
+                        <MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Info" Class="mr-2" />
+                        <MudText Typo="Typo.subtitle1">性能设置</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2">
+                        控制执行时间和并发调用数可以优化系统性能和响应时间。
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" md="4">
+            <MudCard Outlined="true">
+                <MudCardContent Class="pa-3">
+                    <div class="d-flex align-center mb-2">
+                        <MudIcon Icon="@Icons.Material.Filled.BatchPrediction" Color="Color.Success" Class="mr-2" />
+                        <MudText Typo="Typo.subtitle1">批处理优化</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2">
+                        启用批处理可以减少API调用次数，提高处理效率。
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    
+    <MudAlert Severity="Severity.Success" Class="mt-4">
+        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="mr-2" />
+        执行约束配置完成
+    </MudAlert>
+</div>
+
+@code {
+    [Parameter] public ReasoningTransactionDefinition Definition { get; set; } = new();
+    [Parameter] public EventCallback<bool> OnValidationChanged { get; set; }
+    
+    private decimal EstimatedCost => 20.50m; // 模拟预估成本
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // 避免在参数设置时触发验证，防止无限循环
+        // 执行约束总是有效的，无需验证
+    }
+} 

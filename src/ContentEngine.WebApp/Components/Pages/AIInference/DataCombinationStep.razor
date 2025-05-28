@@ -1,0 +1,375 @@
+@using ContentEngine.Core.Inference.Models
+@inject ISnackbar Snackbar
+
+<div class="data-combination-step">
+    <!-- 组合规则概览 -->
+    <MudGrid Spacing="4" Class="mb-6">
+        <MudItem xs="12" lg="6">
+            <MudCard Outlined="true" Class="combination-overview">
+                <MudCardContent Class="pa-4">
+                    <div class="d-flex align-center mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.CallMerge" Color="Color.Secondary" Class="mr-2" />
+                        <MudText Typo="Typo.h6">叉积视图</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="ml-auto">
+                            @CurrentRule.ViewNamesToCrossProduct.Count 个视图
+                        </MudChip>
+                    </div>
+                    
+                    @if (CurrentRule.ViewNamesToCrossProduct.Any())
+                    {
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            @foreach (var viewName in CurrentRule.ViewNamesToCrossProduct)
+                            {
+                                <MudChip T="string" 
+                                        Color="Color.Primary" 
+                                        Size="Size.Small"
+                                        Icon="@Icons.Material.Filled.Close"
+                                        OnClose="() => RemoveFromCrossProduct(viewName)"
+                                        CloseIcon="@Icons.Material.Filled.Close">
+                                    @viewName
+                                </MudChip>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">尚未选择任何叉积视图</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        
+        <MudItem xs="12" lg="6">
+            <MudCard Outlined="true" Class="combination-overview">
+                <MudCardContent Class="pa-4">
+                    <div class="d-flex align-center mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Info" Class="mr-2" />
+                        <MudText Typo="Typo.h6">单例上下文视图</MudText>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-auto">
+                            @CurrentRule.SingletonViewNamesForContext.Count 个视图
+                        </MudChip>
+                    </div>
+                    
+                    @if (CurrentRule.SingletonViewNamesForContext.Any())
+                    {
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            @foreach (var viewName in CurrentRule.SingletonViewNamesForContext)
+                            {
+                                <MudChip T="string" 
+                                        Color="Color.Info" 
+                                        Size="Size.Small"
+                                        Icon="@Icons.Material.Filled.Close"
+                                        OnClose="() => RemoveFromSingletonContext(viewName)"
+                                        CloseIcon="@Icons.Material.Filled.Close">
+                                    @viewName
+                                </MudChip>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">尚未选择任何单例上下文视图</MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+    
+    <!-- 未分配的视图 -->
+    @if (GetUnassignedViews().Any())
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            <div class="d-flex align-center justify-space-between">
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">未分配的视图</MudText>
+                    <MudText Typo="Typo.body2">以下视图尚未分配到叉积或单例上下文中</MudText>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                @foreach (var viewName in GetUnassignedViews())
+                {
+                    <div class="d-flex align-center gap-2">
+                        <MudChip T="string" Color="Color.Secondary" Size="Size.Small">@viewName</MudChip>
+                        <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                            <MudButton OnClick="() => AddToCrossProduct(viewName)" 
+                                      StartIcon="@Icons.Material.Filled.CallMerge"
+                                      Size="Size.Small">
+                                叉积
+                            </MudButton>
+                            <MudButton OnClick="() => AddToSingletonContext(viewName)" 
+                                      StartIcon="@Icons.Material.Filled.Info"
+                                      Size="Size.Small">
+                                单例
+                            </MudButton>
+                        </MudButtonGroup>
+                    </div>
+                }
+            </div>
+        </MudAlert>
+    }
+    
+    <!-- 高级设置 -->
+    <MudExpansionPanels Elevation="2" Class="mb-4">
+        <MudExpansionPanel Text="基本设置" Icon="@Icons.Material.Filled.Settings">
+            <MudGrid Spacing="4">
+                <MudItem xs="12" md="6">
+                    <MudNumericField @bind-Value="CurrentRule.MaxCombinations" 
+                                    Label="最大组合数量" 
+                                    Min="1" 
+                                    Max="100000"
+                                    Variant="Variant.Outlined"
+                                    HelperText="限制生成的最大组合数量，防止组合爆炸" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-3" Outlined="true">
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">理论组合数量</MudText>
+                        <div class="d-flex align-center">
+                            <MudText Typo="Typo.h4" Color="Color.Primary" Class="font-mono">
+                                @CalculateTheoreticalCombinations().ToString("N0")
+                            </MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="ml-2">个组合</MudText>
+                        </div>
+                        @if (CalculateTheoreticalCombinations() > CurrentRule.MaxCombinations)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                                组合数量超过限制，将应用采样策略
+                            </MudAlert>
+                        }
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+        
+        <MudExpansionPanel Text="采样策略" Icon="@Icons.Material.Filled.Science">
+            <MudGrid Spacing="4">
+                <MudItem xs="12" md="6">
+                    <MudSelect @bind-Value="CurrentRule.Strategy" 
+                              Label="组合策略" 
+                              T="CombinationStrategy"
+                              Variant="Variant.Outlined"
+                              HelperText="当理论组合数超过最大限制时使用的策略">
+                        <MudSelectItem Value="CombinationStrategy.CrossProduct">
+                            <div class="d-flex flex-column">
+                                <span>完全叉积</span>
+                                <small class="text-muted">生成所有可能的组合</small>
+                            </div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="CombinationStrategy.RandomSampling">
+                            <div class="d-flex flex-column">
+                                <span>随机采样</span>
+                                <small class="text-muted">随机选择组合样本</small>
+                            </div>
+                        </MudSelectItem>
+                        <MudSelectItem Value="CombinationStrategy.PrioritySampling">
+                            <div class="d-flex flex-column">
+                                <span>优先级采样</span>
+                                <small class="text-muted">按优先级字段排序采样</small>
+                            </div>
+                        </MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                
+                @if (CurrentRule.Strategy != CombinationStrategy.CrossProduct)
+                {
+                    <MudItem xs="12">
+                        <MudDivider />
+                        <MudText Typo="Typo.subtitle2" Class="my-3">采样参数设置</MudText>
+                    </MudItem>
+                    
+                    @if (CurrentRule.Strategy == CombinationStrategy.PrioritySampling)
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="CurrentRule.SamplingRule.PriorityField" 
+                                         Label="优先级字段" 
+                                         Placeholder="Priority"
+                                         Variant="Variant.Outlined"
+                                         HelperText="用于排序的字段名" />
+                        </MudItem>
+                        
+                        <MudItem xs="12" md="6">
+                            <MudCheckBox @bind-Value="CurrentRule.SamplingRule.PreferHigherValues" 
+                                        T="bool"
+                                        Color="Color.Primary"
+                                        Label="优先选择高值"
+                                        Class="mt-4" />
+                        </MudItem>
+                    }
+                    
+                    @if (CurrentRule.Strategy == CombinationStrategy.RandomSampling)
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudSlider @bind-Value="CurrentRule.SamplingRule.RandomSeed"
+                                      T="double"
+                                      Min="0.0"
+                                      Max="1.0"
+                                      Step="0.1"
+                                      Variant="Variant.Filled"
+                                      Color="Color.Primary">
+                                随机种子: @CurrentRule.SamplingRule.RandomSeed.ToString("F1")
+                            </MudSlider>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                相同的种子值将产生相同的采样结果
+                            </MudText>
+                        </MudItem>
+                    }
+                }
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+    
+    <!-- 验证提示 -->
+    @if (IsValid)
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-4">
+            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="mr-2" />
+            数据组合规则配置完成，预估生成 @Math.Min(CalculateTheoreticalCombinations(), CurrentRule.MaxCombinations).ToString("N0") 个组合
+        </MudAlert>
+    }
+    else if (HasAttemptedValidation)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mt-4">
+            <MudIcon Icon="@Icons.Material.Filled.Warning" Class="mr-2" />
+            请至少为一个视图分配组合类型（叉积或单例上下文）
+        </MudAlert>
+    }
+</div>
+
+<style>
+.combination-overview {
+    height: 100%;
+}
+
+.font-mono {
+    font-family: 'Courier New', monospace;
+}
+
+.text-muted {
+    color: var(--mud-palette-text-secondary);
+}
+</style>
+
+@code {
+    [Parameter] public ReasoningTransactionDefinition Definition { get; set; } = new();
+    [Parameter] public EventCallback<bool> OnValidationChanged { get; set; }
+    
+    private bool HasAttemptedValidation = false;
+    
+    private DataCombinationRule CurrentRule => Definition.DataCombinationRules.FirstOrDefault() ?? 
+        new DataCombinationRule 
+        { 
+            Strategy = CombinationStrategy.CrossProduct,
+            MaxCombinations = 1000,
+            ViewNamesToCrossProduct = new List<string>(),
+            SingletonViewNamesForContext = new List<string>(),
+            SamplingRule = new SamplingRule
+            {
+                PriorityField = "Priority",
+                PreferHigherValues = true,
+                RandomSeed = 0.5
+            }
+        };
+    
+    private List<string> AvailableViews => Definition.QueryDefinitions.Select(q => q.OutputViewName).ToList();
+    
+    private bool IsValid => CurrentRule.ViewNamesToCrossProduct.Any() || CurrentRule.SingletonViewNamesForContext.Any();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // 确保有组合规则
+        if (!Definition.DataCombinationRules.Any())
+        {
+            Definition.DataCombinationRules.Add(new DataCombinationRule
+            {
+                Strategy = CombinationStrategy.CrossProduct,
+                MaxCombinations = 1000,
+                ViewNamesToCrossProduct = new List<string>(),
+                SingletonViewNamesForContext = new List<string>(),
+                SamplingRule = new SamplingRule
+                {
+                    PriorityField = "Priority",
+                    PreferHigherValues = true,
+                    RandomSeed = 0.5
+                }
+            });
+        }
+        
+        // 避免在参数设置时触发验证，防止无限循环
+        // 验证将在用户交互时触发
+    }
+
+    private List<string> GetUnassignedViews()
+    {
+        return AvailableViews.Where(view => 
+            !CurrentRule.ViewNamesToCrossProduct.Contains(view) && 
+            !CurrentRule.SingletonViewNamesForContext.Contains(view)
+        ).ToList();
+    }
+
+    private async Task AddToCrossProduct(string viewName)
+    {
+        if (CurrentRule.SingletonViewNamesForContext.Contains(viewName))
+        {
+            CurrentRule.SingletonViewNamesForContext.Remove(viewName);
+        }
+        
+        if (!CurrentRule.ViewNamesToCrossProduct.Contains(viewName))
+        {
+            CurrentRule.ViewNamesToCrossProduct.Add(viewName);
+        }
+        
+        HasAttemptedValidation = true;
+        await ValidateAndNotify();
+        Snackbar.Add($"已将 {viewName} 添加到叉积视图", Severity.Info);
+    }
+
+    private async Task AddToSingletonContext(string viewName)
+    {
+        if (CurrentRule.ViewNamesToCrossProduct.Contains(viewName))
+        {
+            CurrentRule.ViewNamesToCrossProduct.Remove(viewName);
+        }
+        
+        if (!CurrentRule.SingletonViewNamesForContext.Contains(viewName))
+        {
+            CurrentRule.SingletonViewNamesForContext.Add(viewName);
+        }
+        
+        HasAttemptedValidation = true;
+        await ValidateAndNotify();
+        Snackbar.Add($"已将 {viewName} 添加到单例上下文", Severity.Info);
+    }
+
+    private async Task RemoveFromCrossProduct(string viewName)
+    {
+        CurrentRule.ViewNamesToCrossProduct.Remove(viewName);
+        HasAttemptedValidation = true;
+        await ValidateAndNotify();
+        Snackbar.Add($"已从叉积视图中移除 {viewName}", Severity.Info);
+    }
+
+    private async Task RemoveFromSingletonContext(string viewName)
+    {
+        CurrentRule.SingletonViewNamesForContext.Remove(viewName);
+        HasAttemptedValidation = true;
+        await ValidateAndNotify();
+        Snackbar.Add($"已从单例上下文中移除 {viewName}", Severity.Info);
+    }
+
+    private int CalculateTheoreticalCombinations()
+    {
+        if (!CurrentRule.ViewNamesToCrossProduct.Any())
+            return 0;
+
+        // 假设每个视图有5个条目（实际应该从数据库获取）
+        const int assumedItemsPerView = 5;
+        return (int)Math.Pow(assumedItemsPerView, CurrentRule.ViewNamesToCrossProduct.Count);
+    }
+
+    private async Task ValidateAndNotify()
+    {
+        var isValid = IsValid;
+        await OnValidationChanged.InvokeAsync(isValid);
+        StateHasChanged();
+    }
+} 

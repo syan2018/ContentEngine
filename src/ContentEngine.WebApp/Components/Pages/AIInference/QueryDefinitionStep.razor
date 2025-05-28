@@ -1,0 +1,381 @@
+@using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.DataPipeline.Models
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@inject ISnackbar Snackbar
+
+<div class="query-definition-step">
+    <!-- 已定义的查询列表 -->
+    <div class="mb-6">
+        <div class="d-flex align-center justify-space-between mb-4">
+            <MudText Typo="Typo.h6">已定义的数据查询</MudText>
+            <MudChip T="string" Size="Size.Small" Color="Color.Info">@Definition.QueryDefinitions.Count 个查询</MudChip>
+        </div>
+        
+        @if (Definition.QueryDefinitions.Any())
+        {
+            <MudStack Spacing="3">
+                @for (int i = 0; i < Definition.QueryDefinitions.Count; i++)
+                {
+                    var index = i;
+                    var query = Definition.QueryDefinitions[index];
+                    var schema = AvailableSchemas.FirstOrDefault(s => s.Name == query.SourceSchemaName);
+                    
+                    <MudCard Outlined="true" Class="query-definition-card">
+                        <MudCardContent Class="pa-4">
+                            <div class="d-flex justify-space-between align-center mb-3">
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="mr-2" Color="Color.Primary" />
+                                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold">@query.OutputViewName</MudText>
+                                </div>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                              Color="Color.Error" 
+                                              Size="Size.Small"
+                                              OnClick="() => RemoveQuery(index)"
+                                              Title="删除查询" />
+                            </div>
+                            
+                            <MudGrid Spacing="2">
+                                <MudItem xs="12" sm="6">
+                                    <div class="d-flex align-center">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">数据源:</MudText>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">@(schema?.Name ?? query.SourceSchemaName)</MudChip>
+                                    </div>
+                                </MudItem>
+                                @if (!string.IsNullOrWhiteSpace(query.FilterExpression))
+                                {
+                                    <MudItem xs="12" sm="6">
+                                        <div class="d-flex align-center">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">筛选条件:</MudText>
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="font-mono">@query.FilterExpression</MudChip>
+                                        </div>
+                                    </MudItem>
+                                }
+                                <MudItem xs="12">
+                                    <div class="d-flex align-center mb-2">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">选择字段:</MudText>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @foreach (var field in query.SelectFields)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info">@field</MudChip>
+                                        }
+                                    </div>
+                                </MudItem>
+                            </MudGrid>
+                            
+                            <MudCollapse Expanded="false">
+                                <div class="mt-3 pt-3 border-t">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">选择的字段:</MudText>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @foreach (var field in query.SelectFields)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@field</MudChip>
+                                        }
+                                    </div>
+                                </div>
+                            </MudCollapse>
+                        </MudCardContent>
+                    </MudCard>
+                }
+            </MudStack>
+        }
+        else
+        {
+            <MudPaper Class="pa-6 text-center" Outlined="true">
+                <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+                <MudText Typo="Typo.body1" Color="Color.Secondary">尚未定义任何数据查询</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">请添加至少一个查询来获取推理所需的数据</MudText>
+            </MudPaper>
+        }
+    </div>
+    
+    <!-- 添加新查询区域 -->
+    <MudExpansionPanels Elevation="2" Class="mb-4">
+        <MudExpansionPanel @bind-IsExpanded="@showAddQuery" Text="添加新数据查询">
+            <MudGrid Spacing="4" Class="mt-2">
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="newQuery.OutputViewName" 
+                                 Label="输出视图名称" 
+                                 Placeholder="例如：NPCView, ScenarioView"
+                                 Required="true"
+                                 Variant="Variant.Outlined"
+                                 HelperText="视图的唯一标识名称" />
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudSelect Value="newQuery.SourceSchemaName" 
+                              Label="数据源Schema" 
+                              T="string"
+                              Required="true"
+                              Variant="Variant.Outlined"
+                              ValueChanged="OnSchemaSelected">
+                        @foreach (var schema in AvailableSchemas)
+                        {
+                            <MudSelectItem Value="@schema.Name">
+                                <div class="d-flex justify-space-between align-center">
+                                    <span>@schema.Name</span>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info">@schema.Fields.Count 字段</MudChip>
+                                </div>
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="newQuery.FilterExpression" 
+                                 Label="筛选条件（可选）" 
+                                 Placeholder="例如：$.status == 'Active' && $.level > 10"
+                                 Variant="Variant.Outlined"
+                                 HelperText="使用LiteDB查询语法，$表示当前文档" />
+                </MudItem>
+                
+                @if (!string.IsNullOrWhiteSpace(newQuery.SourceSchemaName))
+                {
+                    var selectedSchema = AvailableSchemas.FirstOrDefault(s => s.Name == newQuery.SourceSchemaName);
+                    if (selectedSchema != null)
+                    {
+                        <MudItem xs="12">
+                            <div class="d-flex align-center justify-space-between mb-3">
+                                <MudText Typo="Typo.subtitle1">选择字段</MudText>
+                                <div class="d-flex gap-2">
+                                    <MudButton Size="Size.Small" 
+                                              Variant="Variant.Outlined" 
+                                              OnClick="SelectAllFields">
+                                        全选
+                                    </MudButton>
+                                    <MudButton Size="Size.Small" 
+                                              Variant="Variant.Outlined" 
+                                              OnClick="ClearAllFields">
+                                        清空
+                                    </MudButton>
+                                </div>
+                            </div>
+                            
+                            <MudPaper Class="pa-3" Outlined="true" Style="max-height: 300px; overflow-y: auto;">
+                                <MudGrid Spacing="2">
+                                    @foreach (var field in selectedSchema.Fields)
+                                    {
+                                        <MudItem xs="12" sm="6" md="4">
+                                                                                         <MudCheckBox Value="@GetFieldSelection(field.Name)"
+                                                        T="bool"
+                                                        Dense="true"
+                                                        Color="Color.Primary"
+                                                        ValueChanged="(bool value) => OnFieldSelectionChanged(field.Name, value)">
+                                                <div class="d-flex flex-column">
+                                                    <MudText Typo="Typo.body2">@field.Name</MudText>
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@GetFieldTypeDisplay(field.Type)</MudText>
+                                                </div>
+                                            </MudCheckBox>
+                                        </MudItem>
+                                    }
+                                </MudGrid>
+                            </MudPaper>
+                            
+                            @if (newQuery.SelectFields.Any())
+                            {
+                                <MudAlert Severity="Severity.Info" Class="mt-2">
+                                    已选择 @newQuery.SelectFields.Count 个字段
+                                </MudAlert>
+                            }
+                        </MudItem>
+                    }
+                }
+                
+                <MudItem xs="12" Class="d-flex justify-end gap-2">
+                    <MudButton Variant="Variant.Outlined" 
+                              Color="Color.Secondary"
+                              OnClick="CancelAddQuery">
+                        取消
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Primary"
+                              StartIcon="@Icons.Material.Filled.Add"
+                              OnClick="AddQuery"
+                              Disabled="@(!CanAddQuery())">
+                        添加查询
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+    
+    <!-- 验证提示 -->
+    @if (Definition.QueryDefinitions.Any())
+    {
+        <MudAlert Severity="Severity.Success" Class="mt-4">
+            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="mr-2" />
+            已定义 @Definition.QueryDefinitions.Count 个数据查询，可以继续下一步
+        </MudAlert>
+    }
+    else if (HasAttemptedValidation)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mt-4">
+            <MudIcon Icon="@Icons.Material.Filled.Warning" Class="mr-2" />
+            请至少添加一个数据查询定义
+        </MudAlert>
+    }
+</div>
+
+<style>
+.query-definition-card {
+    transition: all 0.2s ease-in-out;
+}
+
+.query-definition-card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.font-mono {
+    font-family: 'Courier New', monospace;
+}
+</style>
+
+@code {
+    [Parameter] public ReasoningTransactionDefinition Definition { get; set; } = new();
+    [Parameter] public List<SchemaDefinition> AvailableSchemas { get; set; } = new();
+    [Parameter] public EventCallback<bool> OnValidationChanged { get; set; }
+    
+    private bool HasAttemptedValidation = false;
+    private bool showAddQuery = false;
+    private QueryDefinition newQuery = new();
+    
+    private bool IsValid => Definition.QueryDefinitions.Any();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // 避免在参数设置时触发验证，防止无限循环
+        // 验证将在用户交互时触发
+    }
+
+    protected override void OnInitialized()
+    {
+        ResetNewQuery();
+    }
+
+    private void ResetNewQuery()
+    {
+        newQuery = new QueryDefinition
+        {
+            OutputViewName = "",
+            SourceSchemaName = "",
+            FilterExpression = "",
+            SelectFields = new List<string>()
+        };
+    }
+
+    private void OnSchemaSelected(string schemaName)
+    {
+        newQuery.SourceSchemaName = schemaName;
+        newQuery.SelectFields.Clear();
+        StateHasChanged();
+    }
+
+    private bool GetFieldSelection(string fieldName)
+    {
+        return newQuery.SelectFields.Contains(fieldName);
+    }
+
+    private void OnFieldSelectionChanged(string fieldName, bool isSelected)
+    {
+        if (isSelected && !newQuery.SelectFields.Contains(fieldName))
+        {
+            newQuery.SelectFields.Add(fieldName);
+        }
+        else if (!isSelected && newQuery.SelectFields.Contains(fieldName))
+        {
+            newQuery.SelectFields.Remove(fieldName);
+        }
+    }
+
+    private void SelectAllFields()
+    {
+        var selectedSchema = AvailableSchemas.FirstOrDefault(s => s.Name == newQuery.SourceSchemaName);
+        if (selectedSchema != null)
+        {
+            newQuery.SelectFields = selectedSchema.Fields.Select(f => f.Name).ToList();
+        }
+    }
+
+    private void ClearAllFields()
+    {
+        newQuery.SelectFields.Clear();
+    }
+
+    private string GetFieldTypeDisplay(FieldType fieldType)
+    {
+        return fieldType switch
+        {
+            FieldType.Text => "文本",
+            FieldType.Number => "数字",
+            FieldType.Boolean => "布尔",
+            FieldType.Date => "日期",
+            FieldType.Reference => "引用",
+            _ => fieldType.ToString()
+        };
+    }
+
+    private bool CanAddQuery()
+    {
+        return !string.IsNullOrWhiteSpace(newQuery.OutputViewName) &&
+               !string.IsNullOrWhiteSpace(newQuery.SourceSchemaName) &&
+               newQuery.SelectFields.Any();
+    }
+
+    private async Task AddQuery()
+    {
+        if (!CanAddQuery())
+        {
+            Snackbar.Add("请完整填写查询信息并选择至少一个字段", Severity.Warning);
+            return;
+        }
+
+        // 检查视图名称是否重复
+        if (Definition.QueryDefinitions.Any(q => q.OutputViewName == newQuery.OutputViewName))
+        {
+            Snackbar.Add("视图名称已存在，请使用不同的名称", Severity.Warning);
+            return;
+        }
+
+        Definition.QueryDefinitions.Add(new QueryDefinition
+        {
+            QueryId = Guid.NewGuid().ToString(),
+            OutputViewName = newQuery.OutputViewName,
+            SourceSchemaName = newQuery.SourceSchemaName,
+            FilterExpression = newQuery.FilterExpression,
+            SelectFields = new List<string>(newQuery.SelectFields)
+        });
+
+        HasAttemptedValidation = true;
+        ResetNewQuery();
+        showAddQuery = false;
+        await ValidateAndNotify();
+        
+        Snackbar.Add($"已添加查询定义：{newQuery.OutputViewName}", Severity.Success);
+    }
+
+    private async Task RemoveQuery(int index)
+    {
+        if (index >= 0 && index < Definition.QueryDefinitions.Count)
+        {
+            var removedQuery = Definition.QueryDefinitions[index];
+            Definition.QueryDefinitions.RemoveAt(index);
+            HasAttemptedValidation = true;
+            await ValidateAndNotify();
+            
+            Snackbar.Add($"已删除查询定义：{removedQuery.OutputViewName}", Severity.Info);
+        }
+    }
+
+    private void CancelAddQuery()
+    {
+        ResetNewQuery();
+        showAddQuery = false;
+    }
+
+    private async Task ValidateAndNotify()
+    {
+        var isValid = IsValid;
+        await OnValidationChanged.InvokeAsync(isValid);
+        StateHasChanged();
+    }
+} 
