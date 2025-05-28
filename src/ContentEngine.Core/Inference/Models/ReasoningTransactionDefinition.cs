@@ -25,11 +25,6 @@ namespace ContentEngine.Core.Inference.Models
         public string Description { get; set; } = string.Empty;
 
         /// <summary>
-        /// 主体Schema名称（可选）
-        /// </summary>
-        public string? SubjectSchemaName { get; set; }
-
-        /// <summary>
         /// 查询定义列表，定义如何获取数据视图
         /// </summary>
         public List<QueryDefinition> QueryDefinitions { get; set; } = new();

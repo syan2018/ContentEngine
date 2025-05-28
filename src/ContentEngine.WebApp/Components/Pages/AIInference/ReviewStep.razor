@@ -9,15 +9,6 @@
                 <MudText Typo="Typo.body2" Color="Color.Secondary">@Definition.Description</MudText>
             </CardHeaderContent>
         </MudCardHeader>
-        <MudCardContent>
-            @if (!string.IsNullOrWhiteSpace(Definition.SubjectSchemaName))
-            {
-                <div class="d-flex align-center">
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">主体Schema:</MudText>
-                    <MudChip T="string" Size="Size.Small" Color="Color.Info">@Definition.SubjectSchemaName</MudChip>
-                </div>
-            }
-        </MudCardContent>
     </MudCard>
     
     <!-- 配置详情标签页 -->

@@ -11,178 +11,130 @@
 
 <PageTitle>创建推理事务 - ContentEngine</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
     <MudBreadcrumbs Items="breadcrumbItems" Class="mb-4" />
     
-    <!-- 步骤指示器 -->
-    <MudStepper @ref="stepper" @bind-ActiveIndex="currentStep" Class="mb-6">
-        <MudStep Title="基本信息" 
-                Icon="@Icons.Material.Filled.Info"
-                StatusChanged="OnStepStatusChanged"
-                Optional="false">
-            <ChildContent>
-                <div class="d-flex align-center">
-                    <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
-                    <span>定义推理事务的基本信息</span>
-                </div>
-            </ChildContent>
-        </MudStep>
-        
-        <MudStep Title="数据查询" 
-                Icon="@Icons.Material.Filled.Search"
-                StatusChanged="OnStepStatusChanged"
-                Optional="false">
-            <ChildContent>
-                <div class="d-flex align-center">
-                    <MudIcon Icon="@Icons.Material.Filled.Search" Class="mr-2" />
-                    <span>定义数据视图查询</span>
-                </div>
-            </ChildContent>
-        </MudStep>
-        
-        <MudStep Title="数据组合" 
-                Icon="@Icons.Material.Filled.CallMerge"
-                StatusChanged="OnStepStatusChanged"
-                Optional="false">
-            <ChildContent>
-                <div class="d-flex align-center">
-                    <MudIcon Icon="@Icons.Material.Filled.CallMerge" Class="mr-2" />
-                    <span>设置数据组合规则</span>
-                </div>
-            </ChildContent>
-        </MudStep>
-        
-        <MudStep Title="Prompt模板" 
-                Icon="@Icons.Material.Filled.TextSnippet"
-                StatusChanged="OnStepStatusChanged"
-                Optional="false">
-            <ChildContent>
-                <div class="d-flex align-center">
-                    <MudIcon Icon="@Icons.Material.Filled.TextSnippet" Class="mr-2" />
-                    <span>创建Prompt模板</span>
-                </div>
-            </ChildContent>
-        </MudStep>
-        
-        <MudStep Title="执行约束" 
-                Icon="@Icons.Material.Filled.Settings"
-                StatusChanged="OnStepStatusChanged"
-                Optional="false">
-            <ChildContent>
-                <div class="d-flex align-center">
-                    <MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-2" />
-                    <span>设置执行限制</span>
-                </div>
-            </ChildContent>
-        </MudStep>
-        
-        <MudStep Title="确认" 
-                Icon="@Icons.Material.Filled.CheckCircle"
-                StatusChanged="OnStepStatusChanged"
-                Optional="false">
-            <ChildContent>
-                <div class="d-flex align-center">
-                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="mr-2" />
-                    <span>确认并保存</span>
-                </div>
-            </ChildContent>
-        </MudStep>
-    </MudStepper>
-    
-    <!-- 步骤内容 -->
+    <!-- 简洁的向导卡片 -->
     <MudCard Class="mud-elevation-4">
-        <MudCardHeader>
+        <!-- 紧凑的题头 -->
+        <MudCardHeader Class="pb-2">
             <CardHeaderContent>
-                <MudText Typo="Typo.h5">@GetStepTitle()</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">@GetStepDescription()</MudText>
+                <div class="d-flex align-center justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.h5" Class="mb-1">@GetStepTitle()</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@GetStepDescription()</MudText>
+                    </div>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                        @(currentStep + 1) / 6
+                    </MudChip>
+                </div>
             </CardHeaderContent>
         </MudCardHeader>
         
-        <MudCardContent Class="pa-6">
-            @switch (currentStep)
-            {
-                case 0:
+        <MudCardContent Class="pt-2">
+            <!-- 使用 MudStepper 的原生功能 -->
+            <MudStepper @ref="stepper" 
+                       @bind-ActiveIndex="currentStep" 
+                       Linear="true" 
+                       HeaderNavigation="false"
+                       OnPreviewInteraction="HandleStepperPreviewInteraction"
+                       Class="mb-4">
+                
+                <MudStep Title="基本信息" 
+                        Icon="@Icons.Material.Filled.Info"
+                        Completed="@stepValidations[0]">
                     <BasicInfoStep @ref="basicInfoStep" 
                                   Definition="@definition" 
                                   AvailableSchemas="@availableSchemas"
                                   OnValidationChanged="OnStepValidationChanged" />
-                    break;
-                case 1:
+                </MudStep>
+                
+                <MudStep Title="数据查询" 
+                        Icon="@Icons.Material.Filled.Search"
+                        Completed="@stepValidations[1]">
                     <QueryDefinitionStep @ref="queryDefinitionStep"
                                         Definition="@definition" 
                                         AvailableSchemas="@availableSchemas"
                                         OnValidationChanged="OnStepValidationChanged" />
-                    break;
-                case 2:
+                </MudStep>
+                
+                <MudStep Title="数据组合" 
+                        Icon="@Icons.Material.Filled.CallMerge"
+                        Completed="@stepValidations[2]">
                     <DataCombinationStep @ref="dataCombinationStep"
                                         Definition="@definition"
                                         OnValidationChanged="OnStepValidationChanged" />
-                    break;
-                case 3:
+                </MudStep>
+                
+                <MudStep Title="Prompt模板" 
+                        Icon="@Icons.Material.Filled.TextSnippet"
+                        Completed="@stepValidations[3]">
                     <PromptTemplateStep @ref="promptTemplateStep"
                                        Definition="@definition"
                                        OnValidationChanged="OnStepValidationChanged" />
-                    break;
-                case 4:
+                </MudStep>
+                
+                <MudStep Title="执行约束" 
+                        Icon="@Icons.Material.Filled.Settings"
+                        Completed="@stepValidations[4]">
                     <ExecutionConstraintsStep @ref="executionConstraintsStep"
                                              Definition="@definition"
                                              OnValidationChanged="OnStepValidationChanged" />
-                    break;
-                case 5:
+                </MudStep>
+                
+                <MudStep Title="确认" 
+                        Icon="@Icons.Material.Filled.CheckCircle"
+                        Completed="@stepValidations[5]">
                     <ReviewStep Definition="@definition" 
                                EstimatedCost="@estimatedCost"
                                EstimatedTime="@estimatedTime"
                                EstimatedCombinations="@estimatedCombinations" />
-                    break;
+                </MudStep>
+            </MudStepper>
+            
+            <!-- 错误信息显示在内容区域 -->
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-4" CloseIcon="@Icons.Material.Filled.Close" ShowCloseIcon="true" CloseIconClicked="() => errorMessage = null">
+                    @errorMessage
+                </MudAlert>
+            }
+            
+            <!-- 保存确认区域 -->
+            @if (currentStep == 5 && !isSaving)
+            {
+                <MudPaper Class="pa-4" Outlined="true">
+                    <div class="d-flex align-center justify-space-between">
+                        <MudText Typo="Typo.body1" Color="Color.Secondary">
+                            请确认以上配置正确无误，点击"创建推理事务"完成设置
+                        </MudText>
+                        <div class="d-flex gap-2">
+                            <MudButton Variant="Variant.Filled" 
+                                      Color="Color.Success"
+                                      StartIcon="@Icons.Material.Filled.Save"
+                                      OnClick="SaveDefinition"
+                                      Disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                    <span class="ml-2">保存中...</span>
+                                }
+                                else
+                                {
+                                    <span>创建推理事务</span>
+                                }
+                            </MudButton>
+                            
+                            <MudButton Variant="Variant.Text" 
+                                      Color="Color.Secondary"
+                                      OnClick="Cancel">
+                                取消
+                            </MudButton>
+                        </div>
+                    </div>
+                </MudPaper>
             }
         </MudCardContent>
-        
-        <MudCardActions Class="pa-6 d-flex justify-space-between">
-            <MudButton Variant="Variant.Outlined" 
-                      Color="Color.Secondary"
-                      StartIcon="@Icons.Material.Filled.ArrowBack"
-                      OnClick="PreviousStep"
-                      Disabled="@(currentStep == 0 || isSaving)">
-                上一步
-            </MudButton>
-            
-            <div class="d-flex gap-2">
-                @if (currentStep < 5)
-                {
-                    <MudButton Variant="Variant.Filled" 
-                              Color="Color.Primary"
-                              EndIcon="@Icons.Material.Filled.ArrowForward"
-                              OnClick="NextStep"
-                              Disabled="@(!CanProceedToNextStep() || isSaving)">
-                        下一步
-                    </MudButton>
-                }
-                else
-                {
-                    <MudButton Variant="Variant.Filled" 
-                              Color="Color.Success"
-                              StartIcon="@Icons.Material.Filled.Save"
-                              OnClick="SaveDefinition"
-                              Disabled="@isSaving">
-                        @if (isSaving)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
-                            <span class="ml-2">保存中...</span>
-                        }
-                        else
-                        {
-                            <span>保存推理事务</span>
-                        }
-                    </MudButton>
-                }
-                
-                <MudButton Variant="Variant.Text" 
-                          Color="Color.Secondary"
-                          OnClick="Cancel">
-                    取消
-                </MudButton>
-            </div>
-        </MudCardActions>
     </MudCard>
 </MudContainer>
 
@@ -191,6 +143,7 @@
     private int currentStep = 0;
     private bool isSaving = false;
     private bool[] stepValidations = new bool[6];
+    private string? errorMessage;
     
     private ReasoningTransactionDefinition definition = new();
     private List<SchemaDefinition> availableSchemas = new();
@@ -268,6 +221,159 @@
         };
     }
 
+    /// <summary>
+    /// 处理 MudStepper 的导航和验证事件
+    /// </summary>
+    private async Task HandleStepperPreviewInteraction(StepperInteractionEventArgs args)
+    {
+        errorMessage = null;
+        
+        switch (args.Action)
+        {
+            case StepAction.Complete: // 完成当前步骤
+                if (!await ValidateCurrentStep(args.StepIndex))
+                {
+                    args.Cancel = true;
+                    StateHasChanged(); // 立即刷新UI显示错误消息
+                    return;
+                }
+                
+                // 步骤4完成时进行预估
+                if (args.StepIndex == 4)
+                {
+                    await PerformEstimation();
+                }
+                
+                stepValidations[args.StepIndex] = true;
+                StateHasChanged(); // 刷新步骤完成状态
+                break;
+                
+            case StepAction.Activate: // 激活（跳转到）某个步骤
+                if (args.StepIndex > currentStep)
+                {
+                    // 防止跳跃到未完成的步骤
+                    for (int i = currentStep; i < args.StepIndex; i++)
+                    {
+                        if (!stepValidations[i])
+                        {
+                            Snackbar.Add($"请先完成第{i + 1}步", Severity.Warning);
+                            args.Cancel = true;
+                            return;
+                        }
+                    }
+                }
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 验证指定步骤
+    /// </summary>
+    private async Task<bool> ValidateCurrentStep(int stepIndex)
+    {
+        try
+        {
+            return stepIndex switch
+            {
+                0 => await ValidateStep1(),
+                1 => await ValidateStep2(),
+                2 => await ValidateStep3(),
+                3 => await ValidateStep4(),
+                4 => await ValidateStep5(),
+                5 => true, // 确认步骤总是有效的
+                _ => false
+            };
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"验证步骤{stepIndex + 1}时出错: {ex.Message}";
+            StateHasChanged(); // 立即刷新UI显示错误消息
+            return false;
+        }
+    }
+
+    private async Task<bool> ValidateStep1()
+    {
+        if (string.IsNullOrWhiteSpace(definition.Name))
+        {
+            errorMessage = "请输入推理事务名称";
+            return false;
+        }
+        
+        if (string.IsNullOrWhiteSpace(definition.Description))
+        {
+            errorMessage = "请输入推理事务描述";
+            return false;
+        }
+        
+        return true;
+    }
+
+    private async Task<bool> ValidateStep2()
+    {
+        if (!definition.QueryDefinitions.Any())
+        {
+            errorMessage = "请至少添加一个数据查询定义";
+            return false;
+        }
+        
+        return true;
+    }
+
+    private async Task<bool> ValidateStep3()
+    {
+        if (!definition.DataCombinationRules.Any())
+        {
+            errorMessage = "请设置数据组合规则";
+            return false;
+        }
+        
+        var rule = definition.DataCombinationRules[0];
+        if (!rule.ViewNamesToCrossProduct.Any() && !rule.SingletonViewNamesForContext.Any())
+        {
+            errorMessage = "请至少设置一个叉积视图或单例上下文";
+            return false;
+        }
+        
+        return true;
+    }
+
+    private async Task<bool> ValidateStep4()
+    {
+        if (string.IsNullOrWhiteSpace(definition.PromptTemplate.TemplateContent))
+        {
+            errorMessage = "请输入Prompt模板内容";
+            return false;
+        }
+        
+        if (!definition.PromptTemplate.ExpectedInputViewNames.Any())
+        {
+            errorMessage = "Prompt模板必须包含至少一个视图引用";
+            return false;
+        }
+        
+        return true;
+    }
+
+    private async Task<bool> ValidateStep5()
+    {
+        // 执行约束总是有效的，有默认值
+        return true;
+    }
+
+    private void OnStepValidationChanged(bool isValid)
+    {
+        stepValidations[currentStep] = isValid;
+        
+        // 用户编辑后清除错误消息，避免显示过时的错误信息
+        if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            errorMessage = null;
+        }
+        
+        StateHasChanged();
+    }
+
     private string GetStepTitle()
     {
         return currentStep switch
@@ -296,57 +402,6 @@
         };
     }
 
-    private void OnStepStatusChanged()
-    {
-        StateHasChanged();
-    }
-
-    private void OnStepValidationChanged(bool isValid)
-    {
-        stepValidations[currentStep] = isValid;
-        StateHasChanged();
-    }
-
-    private bool CanProceedToNextStep()
-    {
-        return currentStep switch
-        {
-            0 => !string.IsNullOrWhiteSpace(definition.Name) && !string.IsNullOrWhiteSpace(definition.Description),
-            1 => definition.QueryDefinitions.Any(),
-            2 => definition.DataCombinationRules.Any() && 
-                 (definition.DataCombinationRules[0].ViewNamesToCrossProduct.Any() || 
-                  definition.DataCombinationRules[0].SingletonViewNamesForContext.Any()),
-            3 => !string.IsNullOrWhiteSpace(definition.PromptTemplate.TemplateContent) && 
-                 definition.PromptTemplate.ExpectedInputViewNames.Any(),
-            4 => true, // 执行约束有默认值
-            _ => true
-        };
-    }
-
-    private async Task NextStep()
-    {
-        if (currentStep < 5 && CanProceedToNextStep())
-        {
-            // 在进入确认步骤前进行预估
-            if (currentStep == 4)
-            {
-                await PerformEstimation();
-            }
-            
-            currentStep++;
-            StateHasChanged();
-        }
-    }
-
-    private async Task PreviousStep()
-    {
-        if (currentStep > 0)
-        {
-            currentStep--;
-            StateHasChanged();
-        }
-    }
-
     private async Task PerformEstimation()
     {
         try
@@ -369,11 +424,12 @@
         try
         {
             isSaving = true;
+            errorMessage = null;
 
             // 最终验证
-            if (!CanProceedToNextStep())
+            if (!await ValidateCurrentStep(5))
             {
-                Snackbar.Add("请检查所有必填信息是否完整", Severity.Warning);
+                StateHasChanged(); // 刷新UI显示验证错误
                 return;
             }
 
@@ -385,11 +441,13 @@
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"创建推理事务定义失败: {ex.Message}", Severity.Error);
+            errorMessage = $"创建推理事务定义失败: {ex.Message}";
+            StateHasChanged(); // 立即刷新UI显示错误消息
         }
         finally
         {
             isSaving = false;
+            StateHasChanged(); // 确保保存状态更新
         }
     }
 
@@ -401,7 +459,20 @@
     private void TriggerValidationForCurrentStep()
     {
         // 手动触发当前步骤的验证，避免循环依赖
-        var isValid = CanProceedToNextStep();
+        var isValid = currentStep switch
+        {
+            0 => !string.IsNullOrWhiteSpace(definition.Name) && !string.IsNullOrWhiteSpace(definition.Description),
+            1 => definition.QueryDefinitions.Any(),
+            2 => definition.DataCombinationRules.Any() && 
+                 (definition.DataCombinationRules[0].ViewNamesToCrossProduct.Any() || 
+                  definition.DataCombinationRules[0].SingletonViewNamesForContext.Any()),
+            3 => !string.IsNullOrWhiteSpace(definition.PromptTemplate.TemplateContent) && 
+                 definition.PromptTemplate.ExpectedInputViewNames.Any(),
+            4 => true, // 执行约束有默认值
+            5 => true, // 确认步骤总是有效的
+            _ => false
+        };
+        
         stepValidations[currentStep] = isValid;
         StateHasChanged();
     }
