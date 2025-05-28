@@ -1,4 +1,5 @@
 using ContentEngine.Core.DataPipeline.Models;
+using ContentEngine.Core.Inference.Models;
 using LiteDB;
 
 namespace ContentEngine.Core.Storage;
@@ -12,6 +13,10 @@ public class LiteDbContext : IDisposable
 
     // Schema 定义存储在一个固定的集合中
     private const string SchemaCollectionName = "_schemas";
+    
+    // 推理事务定义和实例的集合名称
+    private const string ReasoningDefinitionsCollectionName = "_reasoningDefinitions";
+    private const string ReasoningInstancesCollectionName = "_reasoningInstances";
 
     public LiteDbContext(IConfiguration configuration)
     {
@@ -40,6 +45,16 @@ public class LiteDbContext : IDisposable
     /// 获取用于存储 Schema 定义的集合
     /// </summary>
     public ILiteCollection<SchemaDefinition> SchemaDefinitions => Database.GetCollection<SchemaDefinition>(SchemaCollectionName);
+
+    /// <summary>
+    /// 获取用于存储推理事务定义的集合
+    /// </summary>
+    public ILiteCollection<ReasoningTransactionDefinition> ReasoningDefinitions => Database.GetCollection<ReasoningTransactionDefinition>(ReasoningDefinitionsCollectionName);
+
+    /// <summary>
+    /// 获取用于存储推理事务实例的集合
+    /// </summary>
+    public ILiteCollection<ReasoningTransactionInstance> ReasoningInstances => Database.GetCollection<ReasoningTransactionInstance>(ReasoningInstancesCollectionName);
 
     /// <summary>
     /// 根据 Schema 名称获取用于存储其实例数据的集合
@@ -72,6 +87,15 @@ public class LiteDbContext : IDisposable
     {
         // 为 SchemaDefinition 的 Name 字段创建唯一索引，确保 Schema 名称不重复
         SchemaDefinitions.EnsureIndex(x => x.Name, unique: true);
+        
+        // 为推理事务定义创建索引
+        ReasoningDefinitions.EnsureIndex(x => x.Name, unique: false);
+        ReasoningDefinitions.EnsureIndex(x => x.CreatedAt, unique: false);
+        
+        // 为推理事务实例创建索引
+        ReasoningInstances.EnsureIndex(x => x.DefinitionId, unique: false);
+        ReasoningInstances.EnsureIndex(x => x.Status, unique: false);
+        ReasoningInstances.EnsureIndex(x => x.StartedAt, unique: false);
     }
 
     public void Dispose()

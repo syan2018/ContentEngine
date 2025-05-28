@@ -1,0 +1,180 @@
+@using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.Inference.Services
+@using MudBlazor
+@inject IReasoningService ReasoningService
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Class="pa-0">
+            <MudStack Spacing="4">
+                <div>
+                    <MudText Typo="Typo.h6" Class="mb-2">确认执行推理事务</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        您即将执行推理事务 "<strong>@Definition?.Name</strong>"，请确认执行参数。
+                    </MudText>
+                </div>
+
+                <MudDivider />
+
+                <!-- 事务信息 -->
+                <MudCard Outlined="true">
+                    <MudCardContent>
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.subtitle1">事务信息</MudText>
+                            <MudText Typo="Typo.body2">
+                                <strong>名称：</strong>@Definition?.Name
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                <strong>描述：</strong>@(string.IsNullOrEmpty(Definition?.Description) ? "无描述" : Definition.Description)
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                <strong>查询数：</strong>@(Definition?.QueryDefinitions.Count ?? 0)
+                            </MudText>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- 预估信息 -->
+                @if (estimatedCombinations > 0)
+                {
+                    <MudCard Outlined="true">
+                        <MudCardContent>
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.subtitle1">预估信息</MudText>
+                                <MudText Typo="Typo.body2">
+                                    <strong>预估组合数：</strong>@estimatedCombinations
+                                </MudText>
+                                <MudText Typo="Typo.body2">
+                                    <strong>预估成本：</strong>$@estimatedCost.ToString("F2")
+                                </MudText>
+                                <MudText Typo="Typo.body2">
+                                    <strong>预估时间：</strong>@estimatedTime.ToString(@"hh\:mm\:ss")
+                                </MudText>
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+                }
+
+                <!-- 约束检查 -->
+                @if (Definition != null)
+                {
+                    <MudCard Outlined="true">
+                        <MudCardContent>
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.subtitle1">执行约束</MudText>
+                                <div class="d-flex align-center">
+                                    @if (estimatedCost <= Definition.ExecutionConstraints.MaxEstimatedCostUSD)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" Class="mr-2" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" Class="mr-2" />
+                                    }
+                                    <MudText Typo="Typo.body2">
+                                        成本限制：$@estimatedCost.ToString("F2") / $@Definition.ExecutionConstraints.MaxEstimatedCostUSD.ToString("F2")
+                                    </MudText>
+                                </div>
+                                <div class="d-flex align-center">
+                                    @if (estimatedTime.TotalMinutes <= Definition.ExecutionConstraints.MaxExecutionTimeMinutes)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" Class="mr-2" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" Class="mr-2" />
+                                    }
+                                    <MudText Typo="Typo.body2">
+                                        时间限制：@estimatedTime.ToString(@"hh\:mm\:ss") / @TimeSpan.FromMinutes(Definition.ExecutionConstraints.MaxExecutionTimeMinutes).ToString(@"hh\:mm\:ss")
+                                    </MudText>
+                                </div>
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+                }
+
+                @if (hasConstraintViolations)
+                {
+                    <MudAlert Severity="Severity.Warning">
+                        <strong>警告：</strong>执行此事务将超出预设的约束限制。请确认是否继续执行。
+                    </MudAlert>
+                }
+
+                @if (isLoading)
+                {
+                    <div class="d-flex justify-center pa-4">
+                        <MudProgressCircular Indeterminate="true" />
+                        <MudText Class="ml-2">正在计算预估信息...</MudText>
+                    </div>
+                }
+            </MudStack>
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Secondary" OnClick="Cancel">取消</MudButton>
+        <MudButton Color="Color.Primary" 
+                  Variant="Variant.Filled" 
+                  OnClick="Execute"
+                  Disabled="@isLoading">
+            @if (hasConstraintViolations)
+            {
+                <span>强制执行</span>
+            }
+            else
+            {
+                <span>执行</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter] public ReasoningTransactionDefinition? Definition { get; set; }
+
+    private bool isLoading = true;
+    private int estimatedCombinations = 0;
+    private decimal estimatedCost = 0;
+    private TimeSpan estimatedTime = TimeSpan.Zero;
+    private bool hasConstraintViolations = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Definition != null)
+        {
+            await LoadEstimates();
+        }
+        isLoading = false;
+    }
+
+    private async Task LoadEstimates()
+    {
+        try
+        {
+            if (Definition == null) return;
+
+            estimatedCombinations = await ReasoningService.EstimateCombinationCountAsync(Definition.Id);
+            estimatedCost = await ReasoningService.EstimateExecutionCostAsync(Definition.Id);
+            estimatedTime = await ReasoningService.EstimateExecutionTimeAsync(Definition.Id);
+
+            // 检查约束违规
+            hasConstraintViolations = estimatedCost > Definition.ExecutionConstraints.MaxEstimatedCostUSD ||
+                                    estimatedTime.TotalMinutes > Definition.ExecutionConstraints.MaxExecutionTimeMinutes;
+        }
+        catch (Exception)
+        {
+            // 忽略预估错误，使用默认值
+        }
+    }
+
+    private void Execute()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+} 

@@ -1,0 +1,299 @@
+@page "/ai-inference"
+@using ContentEngine.Core.Inference.Services
+@using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.DataPipeline.Services
+@using ContentEngine.Core.DataPipeline.Models
+@inject IReasoningService ReasoningService
+@inject ISchemaDefinitionService SchemaService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>AI推理引擎 - ContentEngine</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
+    <MudStack Spacing="6">
+        <!-- 页面标题 -->
+        <MudGrid Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudItem xs="12" sm="8">
+                <MudText Typo="Typo.h4" GutterBottom="true" Class="page-title">AI推理引擎</MudText>
+                <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">基于数据组合和模板的智能推理系统</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="4" Class="d-flex justify-sm-end justify-xs-start">
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.Add"
+                          OnClick="CreateNewDefinition">
+                    创建推理事务
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+
+        <!-- 统计卡片 -->
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Psychology" Color="Color.Primary" Size="Size.Large" Class="mr-3" />
+                            <div>
+                                <MudText Typo="Typo.h6">@totalDefinitions</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">推理定义</MudText>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success" Size="Size.Large" Class="mr-3" />
+                            <div>
+                                <MudText Typo="Typo.h6">@runningInstances</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">运行中</MudText>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Info" Size="Size.Large" Class="mr-3" />
+                            <div>
+                                <MudText Typo="Typo.h6">@completedInstances</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">已完成</MudText>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard>
+                    <MudCardContent>
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Color="Color.Warning" Size="Size.Large" Class="mr-3" />
+                            <div>
+                                <MudText Typo="Typo.h6">$@totalCost.ToString("F2")</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">总成本</MudText>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- 推理定义列表 -->
+        <MudCard>
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">推理事务定义</MudText>
+                </CardHeaderContent>
+                <CardHeaderActions>
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
+                                  Color="Color.Default" 
+                                  OnClick="LoadDefinitions" />
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (isLoading)
+                {
+                    <div class="d-flex justify-center pa-4">
+                        <MudProgressCircular Indeterminate="true" />
+                    </div>
+                }
+                else if (definitions.Any())
+                {
+                    <MudTable Items="@definitions" Hover="true" Striped="true">
+                        <HeaderContent>
+                            <MudTh>名称</MudTh>
+                            <MudTh>描述</MudTh>
+                            <MudTh>查询数</MudTh>
+                            <MudTh>创建时间</MudTh>
+                            <MudTh>操作</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="名称">
+                                <MudText Typo="Typo.body1">@context.Name</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="描述">
+                                <MudText Typo="Typo.body2" Class="text-truncate" Style="max-width: 200px;">
+                                    @(string.IsNullOrEmpty(context.Description) ? "无描述" : context.Description)
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="查询数">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.QueryDefinitions.Count</MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="创建时间">
+                                <MudText Typo="Typo.body2">@context.CreatedAt.ToString("yyyy-MM-dd HH:mm")</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="操作">
+                                <MudButtonGroup Size="Size.Small" Variant="Variant.Text">
+                                    <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" 
+                                              Color="Color.Success"
+                                              OnClick="() => ExecuteDefinition(context.Id)">
+                                        执行
+                                    </MudButton>
+                                    <MudButton StartIcon="@Icons.Material.Filled.Edit" 
+                                              Color="Color.Primary"
+                                              OnClick="() => EditDefinition(context.Id)">
+                                        编辑
+                                    </MudButton>
+                                    <MudButton StartIcon="@Icons.Material.Filled.History" 
+                                              Color="Color.Info"
+                                              OnClick="() => ViewInstances(context.Id)">
+                                        历史
+                                    </MudButton>
+                                    <MudButton StartIcon="@Icons.Material.Filled.Delete" 
+                                              Color="Color.Error"
+                                              OnClick="() => DeleteDefinition(context.Id)">
+                                        删除
+                                    </MudButton>
+                                </MudButtonGroup>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <div class="d-flex flex-column align-center pa-8">
+                        <MudIcon Icon="@Icons.Material.Filled.Psychology" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary">暂无推理事务定义</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">创建您的第一个推理事务来开始智能推理</MudText>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  StartIcon="@Icons.Material.Filled.Add"
+                                  OnClick="CreateNewDefinition">
+                            创建推理事务
+                        </MudButton>
+                    </div>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudStack>
+</MudContainer>
+
+@code {
+    private List<ReasoningTransactionDefinition> definitions = new();
+    private bool isLoading = true;
+    
+    // 统计数据
+    private int totalDefinitions = 0;
+    private int runningInstances = 0;
+    private int completedInstances = 0;
+    private decimal totalCost = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDefinitions();
+        await LoadStatistics();
+    }
+
+    private async Task LoadDefinitions()
+    {
+        try
+        {
+            isLoading = true;
+            definitions = await ReasoningService.GetAllDefinitionsAsync();
+            totalDefinitions = definitions.Count;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"加载推理定义失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadStatistics()
+    {
+        try
+        {
+            var allInstances = await ReasoningService.GetInstancesAsync();
+            runningInstances = allInstances.Count(i => i.Status == TransactionStatus.GeneratingOutputs || 
+                                                      i.Status == TransactionStatus.FetchingData || 
+                                                      i.Status == TransactionStatus.CombiningData);
+            completedInstances = allInstances.Count(i => i.Status == TransactionStatus.Completed);
+            totalCost = allInstances.Sum(i => i.Metrics.ActualCostUSD);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"加载统计数据失败: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void CreateNewDefinition()
+    {
+        Navigation.NavigateTo("/ai-inference/create");
+    }
+
+    private void EditDefinition(string definitionId)
+    {
+        Navigation.NavigateTo($"/ai-inference/edit/{definitionId}");
+    }
+
+    private void ViewInstances(string definitionId)
+    {
+        Navigation.NavigateTo($"/ai-inference/instances/{definitionId}");
+    }
+
+    private async Task ExecuteDefinition(string definitionId)
+    {
+        try
+        {
+            var definition = definitions.FirstOrDefault(d => d.Id == definitionId);
+            if (definition == null) return;
+
+            // 显示确认对话框
+            var parameters = new DialogParameters
+            {
+                ["Definition"] = definition
+            };
+
+            var dialog = await DialogService.ShowAsync<ExecuteConfirmDialog>("确认执行", parameters);
+            var result = await dialog.Result;
+
+            if (!result.Canceled)
+            {
+                Snackbar.Add("推理事务已开始执行", Severity.Success);
+                
+                // 导航到执行监控页面
+                Navigation.NavigateTo($"/ai-inference/execute/{definitionId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"执行推理事务失败: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteDefinition(string definitionId)
+    {
+        try
+        {
+            var definition = definitions.FirstOrDefault(d => d.Id == definitionId);
+            if (definition == null) return;
+
+            bool? result = await DialogService.ShowMessageBox(
+                "确认删除",
+                $"确定要删除推理事务定义 '{definition.Name}' 吗？此操作不可撤销。",
+                yesText: "删除", cancelText: "取消");
+
+            if (result == true)
+            {
+                await ReasoningService.DeleteDefinitionAsync(definitionId);
+                Snackbar.Add("推理事务定义已删除", Severity.Success);
+                await LoadDefinitions();
+                await LoadStatistics();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"删除推理事务定义失败: {ex.Message}", Severity.Error);
+        }
+    }
+} 

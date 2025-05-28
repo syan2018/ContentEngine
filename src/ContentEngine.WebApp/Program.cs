@@ -40,6 +40,12 @@ builder.Services.AddHttpClient<IFileConversionService, FileConversionService>();
 // 注册数据结构化服务
 builder.Services.AddScoped<IDataStructuringService, DataStructuringService>();
 
+// 注册Prompt执行服务
+builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IPromptExecutionService, ContentEngine.Core.AI.Services.PromptExecutionService>();
+
+// 注册推理引擎服务
+builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IReasoningService, ContentEngine.Core.Inference.Services.ReasoningService>();
+
 // 2. 配置请求本地化选项 (可选，但推荐)
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
