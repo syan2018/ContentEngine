@@ -365,6 +365,7 @@ namespace ContentEngine.Core.Inference.Services
                 throw new InvalidOperationException($"推理事务定义不存在: {definitionId}");
             }
 
+            // TODO: 生成组合时就该处理缓存了，不然ID都是新的肯定匹配不到
             // 生成组合以找到匹配的组合
             var combinations = await GenerateInputCombinationsAsync(definitionId, cancellationToken);
             var targetCombination = combinations.FirstOrDefault(c => c.CombinationId == combinationId);
