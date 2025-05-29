@@ -390,4 +390,21 @@ public class ReasoningDefinitionService : IReasoningDefinitionService
 
 重构遵循了SOLID原则，特别是单一职责原则和YAGNI原则，为Inference模块的进一步发展奠定了良好的架构基础。同时保持了向后兼容性，确保现有功能不受影响。
 
-这次重构为ContentEngine项目的模块化架构提供了一个很好的范例，展示了如何在保持功能完整性的同时，通过合理的架构设计来提升代码质量和开发效率。 
+这次重构为ContentEngine项目的模块化架构提供了一个很好的范例，展示了如何在保持功能完整性的同时，通过合理的架构设计来提升代码质量和开发效率。
+
+## 相关文档
+
+### 架构设计文档
+- **[ContentEngine 项目服务架构文档](ContentEngine_Service_Architecture.md)** - 详细描述整个项目的服务分工、职责划分和技术栈
+- **[服务依赖关系图](Service_Dependency_Diagram.md)** - 可视化展示各服务间的依赖关系和调用链路
+
+### 技术文档
+- **[ConfigurableAIProvider 文档](ConfigurableAIProvider.md)** - AI基础设施层的详细说明
+- **[推理引擎设计文档](ReasoningEngine_Design.md)** - 推理引擎的设计思路和实现细节
+- **[项目计划文档](ProjectPlan.md)** - 项目整体规划和开发计划
+
+### 最佳实践
+- **[项目最佳实践指南](../README.zh-CN.md#最佳实践)** - 开发规范和代码风格指南
+- **[项目结构说明](../README.zh-CN.md#项目结构)** - 目录结构和文件组织规范
+
+这些文档共同构成了ContentEngine项目的完整技术文档体系，为开发者提供了全面的架构理解和开发指导。 

@@ -790,7 +790,7 @@
             // 根据 outputItem 更新UI或给出提示，例如显示结果或确认执行
             Snackbar.Add($"组合 {combination.CombinationId} 已执行，结果: {(outputItem.IsSuccess ? "成功" : "失败")}", outputItem.IsSuccess ? Severity.Success : Severity.Error);
             // 可能需要重新加载实例详情或部分数据以反映此独立执行的结果（如果服务层支持保存独立执行的输出）
-            // 如果 ExecuteCombinationAsync 的结果需要被持久化，当前服务层实现并未包含此逻辑，需要额外处理
+            // TODO: 处理持久化
             await LoadInstanceDetail(); // 重新加载以获取最新状态
         }
         catch (Exception ex)
