@@ -107,7 +107,7 @@
 
 .combination-id {
     font-family: 'Courier New', monospace;
-    background-color: var(--mud-palette-grey-lighten-4);
+    background-color: #f5f5f5;
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 0.75rem;
@@ -137,10 +137,10 @@
 .field-chip {
     display: flex;
     flex-direction: column;
-    background-color: var(--mud-palette-surface-variant);
+    background-color: #fafafa;
     border-radius: 4px;
     padding: 3px 6px;
-    border: 1px solid var(--mud-palette-divider);
+    border: 1px solid #e0e0e0;
     transition: all 0.2s ease;
     min-width: 60px;
     width: fit-content;
@@ -150,7 +150,7 @@
 }
 
 .field-chip:hover {
-    background-color: var(--mud-palette-action-hover);
+    background-color: #f0f0f0;
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     z-index: 10;
@@ -159,7 +159,7 @@
 .field-label {
     font-size: 0.6rem;
     font-weight: 600;
-    color: var(--mud-palette-text-secondary);
+    color: #666;
     text-transform: uppercase;
     letter-spacing: 0.3px;
     margin-bottom: 1px;
@@ -171,7 +171,7 @@
 
 .field-content {
     font-size: 0.75rem;
-    color: var(--mud-palette-text-primary);
+    color: #333;
     font-weight: 500;
     line-height: 1.2;
     white-space: nowrap;
@@ -183,13 +183,13 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    color: var(--mud-palette-text-secondary);
+    color: #666;
     font-size: 0.7rem;
     padding: 2px 4px;
-    background-color: var(--mud-palette-grey-lighten-5);
+    background-color: #f8f8f8;
     border-radius: 8px;
     justify-content: center;
-    border: 1px dashed var(--mud-palette-divider);
+    border: 1px dashed #ddd;
     min-width: 30px;
     max-width: 50px;
     height: 20px;
@@ -202,8 +202,8 @@
     top: 100%;
     left: 0;
     right: 0;
-    background: var(--mud-palette-surface);
-    border: 1px solid var(--mud-palette-divider);
+    background: white;
+    border: 1px solid #e0e0e0;
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     padding: 8px;
@@ -231,10 +231,10 @@
 .field-chip-small {
     display: flex;
     flex-direction: column;
-    background-color: var(--mud-palette-surface-variant);
+    background-color: #fafafa;
     border-radius: 3px;
     padding: 2px 4px;
-    border: 1px solid var(--mud-palette-divider);
+    border: 1px solid #e0e0e0;
     min-width: 50px;
     max-width: 80px;
     flex-shrink: 0;
@@ -249,7 +249,7 @@
 }
 
 .no-data {
-    color: var(--mud-palette-text-disabled);
+    color: #999;
     font-style: italic;
 }
 
@@ -334,7 +334,7 @@
 
 /* 表格样式优化 */
 .mud-table tbody tr:hover {
-    background-color: var(--mud-palette-action-hover) !important;
+    background-color: #f5f5f5 !important;
 }
 
 .mud-chip.mud-chip-filled {
@@ -343,7 +343,62 @@
 
 .mud-table-head .mud-table-cell {
     font-weight: 600;
-    background-color: var(--mud-palette-surface-variant);
+    background-color: #fafafa;
+}
+
+/* 深色模式支持 */
+@@media (prefers-color-scheme: dark) {
+    .combination-id {
+        background-color: #2d2d30;
+        color: #fff;
+    }
+    
+    .field-chip {
+        background-color: #2d2d30;
+        border-color: #464649;
+        color: #fff;
+    }
+    
+    .field-chip:hover {
+        background-color: #3e3e42;
+    }
+    
+    .field-label {
+        color: #cccccc;
+    }
+    
+    .field-content {
+        color: #ffffff;
+    }
+    
+    .more-fields-indicator {
+        background-color: #252526;
+        color: #cccccc;
+        border-color: #464649;
+    }
+    
+    .hover-overlay {
+        background: #252526;
+        border-color: #464649;
+    }
+    
+    .field-chip-small {
+        background-color: #2d2d30;
+        border-color: #464649;
+    }
+    
+    .no-data {
+        color: #666;
+    }
+    
+    .mud-table tbody tr:hover {
+        background-color: #2d2d30 !important;
+    }
+    
+    .mud-table-head .mud-table-cell {
+        background-color: #2d2d30;
+        color: #fff;
+    }
 }
 </style>
 

@@ -23,6 +23,7 @@ alwaysApply: true
 *   将 `.razor` 文件视为 **View** (HTML 标记) + **ViewModel** (`@code` 块)。
 *   `@code` 块负责：管理 UI 状态、处理用户交互、通过 `@inject` 调用服务。
 *   保持 `@code` 块逻辑**简洁聚焦**。如果过于复杂，优先考虑提取逻辑到**子组件**、**服务**或**工具类**。
+*   MudBlazor中，避免使用类似 `--mud-palette-primary` 类似格式的颜色标记，已弃用
 
 ## 3. 服务层设计
 
