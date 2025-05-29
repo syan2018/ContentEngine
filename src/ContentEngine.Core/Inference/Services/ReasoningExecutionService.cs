@@ -34,28 +34,29 @@ namespace ContentEngine.Core.Inference.Services
 
         // TODO: 重构为Instance驱动
         public async Task<ReasoningTransactionInstance> ExecuteTransactionAsync(
-            string definitionId, 
+            string instanceId, 
             Dictionary<string, object>? executionParams = null, 
             CancellationToken cancellationToken = default)
         {
-            // 获取定义
-            var definition = await _definitionService.GetDefinitionByIdAsync(definitionId, cancellationToken);
-            if (definition == null)
+            // 创建实例
+            var instance = await _instanceService.GetInstanceByIdAsync(instanceId, cancellationToken);
+            if (instance == null)
             {
-                throw new InvalidOperationException($"推理事务定义不存在: {definitionId}");
+                throw new InvalidOperationException($"推理事务实例不存在: {instanceId}");
             }
-
+            
             // 执行前检查
-            var preCheckResult = await PreCheckExecutionAsync(definitionId, executionParams, cancellationToken);
+            var preCheckResult = await PreCheckExecutionAsync(instance.DefinitionId, executionParams, cancellationToken);
             if (!preCheckResult.CanExecute)
             {
                 throw new InvalidOperationException($"执行前检查失败: {string.Join("; ", preCheckResult.Errors)}");
             }
+            
+            var definition = await _definitionService.GetDefinitionByIdAsync(instance.DefinitionId, cancellationToken);
 
-            // 创建实例
-            var instance = await _instanceService.CreateInstanceAsync(definitionId, cancellationToken);
+            
             _logger.LogInformation("开始执行推理事务: {DefinitionName} (实例ID: {InstanceId})", definition.Name, instance.InstanceId);
-
+            
             try
             {
                 instance.Metrics.EstimatedCostUSD = preCheckResult.EstimatedCostUSD;

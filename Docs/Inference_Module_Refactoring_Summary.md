@@ -274,10 +274,120 @@ builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IPromptExecutio
 - 收集使用数据
 - 根据反馈优化接口设计
 
+## 进一步重构：移除Repository层
+
+### 重构动机
+
+在完成服务模块化拆分后，我们发现 `IReasoningRepository` 作为一个通用的数据访问层显得有些冗余。既然我们已经按功能模块拆分了服务，每个服务都有明确的职责范围，那么让各个服务直接使用 `LiteDbContext` 进行数据访问会更加简洁和直接。
+
+### 重构内容
+
+#### 1. 移除Repository接口和实现
+- 删除 `IReasoningRepository.cs` 接口
+- 删除 `ReasoningRepository.cs` 实现类
+
+#### 2. 服务直接使用LiteDbContext
+- `ReasoningDefinitionService` 直接注入 `LiteDbContext`
+- `ReasoningInstanceService` 直接注入 `LiteDbContext`
+- 各服务内部实现相应的数据访问逻辑
+
+#### 3. 更新依赖注入配置
+- 从 `ServiceCollectionExtensions` 中移除 `IReasoningRepository` 的注册
+- 简化服务注册流程
+
+### 重构收益
+
+#### 1. 架构更简洁
+- **减少抽象层次**：移除了不必要的Repository抽象层
+- **直接数据访问**：服务直接操作数据库，减少中间层
+- **代码更清晰**：数据访问逻辑直接在相关服务中，便于理解和维护
+
+#### 2. 性能优化
+- **减少方法调用**：消除Repository层的方法调用开销
+- **更少的对象创建**：减少Repository实例的创建和管理
+- **更直接的数据操作**：避免数据在多层之间传递
+
+#### 3. 维护成本降低
+- **更少的代码文件**：减少需要维护的接口和实现类
+- **更简单的依赖关系**：服务直接依赖LiteDbContext，关系更清晰
+- **更容易调试**：数据访问逻辑直接在业务服务中，调试更方便
+
+### 实施细节
+
+#### 重构前的架构
+```
+Service -> IRepository -> Repository -> LiteDbContext
+```
+
+#### 重构后的架构
+```
+Service -> LiteDbContext
+```
+
+#### 代码变更示例
+
+**重构前：**
+```csharp
+public class ReasoningDefinitionService : IReasoningDefinitionService
+{
+    private readonly IReasoningRepository _reasoningRepository;
+    
+    public async Task<ReasoningTransactionDefinition> CreateDefinitionAsync(...)
+    {
+        // 业务逻辑
+        return await _reasoningRepository.CreateDefinitionAsync(definition);
+    }
+}
+```
+
+**重构后：**
+```csharp
+public class ReasoningDefinitionService : IReasoningDefinitionService
+{
+    private readonly LiteDbContext _dbContext;
+    
+    public async Task<ReasoningTransactionDefinition> CreateDefinitionAsync(...)
+    {
+        // 业务逻辑
+        try
+        {
+            _dbContext.ReasoningDefinitions.Insert(definition);
+            return definition;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "创建推理事务定义失败: {DefinitionId}", definition.Id);
+            throw;
+        }
+    }
+}
+```
+
+### 设计考量
+
+#### 1. 为什么移除Repository层？
+- **YAGNI原则**：Repository层在当前场景下没有提供额外价值
+- **简化架构**：减少不必要的抽象层，让代码更直接
+- **职责明确**：每个服务已经有明确的数据访问职责
+
+#### 2. 何时需要Repository层？
+- **多数据源**：需要支持多种数据库时
+- **复杂查询**：需要复杂的数据访问逻辑时
+- **数据访问复用**：多个服务需要相同的数据访问逻辑时
+
+#### 3. 当前场景的适用性
+- **单一数据源**：只使用LiteDB
+- **简单查询**：主要是CRUD操作
+- **服务专用**：每个服务的数据访问逻辑相对独立
+
+### 编译验证
+
+重构完成后，整个解决方案编译成功，没有引入任何编译错误，证明重构的正确性。
+
 ## 总结
 
-本次重构成功地将庞大的 `ReasoningService` 拆分为多个职责明确的专门服务，大大提升了代码的可维护性和扩展性。通过依赖注入扩展方法，简化了服务配置，提升了开发体验。
+本次重构成功地将庞大的 `ReasoningService` 拆分为多个职责明确的专门服务，并进一步移除了不必要的Repository层，大大提升了代码的可维护性和架构的简洁性。通过依赖注入扩展方法，简化了服务配置，提升了开发体验。
 
-重构遵循了SOLID原则，特别是单一职责原则和开闭原则，为Inference模块的进一步发展奠定了良好的架构基础。同时保持了向后兼容性，确保现有功能不受影响。
+重构遵循了SOLID原则，特别是单一职责原则和YAGNI原则，为Inference模块的进一步发展奠定了良好的架构基础。同时保持了向后兼容性，确保现有功能不受影响。
 
-这次重构为ContentEngine项目的模块化架构提供了一个很好的范例，可以作为其他模块重构的参考。 
+这次重构为ContentEngine项目的模块化架构提供了一个很好的范例，展示了如何在保持功能完整性的同时，通过合理的架构设计来提升代码质量和开发效率。 

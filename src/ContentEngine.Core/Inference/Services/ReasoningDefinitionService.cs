@@ -1,5 +1,6 @@
 using ContentEngine.Core.Inference.Models;
 using ContentEngine.Core.Inference.Utils;
+using ContentEngine.Core.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace ContentEngine.Core.Inference.Services
@@ -9,14 +10,14 @@ namespace ContentEngine.Core.Inference.Services
     /// </summary>
     public class ReasoningDefinitionService : IReasoningDefinitionService
     {
-        private readonly IReasoningRepository _reasoningRepository;
+        private readonly LiteDbContext _dbContext;
         private readonly ILogger<ReasoningDefinitionService> _logger;
 
         public ReasoningDefinitionService(
-            IReasoningRepository reasoningRepository,
+            LiteDbContext dbContext,
             ILogger<ReasoningDefinitionService> logger)
         {
-            _reasoningRepository = reasoningRepository;
+            _dbContext = dbContext;
             _logger = logger;
         }
 
@@ -43,16 +44,36 @@ namespace ContentEngine.Core.Inference.Services
             definition.CreatedAt = DateTime.UtcNow;
             definition.UpdatedAt = DateTime.UtcNow;
 
-            await _reasoningRepository.CreateDefinitionAsync(definition);
-            _logger.LogInformation("创建推理事务定义: {DefinitionName} (ID: {DefinitionId})", definition.Name, definition.Id);
-
-            return definition;
+            try
+            {
+                _dbContext.ReasoningDefinitions.Insert(definition);
+                _logger.LogInformation("创建推理事务定义: {DefinitionName} (ID: {DefinitionId})", definition.Name, definition.Id);
+                return definition;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "创建推理事务定义失败: {DefinitionId}", definition.Id);
+                throw;
+            }
         }
 
         public async Task<List<ReasoningTransactionDefinition>> GetAllDefinitionsAsync(
             CancellationToken cancellationToken = default)
         {
-            return await _reasoningRepository.GetAllDefinitionsAsync();
+            try
+            {
+                var result = _dbContext.ReasoningDefinitions
+                    .Query()
+                    .OrderByDescending(x => x.CreatedAt)
+                    .ToList();
+                
+                return await Task.FromResult(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "获取所有推理事务定义失败");
+                throw;
+            }
         }
 
         public async Task<ReasoningTransactionDefinition?> GetDefinitionByIdAsync(
@@ -62,7 +83,20 @@ namespace ContentEngine.Core.Inference.Services
             if (string.IsNullOrWhiteSpace(definitionId))
                 return null;
 
-            return await _reasoningRepository.GetDefinitionByIdAsync(definitionId);
+            try
+            {
+                var result = _dbContext.ReasoningDefinitions
+                    .Query()
+                    .Where(x => x.Id == definitionId)
+                    .FirstOrDefault();
+                
+                return await Task.FromResult(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "获取推理事务定义失败: {DefinitionId}", definitionId);
+                throw;
+            }
         }
 
         public async Task<ReasoningTransactionDefinition> UpdateDefinitionAsync(
@@ -84,7 +118,18 @@ namespace ContentEngine.Core.Inference.Services
             }
 
             definition.UpdatedAt = DateTime.UtcNow;
-            return await _reasoningRepository.UpdateDefinitionAsync(definition);
+            
+            try
+            {
+                _dbContext.ReasoningDefinitions.Update(definition);
+                _logger.LogInformation("更新推理事务定义: {DefinitionName} (ID: {DefinitionId})", definition.Name, definition.Id);
+                return definition;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "更新推理事务定义失败: {DefinitionId}", definition.Id);
+                throw;
+            }
         }
 
         public async Task<bool> DeleteDefinitionAsync(
@@ -94,7 +139,35 @@ namespace ContentEngine.Core.Inference.Services
             if (string.IsNullOrWhiteSpace(definitionId))
                 return false;
 
-            return await _reasoningRepository.DeleteDefinitionAsync(definitionId);
+            try
+            {
+                // 首先检查是否有关联的实例
+                var hasInstances = _dbContext.ReasoningInstances
+                    .Query()
+                    .Where(x => x.DefinitionId == definitionId)
+                    .Exists();
+
+                if (hasInstances)
+                {
+                    throw new InvalidOperationException("无法删除存在关联实例的推理事务定义，请先删除相关实例");
+                }
+
+                // 使用条件删除
+                var deletedCount = _dbContext.ReasoningDefinitions.DeleteMany(x => x.Id == definitionId);
+                
+                if (deletedCount > 0)
+                {
+                    _logger.LogInformation("删除推理事务定义: {DefinitionId}", definitionId);
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "删除推理事务定义失败: {DefinitionId}", definitionId);
+                throw;
+            }
         }
 
         public async Task<DefinitionValidationResult> ValidateDefinitionAsync(

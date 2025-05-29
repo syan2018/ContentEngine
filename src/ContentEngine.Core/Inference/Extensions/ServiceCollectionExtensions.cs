@@ -15,9 +15,6 @@ namespace ContentEngine.Core.Inference.Extensions
         /// <returns>服务集合</returns>
         public static IServiceCollection AddInferenceServices(this IServiceCollection services)
         {
-            // 注册仓储服务
-            services.AddScoped<IReasoningRepository, ReasoningRepository>();
-
             // 注册Query处理服务
             services.AddScoped<IQueryProcessingService, QueryProcessingService>();
 
@@ -27,7 +24,6 @@ namespace ContentEngine.Core.Inference.Extensions
             services.AddScoped<IReasoningExecutionService, ReasoningExecutionService>();
             services.AddScoped<IReasoningEstimationService, ReasoningEstimationService>();
             services.AddScoped<IReasoningCombinationService, ReasoningCombinationService>();
-
 
             return services;
         }
@@ -39,9 +35,6 @@ namespace ContentEngine.Core.Inference.Extensions
         /// <returns>服务集合</returns>
         public static IServiceCollection AddInferenceCoreServices(this IServiceCollection services)
         {
-            // 注册仓储服务
-            services.AddScoped<IReasoningRepository, ReasoningRepository>();
-
             // 注册Query处理服务
             services.AddScoped<IQueryProcessingService, QueryProcessingService>();
 

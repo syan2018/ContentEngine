@@ -11,12 +11,12 @@ namespace ContentEngine.Core.Inference.Services
         /// <summary>
         /// 执行推理事务
         /// </summary>
-        /// <param name="definitionId">推理事务定义ID</param>
+        /// <param name="instanceId">推理事务定义ID</param>
         /// <param name="executionParams">执行参数</param>
         /// <param name="cancellationToken">取消令牌</param>
         /// <returns>推理事务实例</returns>
         Task<ReasoningTransactionInstance> ExecuteTransactionAsync(
-            string definitionId, 
+            string instanceId, 
             Dictionary<string, object>? executionParams = null, 
             CancellationToken cancellationToken = default);
 

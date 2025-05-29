@@ -1,4 +1,5 @@
 using ContentEngine.Core.Inference.Models;
+using ContentEngine.Core.Storage;
 using Microsoft.Extensions.Logging;
 
 namespace ContentEngine.Core.Inference.Services
@@ -8,16 +9,16 @@ namespace ContentEngine.Core.Inference.Services
     /// </summary>
     public class ReasoningInstanceService : IReasoningInstanceService
     {
-        private readonly IReasoningRepository _reasoningRepository;
+        private readonly LiteDbContext _dbContext;
         private readonly IReasoningDefinitionService _definitionService;
         private readonly ILogger<ReasoningInstanceService> _logger;
 
         public ReasoningInstanceService(
-            IReasoningRepository reasoningRepository,
+            LiteDbContext dbContext,
             IReasoningDefinitionService definitionService,
             ILogger<ReasoningInstanceService> logger)
         {
-            _reasoningRepository = reasoningRepository;
+            _dbContext = dbContext;
             _definitionService = definitionService;
             _logger = logger;
         }
@@ -40,10 +41,17 @@ namespace ContentEngine.Core.Inference.Services
                 StartedAt = DateTime.UtcNow
             };
 
-            await _reasoningRepository.CreateInstanceAsync(instance);
-            _logger.LogInformation("创建推理事务实例: {InstanceId} (定义: {DefinitionId})", instance.InstanceId, definitionId);
-
-            return instance;
+            try
+            {
+                _dbContext.ReasoningInstances.Insert(instance);
+                _logger.LogInformation("创建推理事务实例: {InstanceId} (定义: {DefinitionId})", instance.InstanceId, definitionId);
+                return instance;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "创建推理事务实例失败: {InstanceId}", instance.InstanceId);
+                throw;
+            }
         }
 
         public async Task<List<ReasoningTransactionInstance>> GetInstancesAsync(
@@ -51,7 +59,28 @@ namespace ContentEngine.Core.Inference.Services
             TransactionStatus? status = null, 
             CancellationToken cancellationToken = default)
         {
-            return await _reasoningRepository.GetInstancesAsync(definitionId, status);
+            try
+            {
+                var query = _dbContext.ReasoningInstances.Query();
+
+                if (!string.IsNullOrWhiteSpace(definitionId))
+                {
+                    query = query.Where(x => x.DefinitionId == definitionId);
+                }
+
+                if (status.HasValue)
+                {
+                    query = query.Where(x => x.Status == status.Value);
+                }
+
+                var result = query.OrderByDescending(x => x.StartedAt).ToList();
+                return await Task.FromResult(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "获取推理事务实例列表失败");
+                throw;
+            }
         }
 
         public async Task<ReasoningTransactionInstance?> GetInstanceByIdAsync(
@@ -61,7 +90,20 @@ namespace ContentEngine.Core.Inference.Services
             if (string.IsNullOrWhiteSpace(instanceId))
                 return null;
 
-            return await _reasoningRepository.GetInstanceByIdAsync(instanceId);
+            try
+            {
+                var result = _dbContext.ReasoningInstances
+                    .Query()
+                    .Where(x => x.InstanceId == instanceId)
+                    .FirstOrDefault();
+                
+                return await Task.FromResult(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "获取推理事务实例失败: {InstanceId}", instanceId);
+                throw;
+            }
         }
 
         public async Task<ReasoningTransactionInstance> UpdateInstanceAsync(
@@ -71,7 +113,17 @@ namespace ContentEngine.Core.Inference.Services
             if (instance == null)
                 throw new ArgumentNullException(nameof(instance));
 
-            return await _reasoningRepository.UpdateInstanceAsync(instance);
+            try
+            {
+                _dbContext.ReasoningInstances.Update(instance);
+                _logger.LogInformation("更新推理事务实例: {InstanceId}", instance.InstanceId);
+                return instance;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "更新推理事务实例失败: {InstanceId}", instance.InstanceId);
+                throw;
+            }
         }
 
         public async Task<bool> DeleteInstanceAsync(
@@ -81,7 +133,26 @@ namespace ContentEngine.Core.Inference.Services
             if (string.IsNullOrWhiteSpace(instanceId))
                 return false;
 
-            return await _reasoningRepository.DeleteInstanceAsync(instanceId);
+            try
+            {
+                // 使用条件删除
+                var deletedCount = _dbContext.ReasoningInstances.DeleteMany(x => x.InstanceId == instanceId);
+                
+                if (deletedCount > 0)
+                {
+                    _logger.LogInformation("删除推理事务实例: {InstanceId}", instanceId);
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "删除推理事务实例失败: {InstanceId}", instanceId);
+                throw;
+            }
+            // 考虑关联删除裸 Definition
+            
         }
 
         public async Task<InstanceProgressInfo> GetInstanceProgressAsync(

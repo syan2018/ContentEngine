@@ -645,8 +645,7 @@
         try
         {
             // 执行推理事务
-            // TODO: 重构为基于Instance
-            await ReasoningExecutionService.ExecuteTransactionAsync(definition.Id);
+            await ReasoningExecutionService.ExecuteTransactionAsync(instance.InstanceId);
             Snackbar.Add("任务已开始执行", Severity.Success);
             
             // 重新加载实例详情以获取最新状态和组合缓存
