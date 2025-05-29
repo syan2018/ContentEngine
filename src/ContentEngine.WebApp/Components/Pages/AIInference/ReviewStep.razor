@@ -1,4 +1,7 @@
 @using ContentEngine.Core.Inference.Models
+@using ContentEngine.WebApp.Components.Pages.AIInference.Shared
+
+<link href="Components/Pages/AIInference/Shared/AIInferenceStyles.css" rel="stylesheet" />
 
 <div class="review-step">
     <!-- 基本信息摘要 -->
@@ -24,26 +27,7 @@
                     @foreach (var query in Definition.QueryDefinitions)
                     {
                         <MudItem xs="12" md="6">
-                            <MudCard Outlined="true">
-                                <MudCardContent Class="pa-3">
-                                    <MudText Typo="Typo.subtitle1" Class="mb-2 font-weight-bold">@query.OutputViewName</MudText>
-                                    <div class="d-flex justify-space-between mb-1">
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">数据源:</MudText>
-                                        <MudText Typo="Typo.body2">@query.SourceSchemaName</MudText>
-                                    </div>
-                                    @if (!string.IsNullOrWhiteSpace(query.FilterExpression))
-                                    {
-                                        <div class="d-flex justify-space-between mb-1">
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary">筛选条件:</MudText>
-                                            <code class="small-code">@query.FilterExpression</code>
-                                        </div>
-                                    }
-                                    <div class="d-flex justify-space-between">
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">选择字段:</MudText>
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">@query.SelectFields.Count 个字段</MudChip>
-                                    </div>
-                                </MudCardContent>
-                            </MudCard>
+                            <QueryCard Query="@query" />
                         </MudItem>
                     }
                 </MudGrid>
@@ -63,45 +47,15 @@
                     
                     <MudGrid Spacing="4">
                         <MudItem xs="12" md="6">
-                            <MudCard Outlined="true">
-                                <MudCardContent Class="pa-3">
-                                    <MudText Typo="Typo.subtitle1" Class="mb-2">叉积视图</MudText>
-                                    @if (rule.ViewNamesToCrossProduct.Any())
-                                    {
-                                        <div class="d-flex flex-wrap gap-1">
-                                            @foreach (var viewName in rule.ViewNamesToCrossProduct)
-                                            {
-                                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">@viewName</MudChip>
-                                            }
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <MudText Typo="Typo.body2" Color="Color.Secondary">无</MudText>
-                                    }
-                                </MudCardContent>
-                            </MudCard>
+                            <CombinationOverviewCard Title="叉积视图" 
+                                                   ViewNames="@rule.ViewNamesToCrossProduct" 
+                                                   ChipColor="Color.Primary" />
                         </MudItem>
                         
                         <MudItem xs="12" md="6">
-                            <MudCard Outlined="true">
-                                <MudCardContent Class="pa-3">
-                                    <MudText Typo="Typo.subtitle1" Class="mb-2">单例上下文视图</MudText>
-                                    @if (rule.SingletonViewNamesForContext.Any())
-                                    {
-                                        <div class="d-flex flex-wrap gap-1">
-                                            @foreach (var viewName in rule.SingletonViewNamesForContext)
-                                            {
-                                                <MudChip T="string" Size="Size.Small" Color="Color.Info">@viewName</MudChip>
-                                            }
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <MudText Typo="Typo.body2" Color="Color.Secondary">无</MudText>
-                                    }
-                                </MudCardContent>
-                            </MudCard>
+                            <CombinationOverviewCard Title="单例上下文视图" 
+                                                   ViewNames="@rule.SingletonViewNamesForContext" 
+                                                   ChipColor="Color.Info" />
                         </MudItem>
                         
                         <MudItem xs="12">
@@ -167,33 +121,27 @@
                 
                 <MudGrid Spacing="3">
                     <MudItem xs="12" md="4">
-                        <MudCard Outlined="true">
-                            <MudCardContent Class="pa-3 text-center">
-                                <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Color="Color.Success" Class="mb-2" />
-                                <MudText Typo="Typo.h6" Color="Color.Success">$@Definition.ExecutionConstraints.MaxEstimatedCostUSD</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">最大成本限制</MudText>
-                            </MudCardContent>
-                        </MudCard>
+                        <ConstraintCard Icon="@Icons.Material.Filled.AttachMoney"
+                                      IconColor="Color.Success"
+                                      Value="@($"${Definition.ExecutionConstraints.MaxEstimatedCostUSD}")"
+                                      ValueColor="Color.Success"
+                                      Label="最大成本限制" />
                     </MudItem>
                     
                     <MudItem xs="12" md="4">
-                        <MudCard Outlined="true">
-                            <MudCardContent Class="pa-3 text-center">
-                                <MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Info" Class="mb-2" />
-                                <MudText Typo="Typo.h6" Color="Color.Info">@Definition.ExecutionConstraints.MaxExecutionTimeMinutes</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">最大执行时间（分钟）</MudText>
-                            </MudCardContent>
-                        </MudCard>
+                        <ConstraintCard Icon="@Icons.Material.Filled.Timer"
+                                      IconColor="Color.Info"
+                                      Value="@Definition.ExecutionConstraints.MaxExecutionTimeMinutes.ToString()"
+                                      ValueColor="Color.Info"
+                                      Label="最大执行时间（分钟）" />
                     </MudItem>
                     
                     <MudItem xs="12" md="4">
-                        <MudCard Outlined="true">
-                            <MudCardContent Class="pa-3 text-center">
-                                <MudIcon Icon="@Icons.Material.Filled.Speed" Color="Color.Warning" Class="mb-2" />
-                                <MudText Typo="Typo.h6" Color="Color.Warning">@Definition.ExecutionConstraints.MaxConcurrentAICalls</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">最大并发调用数</MudText>
-                            </MudCardContent>
-                        </MudCard>
+                        <ConstraintCard Icon="@Icons.Material.Filled.Speed"
+                                      IconColor="Color.Warning"
+                                      Value="@Definition.ExecutionConstraints.MaxConcurrentAICalls.ToString()"
+                                      ValueColor="Color.Warning"
+                                      Label="最大并发调用数" />
                     </MudItem>
                     
                     <MudItem xs="12">
@@ -254,29 +202,6 @@
         </MudCardContent>
     </MudCard>
 </div>
-
-<style>
-.small-code {
-    font-family: 'Courier New', monospace;
-    font-size: 0.75rem;
-    background-color: var(--mud-palette-surface);
-    padding: 2px 4px;
-    border-radius: 3px;
-}
-
-.prompt-template {
-    white-space: pre-wrap;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    line-height: 1.6;
-    margin: 0;
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.execution-estimate {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-}
-</style>
 
 @code {
     [Parameter] public ReasoningTransactionDefinition Definition { get; set; } = new();

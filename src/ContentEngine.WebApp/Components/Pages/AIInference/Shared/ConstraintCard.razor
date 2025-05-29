@@ -1,0 +1,17 @@
+@using MudBlazor
+
+<MudCard Outlined="true" Class="constraint-card hover-card">
+    <MudCardContent Class="pa-3 text-center">
+        <MudIcon Icon="@Icon" Color="@IconColor" Class="mb-2" />
+        <MudText Typo="Typo.h6" Color="@ValueColor">@Value</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@Label</MudText>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter] public string Icon { get; set; } = Icons.Material.Filled.Settings;
+    [Parameter] public Color IconColor { get; set; } = Color.Default;
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public Color ValueColor { get; set; } = Color.Default;
+    [Parameter] public string Label { get; set; } = string.Empty;
+} 

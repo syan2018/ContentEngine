@@ -4,6 +4,9 @@
 @using ContentEngine.Core.DataPipeline.Services
 @inject ISchemaDefinitionService SchemaService
 @inject IDataEntryService DataService
+@using ContentEngine.WebApp.Components.Pages.AIInference.Shared
+
+<link href="Components/Pages/AIInference/Shared/AIInferenceStyles.css" rel="stylesheet" />
 
 <div class="prompt-template-step">
     <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="mb-4">
@@ -112,7 +115,7 @@
                     if (query != null)
                     {
                         <MudItem xs="12" md="6">
-                            <MudCard Outlined="true">
+                            <MudCard Outlined="true" Class="query-card">
                                 <MudCardHeader Class="py-2">
                                     <CardHeaderContent>
                                         <MudText Typo="Typo.subtitle1">@viewName</MudText>
@@ -162,27 +165,6 @@
         </MudAlert>
     }
 </div>
-
-<style>
-.font-mono {
-    font-family: 'Courier New', monospace;
-}
-
-.field-reference {
-    background-color: var(--mud-palette-surface);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.875rem;
-    border: 1px solid var(--mud-palette-divider);
-}
-
-.preview-content {
-    white-space: pre-wrap;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    line-height: 1.6;
-    margin: 0;
-}
-</style>
 
 @code {
     [Parameter] public ReasoningTransactionDefinition Definition { get; set; } = new();

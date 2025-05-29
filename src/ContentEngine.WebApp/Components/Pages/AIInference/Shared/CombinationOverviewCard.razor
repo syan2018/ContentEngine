@@ -1,0 +1,26 @@
+@using MudBlazor
+
+<MudCard Outlined="true" Class="combination-overview hover-card">
+    <MudCardContent Class="pa-3">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@Title</MudText>
+        @if (ViewNames?.Any() == true)
+        {
+            <div class="d-flex flex-wrap gap-1">
+                @foreach (var viewName in ViewNames)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@ChipColor">@viewName</MudChip>
+                }
+            </div>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">无</MudText>
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public List<string>? ViewNames { get; set; }
+    [Parameter] public Color ChipColor { get; set; } = Color.Primary;
+} 

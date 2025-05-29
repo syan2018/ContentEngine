@@ -1,0 +1,14 @@
+@using MudBlazor
+
+<MudCard Outlined="true" Class="stat-card text-center">
+    <MudCardContent Class="pa-3">
+        <MudText Typo="Typo.h5" Color="@ValueColor">@Value</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@Label</MudText>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public Color ValueColor { get; set; } = Color.Default;
+    [Parameter] public string Label { get; set; } = string.Empty;
+} 

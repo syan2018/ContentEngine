@@ -1,0 +1,156 @@
+@using MudBlazor
+@using LiteDB
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+@using ContentEngine.WebApp.Components.Pages.AIInference.Shared
+
+<link href="Components/Pages/AIInference/Shared/AIInferenceStyles.css" rel="stylesheet" />
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Class="pa-0">
+            <MudStack Spacing="4">
+                <!-- 头部信息 -->
+                <div>
+                    <MudText Typo="Typo.h6" Class="mb-2">AI生成结果</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        组合ID: <code class="combination-id">@CombinationId</code>
+                    </MudText>
+                </div>
+
+                <MudDivider />
+
+                <!-- 输入数据 -->
+                @if (InputData?.Any() == true)
+                {
+                    <div>
+                        <MudText Typo="Typo.subtitle1" Class="mb-2 d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Input" Class="mr-2" Color="Color.Info" />
+                            输入数据
+                        </MudText>
+                        
+                        <MudGrid Spacing="2">
+                            @foreach (var kvp in InputData)
+                            {
+                                <MudItem xs="12" sm="6" md="4">
+                                    <MudCard Outlined="true" Class="pa-2">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@kvp.Key</MudText>
+                                        <MudText Typo="Typo.body2" Class="font-weight-medium">
+                                            @(kvp.Value?.ToString() ?? "null")
+                                        </MudText>
+                                    </MudCard>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </div>
+                }
+
+                <!-- 生成内容 -->
+                <div>
+                    <div class="d-flex justify-space-between align-center mb-2">
+                        <MudText Typo="Typo.subtitle1" Class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="mr-2" Color="Color.Primary" />
+                            生成内容
+                        </MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" 
+                                      OnClick="CopyContent" 
+                                      Size="Size.Small"
+                                      Title="复制内容" />
+                    </div>
+                    
+                    <MudPaper Class="pa-4 result-content" Outlined="true">
+                        <MudText Typo="Typo.body2" Class="result-text" Style="white-space: pre-wrap; line-height: 1.6;">
+                            @Content
+                        </MudText>
+                    </MudPaper>
+                </div>
+
+                <!-- 统计信息 -->
+                @if (Cost.HasValue || GeneratedAt.HasValue)
+                {
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">统计信息</MudText>
+                        <MudGrid Spacing="2">
+                            @if (Cost.HasValue)
+                            {
+                                <MudItem xs="6">
+                                    <div class="d-flex align-center">
+                                        <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Color="Color.Success" Size="Size.Small" Class="mr-1" />
+                                        <MudText Typo="Typo.body2">成本: $@Cost.Value.ToString("F3")</MudText>
+                                    </div>
+                                </MudItem>
+                            }
+                            @if (GeneratedAt.HasValue)
+                            {
+                                <MudItem xs="6">
+                                    <div class="d-flex align-center">
+                                        <MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Info" Size="Size.Small" Class="mr-1" />
+                                        <MudText Typo="Typo.body2">生成时间: @GeneratedAt.Value.ToString("MM-dd HH:mm")</MudText>
+                                    </div>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </div>
+                }
+            </MudStack>
+        </MudContainer>
+    </DialogContent>
+    
+    <DialogActions>
+        <MudButton OnClick="Cancel">关闭</MudButton>
+        <MudButton Color="Color.Primary" 
+                  Variant="Variant.Filled" 
+                  StartIcon="@Icons.Material.Filled.ContentCopy"
+                  OnClick="CopyContent">
+            复制内容
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.combination-id {
+    font-family: 'Courier New', monospace;
+    background-color: var(--mud-palette-surface);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+}
+
+.result-content {
+    background-color: #f8f9fa;
+    border-left: 4px solid var(--mud-palette-primary);
+}
+
+.result-text {
+    font-style: italic;
+    line-height: 1.6;
+}
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter] public string Content { get; set; } = string.Empty;
+    [Parameter] public string CombinationId { get; set; } = string.Empty;
+    [Parameter] public Dictionary<string, object>? InputData { get; set; }
+    [Parameter] public decimal? Cost { get; set; }
+    [Parameter] public DateTime? GeneratedAt { get; set; }
+
+    private async Task CopyContent()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", Content);
+            Snackbar.Add("内容已复制到剪贴板", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("复制失败，请手动选择并复制", Severity.Warning);
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+} 
