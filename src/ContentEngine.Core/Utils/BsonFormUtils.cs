@@ -132,6 +132,38 @@ public static class BsonFormUtils
         }
         return "(not found)";
     }
+    
+    /// <summary>
+    /// 安全地将 BsonValue 转换为字符串，处理各种类型包括 ObjectId
+    /// </summary>
+    public static string GetSafeBsonValueAsString(BsonValue? bsonValue)
+    {
+        if (bsonValue == null || bsonValue.IsNull)
+            return "[null]";
+
+        try
+        {
+            return bsonValue.Type switch
+            {
+                BsonType.ObjectId => bsonValue.AsObjectId.ToString(),
+                BsonType.String => bsonValue.AsString,
+                BsonType.Int32 => bsonValue.AsInt32.ToString(),
+                BsonType.Int64 => bsonValue.AsInt64.ToString(),
+                BsonType.Double => bsonValue.AsDouble.ToString("F2"),
+                BsonType.Decimal => bsonValue.AsDecimal.ToString("F2"),
+                BsonType.Boolean => bsonValue.AsBoolean.ToString(),
+                BsonType.DateTime => bsonValue.AsDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                BsonType.Array => "[Array]",
+                BsonType.Document => "[Document]",
+                _ => bsonValue.RawValue?.ToString() ?? "[unknown]"
+            };
+        }
+        catch (Exception)
+        {
+            // 如果转换失败，返回原始值的字符串表示
+            return bsonValue.RawValue?.ToString() ?? "[error]";
+        }
+    }
 
     /// <summary>
     /// Gets a stable string key for a BsonDocument entry, typically its _id field.

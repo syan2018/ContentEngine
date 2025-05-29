@@ -1,12 +1,11 @@
 @page "/ai-inference/detail/{TaskId}"
 @using ContentEngine.Core.Inference.Services
 @using ContentEngine.Core.Inference.Models
-@using ContentEngine.Core.DataPipeline.Services
-@using ContentEngine.Core.DataPipeline.Models
-@using ContentEngine.Core.AI.Services
+@using ContentEngine.Core.Utils
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Cards
+@using LiteDB
 @inject IReasoningService ReasoningService
 @inject ISchemaDefinitionService SchemaService
 @inject IDataEntryService DataService
@@ -630,13 +629,14 @@
             foreach (var field in doc)
             {
                 var placeholder = "{{" + viewName + "." + field.Key + "}}";
-                var value = field.Value?.AsString ?? "[null]";
+                var value = BsonFormUtils.GetSafeBsonValueAsString(field.Value);
                 content = content.Replace(placeholder, value);
             }
         }
         
         return content;
     }
+    
 
     private async Task ExecuteTask()
     {
