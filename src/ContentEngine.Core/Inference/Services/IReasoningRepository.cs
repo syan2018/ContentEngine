@@ -1,6 +1,6 @@
 using ContentEngine.Core.Inference.Models;
 
-namespace ContentEngine.Core.Storage
+namespace ContentEngine.Core.Inference.Services
 {
     /// <summary>
     /// 推理相关数据的仓储接口

@@ -1,8 +1,9 @@
 using ContentEngine.Core.Inference.Models;
 using LiteDB;
+using ContentEngine.Core.Storage;
 using Microsoft.Extensions.Logging;
 
-namespace ContentEngine.Core.Storage
+namespace ContentEngine.Core.Inference.Services
 {
     /// <summary>
     /// 推理相关数据的仓储实现

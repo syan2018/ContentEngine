@@ -21,8 +21,7 @@ builder.Services.AddLocalization(options => options.ResourcesPath = "Resources")
 // 注册 LiteDB 上下文为单例服务
 builder.Services.AddSingleton<LiteDbContext>();
 
-// 注册推理仓储服务
-builder.Services.AddScoped<ContentEngine.Core.Storage.IReasoningRepository, ContentEngine.Core.Storage.ReasoningRepository>();
+
 
 // 注册 Schema 管理服务 (可以使用 Scoped 或 Transient)
 builder.Services.AddScoped<ISchemaDefinitionService, SchemaDefinitionService>();
@@ -42,6 +41,9 @@ builder.Services.AddHttpClient<IFileConversionService, FileConversionService>();
 
 // 注册数据结构化服务
 builder.Services.AddScoped<IDataStructuringService, DataStructuringService>();
+
+// 注册推理仓储服务
+builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IReasoningRepository, ContentEngine.Core.Inference.Services.ReasoningRepository>();
 
 // 注册Prompt执行服务
 builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IPromptExecutionService, ContentEngine.Core.AI.Services.PromptExecutionService>();
