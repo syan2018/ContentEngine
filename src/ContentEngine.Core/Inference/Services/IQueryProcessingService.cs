@@ -2,7 +2,7 @@ using ContentEngine.Core.Inference.Models;
 using ContentEngine.Core.DataPipeline.Models;
 using LiteDB;
 
-namespace ContentEngine.Core.AI.Services;
+namespace ContentEngine.Core.Inference.Services;
 
 /// <summary>
 /// Query处理服务接口

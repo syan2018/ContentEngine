@@ -17,7 +17,7 @@
 
 <link href="Shared/AIInferenceStyles.css" rel="stylesheet" />
 
-<PageTitle>@(definition?.Name ?? "推理任务详情") - ContentEngine</PageTitle>
+<PageTitle>@(definition?.Name ?? "推理实例详情") - ContentEngine</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
     <MudBreadcrumbs Items="breadcrumbItems" Class="mb-4" />
@@ -28,10 +28,10 @@
             <MudProgressCircular Indeterminate="true" Size="Size.Large" />
         </div>
     }
-    else if (definition == null)
+    else if (instance == null)
     {
         <MudAlert Severity="Severity.Error">
-            推理任务不存在或已被删除
+            推理实例不存在或已被删除
         </MudAlert>
     }
     else
@@ -41,20 +41,19 @@
             <MudCardContent Class="pa-4">
                 <MudGrid Spacing="3" AlignItems="Center.Center">
                     <MudItem xs="12" md="8">
-                        <MudText Typo="Typo.h4" Class="mb-2">@definition.Name</MudText>
-                        <MudText Typo="Typo.body1" Class="mb-3">@definition.Description</MudText>
+                        <MudText Typo="Typo.h4" Class="mb-2">@(definition?.Name ?? "未知任务")</MudText>
+                        <MudText Typo="Typo.body1" Class="mb-3">@(definition?.Description ?? "无描述")</MudText>
                         <div class="d-flex flex-wrap gap-2">
-                            @if (latestInstance != null)
-                            {
-                                @GetStatusBadge(latestInstance.Status)
-                            }
-                            else
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Default">未执行</MudChip>
-                            }
+                            @GetStatusBadge(instance.Status)
                             <MudChip T="string" Size="Size.Small" Color="Color.Inherit">
-                                ID: @definition.Id[..8]...
+                                实例ID: @instance.InstanceId[..8]...
                             </MudChip>
+                            @if (definition != null)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Secondary">
+                                    定义ID: @definition.Id[..8]...
+                                </MudChip>
+                            }
                         </div>
                     </MudItem>
                     
@@ -196,6 +195,21 @@
                     <div class="d-flex align-center justify-space-between mb-4">
                         <div class="d-flex align-center gap-3">
                             <MudText Typo="Typo.h6">输入组合列表</MudText>
+                            @if (realTimeCombinations?.Any() == true)
+                            {
+                                @if (instance?.InputCombinations?.Any() == true && instance.InputCombinations.Count == realTimeCombinations.Count)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">
+                                        已缓存
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">
+                                        临时生成
+                                    </MudChip>
+                                }
+                            }
                             <MudButton Variant="Variant.Outlined" 
                                       StartIcon="@Icons.Material.Filled.Refresh"
                                       OnClick="RefreshCombinations"
@@ -306,9 +320,9 @@
                         </MudCardContent>
                     </MudCard>
                     
-                    @if (latestInstance?.InputCombinations?.Any() == true)
+                    @if (instance?.InputCombinations?.Any() == true)
                     {
-                        var sampleCombination = latestInstance.InputCombinations.FirstOrDefault();
+                        var sampleCombination = instance.InputCombinations.FirstOrDefault();
                         if (sampleCombination != null)
                         {
                             <MudText Typo="Typo.h6" Class="mb-3">样例Prompt（基于第一个组合）</MudText>
@@ -324,7 +338,7 @@
             
             <MudTabPanel Text="执行结果" Icon="@Icons.Material.Filled.Assessment">
                 <div class="pa-4">
-                    @if (latestInstance != null)
+                    @if (instance != null)
                     {
                         <MudGrid Spacing="4">
                             <!-- 执行统计 -->
@@ -333,25 +347,25 @@
                                 
                                 <MudGrid Spacing="3">
                                     <MudItem xs="12" md="3">
-                                        <StatCard Value="@latestInstance.InputCombinations.Count.ToString()"
+                                        <StatCard Value="@instance.InputCombinations.Count.ToString()"
                                                 ValueColor="Color.Primary"
                                                 Label="总组合数" />
                                     </MudItem>
                                     
                                     <MudItem xs="12" md="3">
-                                        <StatCard Value="@latestInstance.Metrics.SuccessfulOutputs.ToString()"
+                                        <StatCard Value="@instance.Metrics.SuccessfulOutputs.ToString()"
                                                 ValueColor="Color.Success"
                                                 Label="已完成" />
                                     </MudItem>
                                     
                                     <MudItem xs="12" md="3">
-                                        <StatCard Value="@($"${latestInstance.Metrics.ActualCostUSD:F2}")"
+                                        <StatCard Value="@($"${instance.Metrics.ActualCostUSD:F2}")"
                                                 ValueColor="Color.Success"
                                                 Label="实际成本" />
                                     </MudItem>
                                     
                                     <MudItem xs="12" md="3">
-                                        <StatCard Value="@($"{latestInstance.Metrics.ElapsedTime.TotalMinutes:F1} min")"
+                                        <StatCard Value="@($"{instance.Metrics.ElapsedTime.TotalMinutes:F1} min")"
                                                 ValueColor="Color.Info"
                                                 Label="执行时间" />
                                     </MudItem>
@@ -363,7 +377,7 @@
                                 <MudText Typo="Typo.h6" Class="mb-3">生成内容预览</MudText>
                                 
                                 @{
-                                    var completedOutputs = latestInstance.Outputs
+                                    var completedOutputs = instance.Outputs
                                         .Where(o => o.IsSuccess && !string.IsNullOrWhiteSpace(o.GeneratedText))
                                         .Take(3)
                                         .ToList();
@@ -374,7 +388,7 @@
                                     <MudGrid Spacing="3">
                                         @foreach (var output in completedOutputs)
                                         {
-                                            var combination = latestInstance.InputCombinations.FirstOrDefault(c => c.CombinationId == output.InputCombinationId);
+                                            var combination = instance.InputCombinations.FirstOrDefault(c => c.CombinationId == output.InputCombinationId);
                                             <MudItem xs="12" md="4">
                                                 <MudCard Outlined="true" Class="hover-card">
                                                     <MudCardHeader>
@@ -397,13 +411,13 @@
                                         }
                                     </MudGrid>
                                     
-                                    @if (latestInstance.Metrics.SuccessfulOutputs > 3)
+                                    @if (instance.Metrics.SuccessfulOutputs > 3)
                                     {
                                         <div class="text-center mt-4">
                                             <MudButton Variant="Variant.Outlined" 
                                                       OnClick="() => activeTab = 1"
                                                       StartIcon="@Icons.Material.Filled.DataArray">
-                                                查看所有结果（@latestInstance.Metrics.SuccessfulOutputs 个）
+                                                查看所有结果（@instance.Metrics.SuccessfulOutputs 个）
                                             </MudButton>
                                         </div>
                                     }
@@ -501,9 +515,9 @@
 @code {
     [Parameter] public string TaskId { get; set; } = string.Empty;
     
+    private ReasoningTransactionInstance? instance;
     private ReasoningTransactionDefinition? definition;
-    private ReasoningTransactionInstance? latestInstance;
-    private List<ReasoningTransactionInstance> instances = new();
+    private List<ReasoningTransactionInstance> allInstances = new();
     private bool isLoading = true;
     private bool isExecuting = false;
     private int activeTab = 0;
@@ -515,32 +529,50 @@
     {
         new("首页", href: "/"),
         new("AI推理", href: "/ai-inference"),
-        new("任务详情", href: null, disabled: true)
+        new("实例详情", href: null, disabled: true)
     };
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadTaskDetail();
+        await LoadInstanceDetail();
     }
 
-    private async Task LoadTaskDetail()
+    private async Task LoadInstanceDetail()
     {
         isLoading = true;
         try
         {
-            definition = await ReasoningService.GetDefinitionByIdAsync(TaskId);
-            if (definition != null)
+            // TaskId 现在是 instanceId
+            instance = await ReasoningService.GetInstanceByIdAsync(TaskId);
+            
+            if (instance != null)
             {
-                instances = await ReasoningService.GetInstancesAsync(definition.Id);
-                latestInstance = instances.OrderByDescending(i => i.StartedAt).FirstOrDefault();
+                // 加载关联的定义
+                definition = await ReasoningService.GetDefinitionByIdAsync(instance.DefinitionId);
+                
+                // 加载所有相关实例（用于历史记录等）
+                allInstances = await ReasoningService.GetInstancesAsync(instance.DefinitionId);
+                
+                // 检查实例是否已经有缓存的组合，如果有就直接使用
+                if (instance.InputCombinations?.Any() == true)
+                {
+                    realTimeCombinations = instance.InputCombinations;
+                    Console.WriteLine($"[INFO] 使用实例缓存的输入组合: {realTimeCombinations.Count} 个");
+                }
+                else
+                {
+                    // 如果没有缓存的组合，清空 realTimeCombinations
+                    realTimeCombinations.Clear();
+                }
                 
                 // 更新面包屑
-                breadcrumbItems[2] = new BreadcrumbItem(definition.Name, href: null, disabled: true);
+                var displayName = definition?.Name ?? $"实例 {instance.InstanceId[..8]}...";
+                breadcrumbItems[2] = new BreadcrumbItem(displayName, href: null, disabled: true);
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"加载任务详情失败: {ex.Message}", Severity.Error);
+            Snackbar.Add($"加载实例详情失败: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -550,7 +582,7 @@
 
     private ReasoningOutputItem? GetOutputForCombination(string combinationId)
     {
-        return latestInstance?.Outputs.FirstOrDefault(o => o.InputCombinationId == combinationId);
+        return instance?.Outputs.FirstOrDefault(o => o.InputCombinationId == combinationId);
     }
 
     private string GetDocumentSummary(LiteDB.BsonDocument doc)
@@ -608,14 +640,17 @@
 
     private async Task ExecuteTask()
     {
-        if (definition == null) return;
+        if (definition == null || instance == null) return;
         
         isExecuting = true;
         try
         {
+            // 执行推理事务
             await ReasoningService.ExecuteTransactionAsync(definition.Id);
             Snackbar.Add("任务已开始执行", Severity.Success);
-            await LoadTaskDetail();
+            
+            // 重新加载实例详情以获取最新状态和组合缓存
+            await LoadInstanceDetail();
         }
         catch (Exception ex)
         {
@@ -633,7 +668,7 @@
         
         try
         {
-            // 创建副本
+            // 创建副本 - 基于当前实例关联的定义
             var copy = new ReasoningTransactionDefinition
             {
                 Name = $"{definition.Name} - 副本",
@@ -656,8 +691,20 @@
             };
             
             var created = await ReasoningService.CreateDefinitionAsync(copy);
-            Snackbar.Add("任务已复制", Severity.Success);
-            Navigation.NavigateTo($"/ai-inference/detail/{created.Id}");
+            
+            // 获取新创建定义的默认实例
+            var newInstances = await ReasoningService.GetInstancesAsync(created.Id);
+            var newInstance = newInstances.FirstOrDefault();
+            
+            if (newInstance != null)
+            {
+                Snackbar.Add("任务已复制", Severity.Success);
+                Navigation.NavigateTo($"/ai-inference/detail/{newInstance.InstanceId}");
+            }
+            else
+            {
+                Snackbar.Add("任务复制成功，但无法定位新实例", Severity.Warning);
+            }
         }
         catch (Exception ex)
         {
@@ -707,13 +754,21 @@
 
     private async Task RefreshCombinations()
     {
-        if (definition == null) return;
+        if (definition == null || instance == null) return;
         
         isLoadingCombinations = true;
         try
         {
+            // 重新生成输入组合
             realTimeCombinations = await ReasoningService.GenerateInputCombinationsAsync(definition.Id);
-            Snackbar.Add("输入组合已重新生成", Severity.Success);
+            
+            // 将生成的组合保存到实例中
+            instance.InputCombinations = realTimeCombinations;
+            
+            // 更新实例到数据库以保存缓存的组合
+            await ReasoningService.UpdateInstanceAsync(instance);
+            
+            Snackbar.Add($"输入组合已重新生成并缓存: {realTimeCombinations.Count} 个", Severity.Success);
         }
         catch (Exception ex)
         {
@@ -728,39 +783,48 @@
     private async Task ExecuteCombination(ReasoningInputCombination combination)
     {
         if (definition == null) return;
+        if (instance == null)
+        {
+            Snackbar.Add("没有可用的执行实例来执行此组合。请先执行一次完整任务。", Severity.Warning);
+            return;
+        }
         
         try
         {
-            await ReasoningService.ExecuteCombinationAsync(definition.Id, combination.CombinationId);
-            Snackbar.Add("组合已执行", Severity.Success);
-            await LoadTaskDetail();
+            // 使用 instance.InstanceId
+            var outputItem = await ReasoningService.ExecuteCombinationAsync(instance.InstanceId, combination.CombinationId);
+            // 根据 outputItem 更新UI或给出提示，例如显示结果或确认执行
+            Snackbar.Add($"组合 {combination.CombinationId} 已执行，结果: {(outputItem.IsSuccess ? "成功" : "失败")}", outputItem.IsSuccess ? Severity.Success : Severity.Error);
+            // 可能需要重新加载实例详情或部分数据以反映此独立执行的结果（如果服务层支持保存独立执行的输出）
+            // 如果 ExecuteCombinationAsync 的结果需要被持久化，当前服务层实现并未包含此逻辑，需要额外处理
+            await LoadInstanceDetail(); // 重新加载以获取最新状态
         }
         catch (Exception ex)
-        {
-            Snackbar.Add($"执行组合失败: {ex.Message}", Severity.Error);
-        }
+        { Snackbar.Add($"执行组合失败: {ex.Message}", Severity.Error); }
     }
 
     private async Task PreviewCombinationData(ReasoningInputCombination combination)
     {
         if (definition == null) return;
+        if (instance == null)
+        {
+            Snackbar.Add("没有可用的执行实例来预览此组合的输出。", Severity.Warning);
+            return;
+        }
         
         try
         {
-            var output = await ReasoningService.GetOutputForCombinationAsync(definition.Id, combination.CombinationId);
+            // 使用 instance.InstanceId
+            var output = await ReasoningService.GetOutputForCombinationAsync(instance.InstanceId, combination.CombinationId);
             if (output != null)
             {
                 await ShowCombinationResult(combination, output);
             }
             else
-            {
-                Snackbar.Add("无法获取组合输出", Severity.Warning);
-            }
+            { Snackbar.Add("未找到该组合的输出结果。可能尚未执行或执行未产生输出。", Severity.Info); }
         }
         catch (Exception ex)
-        {
-            Snackbar.Add($"预览组合数据失败: {ex.Message}", Severity.Error);
-        }
+        { Snackbar.Add($"预览组合数据失败: {ex.Message}", Severity.Error); }
     }
 
     private async Task ShowPromptPreview(string promptContent)

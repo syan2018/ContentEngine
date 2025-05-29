@@ -21,6 +21,9 @@ builder.Services.AddLocalization(options => options.ResourcesPath = "Resources")
 // 注册 LiteDB 上下文为单例服务
 builder.Services.AddSingleton<LiteDbContext>();
 
+// 注册推理仓储服务
+builder.Services.AddScoped<ContentEngine.Core.Storage.IReasoningRepository, ContentEngine.Core.Storage.ReasoningRepository>();
+
 // 注册 Schema 管理服务 (可以使用 Scoped 或 Transient)
 builder.Services.AddScoped<ISchemaDefinitionService, SchemaDefinitionService>();
 
@@ -47,7 +50,7 @@ builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IPromptExecutio
 builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IReasoningService, ContentEngine.Core.Inference.Services.ReasoningService>();
 
 // 注册Query处理服务
-builder.Services.AddScoped<ContentEngine.Core.AI.Services.IQueryProcessingService, ContentEngine.Core.AI.Services.QueryProcessingService>();
+builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IQueryProcessingService, ContentEngine.Core.Inference.Services.QueryProcessingService>();
 
 // 2. 配置请求本地化选项 (可选，但推荐)
 builder.Services.Configure<RequestLocalizationOptions>(options =>
@@ -64,6 +67,7 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 });
 
 var app = builder.Build();
+
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

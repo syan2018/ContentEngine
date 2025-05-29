@@ -5,7 +5,7 @@ using ContentEngine.Core.Storage;
 using LiteDB;
 using Microsoft.Extensions.Logging;
 
-namespace ContentEngine.Core.AI.Services;
+namespace ContentEngine.Core.Inference.Services;
 
 /// <summary>
 /// Query处理服务实现

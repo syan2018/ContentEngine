@@ -117,6 +117,14 @@ namespace ContentEngine.Core.Inference.Services
         Task<ReasoningTransactionInstance?> GetInstanceByIdAsync(string instanceId, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 更新推理事务实例
+        /// </summary>
+        /// <param name="instance">推理事务实例</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>更新后的推理事务实例</returns>
+        Task<ReasoningTransactionInstance> UpdateInstanceAsync(ReasoningTransactionInstance instance, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 删除推理事务实例
         /// </summary>
         /// <param name="instanceId">实例ID</param>
@@ -177,22 +185,22 @@ namespace ContentEngine.Core.Inference.Services
         Task<List<ReasoningInputCombination>> GenerateInputCombinationsAsync(string definitionId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 执行单个组合
+        /// 执行指定推理实例中的单个组合
         /// </summary>
-        /// <param name="definitionId">推理事务定义ID</param>
+        /// <param name="instanceId">推理事务实例ID</param>
         /// <param name="combinationId">组合ID</param>
         /// <param name="cancellationToken">取消令牌</param>
         /// <returns>执行结果</returns>
-        Task<ReasoningOutputItem> ExecuteCombinationAsync(string definitionId, string combinationId, CancellationToken cancellationToken = default);
+        Task<ReasoningOutputItem> ExecuteCombinationAsync(string instanceId, string combinationId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 获取组合的输出结果
+        /// 获取指定推理实例中组合的输出结果
         /// </summary>
-        /// <param name="definitionId">推理事务定义ID</param>
+        /// <param name="instanceId">推理事务实例ID</param>
         /// <param name="combinationId">组合ID</param>
         /// <param name="cancellationToken">取消令牌</param>
         /// <returns>输出结果，如果不存在返回null</returns>
-        Task<ReasoningOutputItem?> GetOutputForCombinationAsync(string definitionId, string combinationId, CancellationToken cancellationToken = default);
+        Task<ReasoningOutputItem?> GetOutputForCombinationAsync(string instanceId, string combinationId, CancellationToken cancellationToken = default);
 
         #endregion
     }

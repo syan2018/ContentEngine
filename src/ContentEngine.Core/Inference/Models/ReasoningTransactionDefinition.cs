@@ -12,6 +12,7 @@ namespace ContentEngine.Core.Inference.Models
         /// <summary>
         /// 推理事务定义的唯一标识符
         /// </summary>
+        [BsonId]
         public string Id { get; set; } = Guid.NewGuid().ToString();
 
         /// <summary>

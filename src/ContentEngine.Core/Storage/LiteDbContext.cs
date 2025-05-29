@@ -18,6 +18,12 @@ public class LiteDbContext : IDisposable
     private const string ReasoningDefinitionsCollectionName = "_reasoningDefinitions";
     private const string ReasoningInstancesCollectionName = "_reasoningInstances";
 
+    // 静态构造函数确保 LiteDB 映射配置只执行一次
+    static LiteDbContext()
+    {
+        ConfigureGlobalMappings();
+    }
+
     public LiteDbContext(IConfiguration configuration)
     {
         // 从配置中读取数据库路径，如果未配置则使用默认值
@@ -77,10 +83,17 @@ public class LiteDbContext : IDisposable
 
     private void ConfigureMappings()
     {
-        var mapper = BsonMapper.Global;
-        // 如果需要，可以在这里添加自定义的类型映射
-        // 例如: mapper.Entity<SchemaDefinition>().Id(x => x.Id);
-        // 对于简单场景，LiteDB 的默认映射通常足够
+        // 全局映射已在静态构造函数中配置
+        // 这里可以保留其他特定于数据库实例的配置（如果需要的话）
+    }
+
+    /// <summary>
+    /// 配置 LiteDB 全局映射 - 只在应用程序启动时执行一次
+    /// </summary>
+    private static void ConfigureGlobalMappings()
+    {
+        // ID 映射现在通过模型类上的 [BsonId] 属性来处理
+        // 这里可以保留其他全局映射配置（如果需要的话）
     }
 
     private void EnsureIndexes()
@@ -96,6 +109,36 @@ public class LiteDbContext : IDisposable
         ReasoningInstances.EnsureIndex(x => x.DefinitionId, unique: false);
         ReasoningInstances.EnsureIndex(x => x.Status, unique: false);
         ReasoningInstances.EnsureIndex(x => x.StartedAt, unique: false);
+    }
+
+    /// <summary>
+    /// 清理推理引擎相关的数据库集合（用于解决主键类型变更后的兼容性问题）
+    /// </summary>
+    public void ClearReasoningData()
+    {
+        try
+        {
+            // 删除推理事务定义集合
+            if (Database.CollectionExists(ReasoningDefinitionsCollectionName))
+            {
+                Database.DropCollection(ReasoningDefinitionsCollectionName);
+                Console.WriteLine($"已清理集合: {ReasoningDefinitionsCollectionName}");
+            }
+
+            // 删除推理事务实例集合
+            if (Database.CollectionExists(ReasoningInstancesCollectionName))
+            {
+                Database.DropCollection(ReasoningInstancesCollectionName);
+                Console.WriteLine($"已清理集合: {ReasoningInstancesCollectionName}");
+            }
+
+            Console.WriteLine("推理引擎数据清理完成！");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"清理推理引擎数据时发生错误: {ex.Message}");
+            throw;
+        }
     }
 
     public void Dispose()

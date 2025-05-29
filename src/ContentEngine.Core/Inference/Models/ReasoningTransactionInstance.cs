@@ -12,6 +12,7 @@ namespace ContentEngine.Core.Inference.Models
         /// <summary>
         /// 实例的唯一标识符
         /// </summary>
+        [BsonId]
         public string InstanceId { get; set; } = Guid.NewGuid().ToString();
 
         /// <summary>
@@ -217,6 +218,7 @@ namespace ContentEngine.Core.Inference.Models
         /// <summary>
         /// 组合的唯一标识符
         /// </summary>
+        [BsonId]
         public string CombinationId { get; set; } = Guid.NewGuid().ToString();
 
         /// <summary>
@@ -238,6 +240,7 @@ namespace ContentEngine.Core.Inference.Models
         /// <summary>
         /// 输出的唯一标识符
         /// </summary>
+        [BsonId]
         public string OutputId { get; set; } = Guid.NewGuid().ToString();
 
         /// <summary>

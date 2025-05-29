@@ -94,7 +94,7 @@
                 <MudText Typo="Typo.h5">推理事务</MudText>
                 <MudIconButton Icon="@Icons.Material.Filled.Refresh" 
                               Color="Color.Default" 
-                              OnClick="LoadDefinitions"
+                              OnClick="LoadInstances"
                               Title="刷新列表" />
             </div>
 
@@ -104,33 +104,29 @@
                     <MudProgressCircular Indeterminate="true" Size="Size.Large" />
                 </div>
             }
-            else if (definitions.Any())
+            else if (instances.Any())
             {
                 <MudGrid Spacing="4">
-                    @foreach (var definition in definitions)
+                    @foreach (var instance in instances)
                     {
                         <MudItem xs="12">
                             <MudCard Class="task-card hover-card" Outlined="true">
                                 <MudCardContent Class="pa-4">
                                     <div class="d-flex justify-space-between align-start mb-3">
                                         <div class="flex-grow-1">
-                                            <MudText Typo="Typo.h6" Class="mb-2">@definition.Name</MudText>
+                                            <MudText Typo="Typo.h6" Class="mb-2">@GetDefinitionForInstance(instance)?.Name</MudText>
                                             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                                                @(string.IsNullOrEmpty(definition.Description) ? "无描述" : definition.Description)
+                                                @(string.IsNullOrEmpty(GetDefinitionForInstance(instance)?.Description) ? "无描述" : GetDefinitionForInstance(instance)?.Description)
                                             </MudText>
                                         </div>
                                         <div class="d-flex align-center gap-2">
-                                            @{
-                                                var instance = GetLatestInstance(definition.Id);
-                                                var status = instance?.Status ?? TransactionStatus.Pending;
-                                            }
-                                            @GetStatusBadge(status)
+                                            @GetStatusBadge(instance.Status)
                                         </div>
                                     </div>
 
                                     <!-- Schema标签 -->
                                     <div class="d-flex flex-wrap gap-2 mb-3">
-                                        @foreach (var query in definition.QueryDefinitions)
+                                        @foreach (var query in GetDefinitionForInstance(instance)?.QueryDefinitions ?? new List<QueryDefinition>())
                                         {
                                             <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
                                                 @query.SourceSchemaName
@@ -144,21 +140,20 @@
                                             <div class="d-flex align-center text-muted">
                                                 <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Class="mr-1" />
                                                 <MudText Typo="Typo.caption">
-                                                    创建于 @definition.CreatedAt.ToString("MM-dd HH:mm")
+                                                    创建于 @GetDefinitionForInstance(instance)?.CreatedAt.ToString("MM-dd HH:mm")
                                                 </MudText>
                                             </div>
                                         </MudItem>
                                         <MudItem xs="12" sm="4">
                                             <div class="d-flex align-center text-muted">
                                                 <MudText Typo="Typo.caption">
-                                                    查询: @definition.QueryDefinitions.Count 个
+                                                    查询: @GetDefinitionForInstance(instance)?.QueryDefinitions.Count 个
                                                 </MudText>
                                             </div>
                                         </MudItem>
                                         <MudItem xs="12" sm="4">
                                             @{
-                                                var latestInstance = GetLatestInstance(definition.Id);
-                                                var cost = latestInstance?.Metrics.ActualCostUSD ?? 0m;
+                                                var cost = instance.Metrics.ActualCostUSD;
                                             }
                                             <div class="d-flex align-center">
                                                 <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Small" Color="Color.Success" Class="mr-1" />
@@ -171,21 +166,19 @@
 
                                     <!-- 进度条（如果有运行中的实例） -->
                                     @{
-                                        var runningInstance = GetLatestInstance(definition.Id);
-                                        if (runningInstance != null && 
-                                            (runningInstance.Status == TransactionStatus.GeneratingOutputs || 
-                                             runningInstance.Status == TransactionStatus.FetchingData || 
-                                             runningInstance.Status == TransactionStatus.CombiningData))
+                                        if (instance.Status == TransactionStatus.GeneratingOutputs || 
+                                            instance.Status == TransactionStatus.FetchingData || 
+                                            instance.Status == TransactionStatus.CombiningData)
                                         {
                                             <div class="mb-3">
                                                 <div class="d-flex justify-space-between align-center mb-1">
                                                     <MudText Typo="Typo.caption" Color="Color.Secondary">执行进度</MudText>
                                                     <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                        @runningInstance.Metrics.ProcessedCombinations / @runningInstance.Metrics.TotalCombinations
-                                                        (@runningInstance.Metrics.ProgressPercentage.ToString("F0")%)
+                                                        @instance.Metrics.ProcessedCombinations / @instance.Metrics.TotalCombinations
+                                                        (@instance.Metrics.ProgressPercentage.ToString("F0")%)
                                                     </MudText>
                                                 </div>
-                                                <MudProgressLinear Value="@runningInstance.Metrics.ProgressPercentage" 
+                                                <MudProgressLinear Value="@instance.Metrics.ProgressPercentage" 
                                                                   Color="Color.Primary" 
                                                                   Size="Size.Small"
                                                                   Class="rounded" />
@@ -198,17 +191,17 @@
                                     <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
                                         <MudButton StartIcon="@Icons.Material.Filled.Visibility" 
                                                   Color="Color.Primary"
-                                                  OnClick="() => ViewTaskDetail(definition.Id)">
+                                                  OnClick="() => ViewTaskDetail(instance.InstanceId)">
                                             查看详情
                                         </MudButton>
                                         <MudButton StartIcon="@Icons.Material.Filled.ContentCopy" 
                                                   Color="Color.Secondary"
-                                                  OnClick="() => CopyTask(definition.Id)">
+                                                  OnClick="() => CopyTask(instance.InstanceId)">
                                             复制任务
                                         </MudButton>
                                         <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" 
                                                   Color="Color.Success"
-                                                  OnClick="() => ExecuteDefinition(definition.Id)">
+                                                  OnClick="() => ExecuteInstance(instance.InstanceId)">
                                             执行
                                         </MudButton>
                                     </MudButtonGroup>
@@ -217,17 +210,17 @@
                                     
                                     <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small">
                                         <MudMenuItem Icon="@Icons.Material.Filled.Edit" 
-                                                    OnClick="() => EditDefinition(definition.Id)">
+                                                    OnClick="() => EditDefinition(instance.InstanceId)">
                                             编辑
                                         </MudMenuItem>
                                         <MudMenuItem Icon="@Icons.Material.Filled.History" 
-                                                    OnClick="() => ViewInstances(definition.Id)">
+                                                    OnClick="() => ViewInstances(instance.InstanceId)">
                                             执行历史
                                         </MudMenuItem>
                                         <MudDivider />
                                         <MudMenuItem Icon="@Icons.Material.Filled.Delete" 
                                                     IconColor="Color.Error"
-                                                    OnClick="() => DeleteDefinition(definition.Id)">
+                                                    OnClick="() => DeleteInstance(instance.InstanceId)">
                                             删除
                                         </MudMenuItem>
                                     </MudMenu>
@@ -285,8 +278,9 @@
 </style>
 
 @code {
+    private List<ReasoningTransactionInstance> instances = new();
     private List<ReasoningTransactionDefinition> definitions = new();
-    private List<ReasoningTransactionInstance> allInstances = new();
+    private Dictionary<string, ReasoningTransactionDefinition> definitionLookup = new();
     private bool isLoading = true;
     
     // 统计数据
@@ -297,21 +291,27 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadDefinitions();
+        await LoadInstances();
         await LoadStatistics();
     }
 
-    private async Task LoadDefinitions()
+    private async Task LoadInstances()
     {
         try
         {
             isLoading = true;
+            // 加载所有实例
+            instances = await ReasoningService.GetInstancesAsync();
+            
+            // 加载所有定义用于显示名称和描述
             definitions = await ReasoningService.GetAllDefinitionsAsync();
+            definitionLookup = definitions.ToDictionary(d => d.Id, d => d);
+            
             totalDefinitions = definitions.Count;
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"加载推理定义失败: {ex.Message}", Severity.Error);
+            Snackbar.Add($"加载推理实例失败: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -323,12 +323,11 @@
     {
         try
         {
-            allInstances = await ReasoningService.GetInstancesAsync();
-            runningInstances = allInstances.Count(i => i.Status == TransactionStatus.GeneratingOutputs || 
+            runningInstances = instances.Count(i => i.Status == TransactionStatus.GeneratingOutputs || 
                                                       i.Status == TransactionStatus.FetchingData || 
                                                       i.Status == TransactionStatus.CombiningData);
-            completedInstances = allInstances.Count(i => i.Status == TransactionStatus.Completed);
-            totalCost = allInstances.Sum(i => i.Metrics.ActualCostUSD);
+            completedInstances = instances.Count(i => i.Status == TransactionStatus.Completed);
+            totalCost = instances.Sum(i => i.Metrics.ActualCostUSD);
         }
         catch (Exception ex)
         {
@@ -336,12 +335,10 @@
         }
     }
 
-    private ReasoningTransactionInstance? GetLatestInstance(string definitionId)
+    private ReasoningTransactionDefinition? GetDefinitionForInstance(ReasoningTransactionInstance instance)
     {
-        return allInstances
-            .Where(i => i.DefinitionId == definitionId)
-            .OrderByDescending(i => i.StartedAt)
-            .FirstOrDefault();
+        definitionLookup.TryGetValue(instance.DefinitionId, out var definition);
+        return definition;
     }
 
     private RenderFragment GetStatusBadge(TransactionStatus status)
@@ -363,29 +360,40 @@
         Navigation.NavigateTo("/ai-inference/create");
     }
 
-    private void ViewTaskDetail(string definitionId)
+    private void ViewTaskDetail(string instanceId)
     {
-        Navigation.NavigateTo($"/ai-inference/detail/{definitionId}");
+        Navigation.NavigateTo($"/ai-inference/detail/{instanceId}");
     }
 
-    private void EditDefinition(string definitionId)
+    private void EditDefinition(string instanceId)
     {
-        Navigation.NavigateTo($"/ai-inference/edit/{definitionId}");
+        var instance = instances.FirstOrDefault(i => i.InstanceId == instanceId);
+        if (instance != null)
+        {
+            Navigation.NavigateTo($"/ai-inference/edit/{instance.DefinitionId}");
+        }
     }
 
-    private void ViewInstances(string definitionId)
+    private void ViewInstances(string instanceId)
     {
-        Navigation.NavigateTo($"/ai-inference/instances/{definitionId}");
+        var instance = instances.FirstOrDefault(i => i.InstanceId == instanceId);
+        if (instance != null)
+        {
+            Navigation.NavigateTo($"/ai-inference/instances/{instance.DefinitionId}");
+        }
     }
 
-    private async Task CopyTask(string definitionId)
+    private async Task CopyTask(string instanceId)
     {
         try
         {
-            var definition = definitions.FirstOrDefault(d => d.Id == definitionId);
+            var instance = instances.FirstOrDefault(i => i.InstanceId == instanceId);
+            if (instance == null) return;
+            
+            var definition = GetDefinitionForInstance(instance);
             if (definition != null)
             {
-                // 复制任务逻辑
+                // 复制任务逻辑 - 基于定义创建新定义（这会自动创建新的默认实例）
                 var newDefinition = new ReasoningTransactionDefinition
                 {
                     Name = $"{definition.Name} (副本)",
@@ -422,7 +430,7 @@
 
                 await ReasoningService.CreateDefinitionAsync(newDefinition);
                 Snackbar.Add("任务复制成功", Severity.Success);
-                await LoadDefinitions();
+                await LoadInstances();
             }
         }
         catch (Exception ex)
@@ -431,17 +439,21 @@
         }
     }
 
-    private async Task ExecuteDefinition(string definitionId)
+    private async Task ExecuteInstance(string instanceId)
     {
         try
         {
-            var definition = definitions.FirstOrDefault(d => d.Id == definitionId);
+            var instance = instances.FirstOrDefault(i => i.InstanceId == instanceId);
+            if (instance == null) return;
+
+            var definition = GetDefinitionForInstance(instance);
             if (definition == null) return;
 
             // 显示确认对话框
             var parameters = new DialogParameters
             {
-                ["Definition"] = definition
+                ["Definition"] = definition,
+                ["Instance"] = instance
             };
 
             var dialog = await DialogService.ShowAsync<ExecuteConfirmDialog>("确认执行", parameters);
@@ -452,7 +464,7 @@
                 Snackbar.Add("推理事务已开始执行", Severity.Success);
                 
                 // 导航到执行监控页面
-                Navigation.NavigateTo($"/ai-inference/execute/{definitionId}");
+                Navigation.NavigateTo($"/ai-inference/detail/{instanceId}");
             }
         }
         catch (Exception ex)
@@ -461,29 +473,32 @@
         }
     }
 
-    private async Task DeleteDefinition(string definitionId)
+    private async Task DeleteInstance(string instanceId)
     {
         try
         {
-            var definition = definitions.FirstOrDefault(d => d.Id == definitionId);
-            if (definition == null) return;
+            var instance = instances.FirstOrDefault(i => i.InstanceId == instanceId);
+            if (instance == null) return;
+
+            var definition = GetDefinitionForInstance(instance);
+            var displayName = definition?.Name ?? "未知任务";
 
             bool? result = await DialogService.ShowMessageBox(
                 "确认删除",
-                $"确定要删除推理事务定义 '{definition.Name}' 吗？此操作不可撤销。",
+                $"确定要删除推理实例 '{displayName}' ({instance.InstanceId[..8]}...) 吗？此操作不可撤销。",
                 yesText: "删除", cancelText: "取消");
 
             if (result == true)
             {
-                await ReasoningService.DeleteDefinitionAsync(definitionId);
-                Snackbar.Add("推理事务定义已删除", Severity.Success);
-                await LoadDefinitions();
+                await ReasoningService.DeleteInstanceAsync(instanceId);
+                Snackbar.Add("推理实例已删除", Severity.Success);
+                await LoadInstances();
                 await LoadStatistics();
             }
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"删除推理事务定义失败: {ex.Message}", Severity.Error);
+            Snackbar.Add($"删除推理实例失败: {ex.Message}", Severity.Error);
         }
     }
 } 

@@ -18,27 +18,24 @@ namespace ContentEngine.Core.Inference.Services
     /// </summary>
     public class ReasoningService : IReasoningService
     {
+        private readonly IReasoningRepository _reasoningRepository;
         private readonly LiteDbContext _liteDbContext;
         private readonly IDataEntryService _dataEntryService;
         private readonly IPromptExecutionService _promptExecutionService;
         private readonly ILogger<ReasoningService> _logger;
 
-        private readonly ILiteCollection<ReasoningTransactionDefinition> _definitionsCollection;
-        private readonly ILiteCollection<ReasoningTransactionInstance> _instancesCollection;
-
         public ReasoningService(
+            IReasoningRepository reasoningRepository,
             LiteDbContext liteDbContext,
             IDataEntryService dataEntryService,
             IPromptExecutionService promptExecutionService,
             ILogger<ReasoningService> logger)
         {
+            _reasoningRepository = reasoningRepository;
             _liteDbContext = liteDbContext;
             _dataEntryService = dataEntryService;
             _promptExecutionService = promptExecutionService;
             _logger = logger;
-
-            _definitionsCollection = _liteDbContext.ReasoningDefinitions;
-            _instancesCollection = _liteDbContext.ReasoningInstances;
         }
 
         #region 推理事务定义管理
@@ -64,15 +61,25 @@ namespace ContentEngine.Core.Inference.Services
             definition.CreatedAt = DateTime.UtcNow;
             definition.UpdatedAt = DateTime.UtcNow;
 
-            _definitionsCollection.Insert(definition);
+            await _reasoningRepository.CreateDefinitionAsync(definition);
             _logger.LogInformation("创建推理事务定义: {DefinitionName} (ID: {DefinitionId})", definition.Name, definition.Id);
+
+            // 为新定义创建一个默认的初始实例
+            var initialInstance = new ReasoningTransactionInstance
+            {
+                DefinitionId = definition.Id,
+                Status = TransactionStatus.Pending,
+                StartedAt = DateTime.UtcNow
+            };
+            await _reasoningRepository.CreateInstanceAsync(initialInstance);
+            _logger.LogInformation("为定义 {DefinitionId} 创建了初始推理实例 (ID: {InstanceId})", definition.Id, initialInstance.InstanceId);
 
             return definition;
         }
 
         public async Task<List<ReasoningTransactionDefinition>> GetAllDefinitionsAsync(CancellationToken cancellationToken = default)
         {
-            return await Task.FromResult(_definitionsCollection.FindAll().OrderByDescending(x => x.CreatedAt).ToList());
+            return await _reasoningRepository.GetAllDefinitionsAsync();
         }
 
         public async Task<ReasoningTransactionDefinition?> GetDefinitionByIdAsync(string definitionId, CancellationToken cancellationToken = default)
@@ -80,7 +87,7 @@ namespace ContentEngine.Core.Inference.Services
             if (string.IsNullOrWhiteSpace(definitionId))
                 return null;
 
-            return await Task.FromResult(_definitionsCollection.FindById(definitionId));
+            return await _reasoningRepository.GetDefinitionByIdAsync(definitionId);
         }
 
         public async Task<ReasoningTransactionDefinition> UpdateDefinitionAsync(ReasoningTransactionDefinition definition, CancellationToken cancellationToken = default)
@@ -100,10 +107,7 @@ namespace ContentEngine.Core.Inference.Services
             }
 
             definition.UpdatedAt = DateTime.UtcNow;
-            _definitionsCollection.Update(definition);
-
-            _logger.LogInformation("更新推理事务定义: {DefinitionName} (ID: {DefinitionId})", definition.Name, definition.Id);
-            return definition;
+            return await _reasoningRepository.UpdateDefinitionAsync(definition);
         }
 
         public async Task<bool> DeleteDefinitionAsync(string definitionId, CancellationToken cancellationToken = default)
@@ -111,20 +115,7 @@ namespace ContentEngine.Core.Inference.Services
             if (string.IsNullOrWhiteSpace(definitionId))
                 return false;
 
-            // 检查是否有关联的实例
-            var hasInstances = _instancesCollection.Exists(x => x.DefinitionId == definitionId);
-            if (hasInstances)
-            {
-                throw new InvalidOperationException("无法删除存在关联实例的推理事务定义，请先删除相关实例");
-            }
-
-            var deleted = _definitionsCollection.Delete(definitionId);
-            if (deleted)
-            {
-                _logger.LogInformation("删除推理事务定义: {DefinitionId}", definitionId);
-            }
-
-            return deleted;
+            return await _reasoningRepository.DeleteDefinitionAsync(definitionId);
         }
 
         #endregion
@@ -151,7 +142,7 @@ namespace ContentEngine.Core.Inference.Services
                 StartedAt = DateTime.UtcNow
             };
 
-            _instancesCollection.Insert(instance);
+            await _reasoningRepository.CreateInstanceAsync(instance);
             _logger.LogInformation("开始执行推理事务: {DefinitionName} (实例ID: {InstanceId})", definition.Name, instance.InstanceId);
 
             try
@@ -175,7 +166,7 @@ namespace ContentEngine.Core.Inference.Services
                 instance.CompletedAt = DateTime.UtcNow;
                 instance.Metrics.ElapsedTime = DateTime.UtcNow - instance.StartedAt;
 
-                _instancesCollection.Update(instance);
+                await _reasoningRepository.UpdateInstanceAsync(instance);
                 _logger.LogInformation("推理事务执行完成: {InstanceId}", instance.InstanceId);
 
                 return instance;
@@ -192,7 +183,7 @@ namespace ContentEngine.Core.Inference.Services
                     IsRetriable = true
                 });
 
-                _instancesCollection.Update(instance);
+                await _reasoningRepository.UpdateInstanceAsync(instance);
                 _logger.LogError(ex, "推理事务执行失败: {InstanceId}", instance.InstanceId);
 
                 throw;
@@ -208,19 +199,7 @@ namespace ContentEngine.Core.Inference.Services
             TransactionStatus? status = null, 
             CancellationToken cancellationToken = default)
         {
-            var query = _instancesCollection.Query();
-
-            if (!string.IsNullOrWhiteSpace(definitionId))
-            {
-                query = query.Where(x => x.DefinitionId == definitionId);
-            }
-
-            if (status.HasValue)
-            {
-                query = query.Where(x => x.Status == status.Value);
-            }
-
-            return await Task.FromResult(query.OrderByDescending(x => x.StartedAt).ToList());
+            return await _reasoningRepository.GetInstancesAsync(definitionId, status);
         }
 
         public async Task<ReasoningTransactionInstance?> GetInstanceByIdAsync(string instanceId, CancellationToken cancellationToken = default)
@@ -228,7 +207,15 @@ namespace ContentEngine.Core.Inference.Services
             if (string.IsNullOrWhiteSpace(instanceId))
                 return null;
 
-            return await Task.FromResult(_instancesCollection.FindById(instanceId));
+            return await _reasoningRepository.GetInstanceByIdAsync(instanceId);
+        }
+
+        public async Task<ReasoningTransactionInstance> UpdateInstanceAsync(ReasoningTransactionInstance instance, CancellationToken cancellationToken = default)
+        {
+            if (instance == null)
+                throw new ArgumentNullException(nameof(instance));
+
+            return await _reasoningRepository.UpdateInstanceAsync(instance);
         }
 
         public async Task<bool> DeleteInstanceAsync(string instanceId, CancellationToken cancellationToken = default)
@@ -236,13 +223,7 @@ namespace ContentEngine.Core.Inference.Services
             if (string.IsNullOrWhiteSpace(instanceId))
                 return false;
 
-            var deleted = _instancesCollection.Delete(instanceId);
-            if (deleted)
-            {
-                _logger.LogInformation("删除推理事务实例: {InstanceId}", instanceId);
-            }
-
-            return deleted;
+            return await _reasoningRepository.DeleteInstanceAsync(instanceId);
         }
 
         #endregion
@@ -357,22 +338,26 @@ namespace ContentEngine.Core.Inference.Services
             return allCombinations;
         }
 
-        public async Task<ReasoningOutputItem> ExecuteCombinationAsync(string definitionId, string combinationId, CancellationToken cancellationToken = default)
+        public async Task<ReasoningOutputItem> ExecuteCombinationAsync(string instanceId, string combinationId, CancellationToken cancellationToken = default)
         {
-            var definition = await GetDefinitionByIdAsync(definitionId, cancellationToken);
-            if (definition == null)
+            var instance = await GetInstanceByIdAsync(instanceId, cancellationToken);
+            if (instance == null)
             {
-                throw new InvalidOperationException($"推理事务定义不存在: {definitionId}");
+                throw new InvalidOperationException($"推理事务实例不存在: {instanceId}");
             }
 
-            // TODO: 生成组合时就该处理缓存了，不然ID都是新的肯定匹配不到
-            // 生成组合以找到匹配的组合
-            var combinations = await GenerateInputCombinationsAsync(definitionId, cancellationToken);
-            var targetCombination = combinations.FirstOrDefault(c => c.CombinationId == combinationId);
+            var definition = await GetDefinitionByIdAsync(instance.DefinitionId, cancellationToken);
+            if (definition == null)
+            {
+                // This case should ideally not happen if data integrity is maintained
+                throw new InvalidOperationException($"与实例 {instanceId} 关联的推理事务定义 {instance.DefinitionId} 不存在。");
+            }
+
+            var targetCombination = instance.InputCombinations.FirstOrDefault(c => c.CombinationId == combinationId);
             
             if (targetCombination == null)
             {
-                throw new InvalidOperationException($"组合不存在: {combinationId}");
+                throw new InvalidOperationException($"组合ID {combinationId} 在实例 {instanceId} 中未找到。");
             }
 
             // 执行单个组合
@@ -398,13 +383,13 @@ namespace ContentEngine.Core.Inference.Services
                     output.FailureReason = result.FailureReason;
                 }
 
-                _logger.LogInformation("组合 {CombinationId} 执行完成，成功: {IsSuccess}", combinationId, result.IsSuccess);
+                _logger.LogInformation("实例 {InstanceId} 中的组合 {CombinationId} 执行完成，成功: {IsSuccess}", instanceId, combinationId, result.IsSuccess);
                 return output;
             }
             catch (Exception ex)
             {
                 var executionTime = DateTime.UtcNow - startTime;
-                _logger.LogError(ex, "执行组合 {CombinationId} 时发生错误", combinationId);
+                _logger.LogError(ex, "执行实例 {InstanceId} 中的组合 {CombinationId} 时发生错误", instanceId, combinationId);
                 
                 return new ReasoningOutputItem
                 {
@@ -416,21 +401,21 @@ namespace ContentEngine.Core.Inference.Services
             }
         }
 
-        public async Task<ReasoningOutputItem?> GetOutputForCombinationAsync(string definitionId, string combinationId, CancellationToken cancellationToken = default)
+        public async Task<ReasoningOutputItem?> GetOutputForCombinationAsync(string instanceId, string combinationId, CancellationToken cancellationToken = default)
         {
-            // 在已有的实例中查找该组合的输出结果
-            var instances = await GetInstancesAsync(definitionId, null, cancellationToken);
-            
-            foreach (var instance in instances)
+            var instance = await GetInstanceByIdAsync(instanceId, cancellationToken);
+            if (instance == null)
             {
-                var output = instance.Outputs.FirstOrDefault(o => o.InputCombinationId == combinationId);
-                if (output != null)
-                {
-                    return output;
-                }
+                _logger.LogWarning("尝试获取组合输出时未找到实例: {InstanceId}", instanceId);
+                return null;
             }
-
-            return null;
+            
+            var output = instance.Outputs.FirstOrDefault(o => o.InputCombinationId == combinationId);
+            if (output == null)
+            {
+                _logger.LogDebug("在实例 {InstanceId} 中未找到组合 {CombinationId} 的输出", instanceId, combinationId);
+            }
+            return output;
         }
 
         #endregion
@@ -459,7 +444,7 @@ namespace ContentEngine.Core.Inference.Services
         private async Task FetchDataAsync(ReasoningTransactionInstance instance, ReasoningTransactionDefinition definition, CancellationToken cancellationToken)
         {
             instance.Status = TransactionStatus.FetchingData;
-            _instancesCollection.Update(instance);
+            await _reasoningRepository.UpdateInstanceAsync(instance);
 
             _logger.LogInformation("开始获取数据: {InstanceId}", instance.InstanceId);
 
@@ -487,7 +472,7 @@ namespace ContentEngine.Core.Inference.Services
         private async Task CombineDataAsync(ReasoningTransactionInstance instance, ReasoningTransactionDefinition definition, CancellationToken cancellationToken)
         {
             instance.Status = TransactionStatus.CombiningData;
-            _instancesCollection.Update(instance);
+            await _reasoningRepository.UpdateInstanceAsync(instance);
 
             _logger.LogInformation("开始组合数据: {InstanceId}", instance.InstanceId);
 
@@ -510,7 +495,7 @@ namespace ContentEngine.Core.Inference.Services
         private async Task GenerateOutputsAsync(ReasoningTransactionInstance instance, ReasoningTransactionDefinition definition, CancellationToken cancellationToken)
         {
             instance.Status = TransactionStatus.GeneratingOutputs;
-            _instancesCollection.Update(instance);
+            await _reasoningRepository.UpdateInstanceAsync(instance);
 
             _logger.LogInformation("开始生成AI输出: {InstanceId}, 组合数: {CombinationCount}", 
                 instance.InstanceId, instance.InputCombinations.Count);
@@ -723,7 +708,7 @@ namespace ContentEngine.Core.Inference.Services
                 // 定期更新实例状态
                 if (instance.Metrics.ProcessedCombinations % 10 == 0)
                 {
-                    _instancesCollection.Update(instance);
+                    await _reasoningRepository.UpdateInstanceAsync(instance);
                 }
             }
             finally
