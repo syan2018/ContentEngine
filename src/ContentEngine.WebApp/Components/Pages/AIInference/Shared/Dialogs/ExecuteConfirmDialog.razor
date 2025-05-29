@@ -1,7 +1,8 @@
 @using ContentEngine.Core.Inference.Models
 @using ContentEngine.Core.Inference.Services
 @using MudBlazor
-@inject IReasoningService ReasoningService
+@inject IReasoningDefinitionService ReasoningDefinitionService
+@inject IReasoningEstimationService ReasoningEstimationService
 
 <MudDialog>
     <DialogContent>
@@ -131,7 +132,10 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     
-    [Parameter] public ReasoningTransactionDefinition? Definition { get; set; }
+    
+    [Parameter] public ReasoningTransactionInstance? Instance { get; set; }
+    
+    public ReasoningTransactionDefinition? Definition { get; set; }
 
     private bool isLoading = true;
     private int estimatedCombinations = 0;
@@ -141,6 +145,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+
+        if (Instance != null)
+        {
+            Definition = await ReasoningDefinitionService.GetDefinitionByIdAsync(Instance.DefinitionId);
+        }
+        
         if (Definition != null)
         {
             await LoadEstimates();
@@ -154,9 +164,9 @@
         {
             if (Definition == null) return;
 
-            estimatedCombinations = await ReasoningService.EstimateCombinationCountAsync(Definition.Id);
-            estimatedCost = await ReasoningService.EstimateExecutionCostAsync(Definition.Id);
-            estimatedTime = await ReasoningService.EstimateExecutionTimeAsync(Definition.Id);
+            estimatedCombinations = await ReasoningEstimationService.EstimateCombinationCountAsync(Definition.Id);
+            estimatedCost = await ReasoningEstimationService.EstimateExecutionCostAsync(Definition.Id);
+            estimatedTime = await ReasoningEstimationService.EstimateExecutionTimeAsync(Definition.Id);
 
             // 检查约束违规
             hasConstraintViolations = estimatedCost > Definition.ExecutionConstraints.MaxEstimatedCostUSD ||

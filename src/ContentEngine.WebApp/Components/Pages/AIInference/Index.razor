@@ -1,15 +1,12 @@
 @page "/ai-inference"
 @using ContentEngine.Core.Inference.Services
 @using ContentEngine.Core.Inference.Models
-@using ContentEngine.Core.DataPipeline.Services
-@using ContentEngine.Core.DataPipeline.Models
-@using ContentEngine.WebApp.Components.Pages.AIInference.Shared
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
-@inject IReasoningService ReasoningService
-@inject ISchemaDefinitionService SchemaService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject IReasoningDefinitionService ReasoningDefinitionService
+@inject IReasoningInstanceService ReasoningInstanceService
 
 <PageTitle>AI推理引擎 - ContentEngine</PageTitle>
 
@@ -301,10 +298,10 @@
         {
             isLoading = true;
             // 加载所有实例
-            instances = await ReasoningService.GetInstancesAsync();
+            instances = await ReasoningInstanceService.GetInstancesAsync();
             
             // 加载所有定义用于显示名称和描述
-            definitions = await ReasoningService.GetAllDefinitionsAsync();
+            definitions = await ReasoningDefinitionService.GetAllDefinitionsAsync();
             definitionLookup = definitions.ToDictionary(d => d.Id, d => d);
             
             totalDefinitions = definitions.Count;
@@ -427,9 +424,13 @@
                         BatchSize = definition.ExecutionConstraints.BatchSize
                     }
                 };
-
-                await ReasoningService.CreateDefinitionAsync(newDefinition);
+                
+                // TODO: 重构通用的Instance复制接口
+                await ReasoningDefinitionService.CreateDefinitionAsync(newDefinition);
+                await ReasoningInstanceService.CreateInstanceAsync(newDefinition.Id);
                 Snackbar.Add("任务复制成功", Severity.Success);
+                
+                
                 await LoadInstances();
             }
         }
@@ -452,7 +453,6 @@
             // 显示确认对话框
             var parameters = new DialogParameters
             {
-                ["Definition"] = definition,
                 ["Instance"] = instance
             };
 
@@ -490,7 +490,7 @@
 
             if (result == true)
             {
-                await ReasoningService.DeleteInstanceAsync(instanceId);
+                await ReasoningInstanceService.DeleteInstanceAsync(instanceId);
                 Snackbar.Add("推理实例已删除", Severity.Success);
                 await LoadInstances();
                 await LoadStatistics();

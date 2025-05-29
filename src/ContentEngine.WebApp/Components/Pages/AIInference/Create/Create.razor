@@ -1,7 +1,9 @@
 @page "/ai-inference/create"
 @using ContentEngine.Core.Inference.Services
 @using ContentEngine.Core.Inference.Models
-@inject IReasoningService ReasoningService
+@inject IReasoningDefinitionService ReasoningDefinitionService
+@inject IReasoningInstanceService ReasoningInstanceService
+@inject IReasoningEstimationService ReasoningEstimationService
 @inject ISchemaDefinitionService SchemaService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -403,9 +405,9 @@
     {
         try
         {
-            estimatedCost = await ReasoningService.EstimateExecutionCostAsync(definition.Id ?? "temp");
-            estimatedTime = await ReasoningService.EstimateExecutionTimeAsync(definition.Id ?? "temp");
-            estimatedCombinations = await ReasoningService.EstimateCombinationCountAsync(definition.Id ?? "temp");
+            estimatedCost = await ReasoningEstimationService.EstimateExecutionCostAsync(definition.Id ?? "temp");
+            estimatedTime = await ReasoningEstimationService.EstimateExecutionTimeAsync(definition.Id ?? "temp");
+            estimatedCombinations = await ReasoningEstimationService.EstimateCombinationCountAsync(definition.Id ?? "temp");
         }
         catch
         {
@@ -431,9 +433,12 @@
             }
 
             // 保存定义
-            await ReasoningService.CreateDefinitionAsync(definition);
-            
+            await ReasoningDefinitionService.CreateDefinitionAsync(definition);
             Snackbar.Add("推理事务定义创建成功", Severity.Success);
+
+            await ReasoningInstanceService.CreateInstanceAsync(definition.Id);
+            Snackbar.Add("推理事务实例创建成功", Severity.Success);
+            
             Navigation.NavigateTo("/ai-inference");
         }
         catch (Exception ex)

@@ -5,11 +5,10 @@
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Cards
-@using LiteDB
-@inject IReasoningService ReasoningService
-@inject ISchemaDefinitionService SchemaService
-@inject IDataEntryService DataService
-@inject IQueryProcessingService QueryProcessingService
+@inject IReasoningDefinitionService ReasoningDefinitionService
+@inject IReasoningInstanceService ReasoningInstanceService
+@inject IReasoningExecutionService ReasoningExecutionService
+@inject IReasoningCombinationService ReasoningCombinationService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -542,15 +541,15 @@
         try
         {
             // TaskId 现在是 instanceId
-            instance = await ReasoningService.GetInstanceByIdAsync(TaskId);
+            instance = await ReasoningInstanceService.GetInstanceByIdAsync(TaskId);
             
             if (instance != null)
             {
                 // 加载关联的定义
-                definition = await ReasoningService.GetDefinitionByIdAsync(instance.DefinitionId);
+                definition = await ReasoningDefinitionService.GetDefinitionByIdAsync(instance.DefinitionId);
                 
                 // 加载所有相关实例（用于历史记录等）
-                allInstances = await ReasoningService.GetInstancesAsync(instance.DefinitionId);
+                allInstances = await ReasoningInstanceService.GetInstancesAsync(instance.DefinitionId);
                 
                 // 检查实例是否已经有缓存的组合，如果有就直接使用
                 if (instance.InputCombinations?.Any() == true)
@@ -646,7 +645,8 @@
         try
         {
             // 执行推理事务
-            await ReasoningService.ExecuteTransactionAsync(definition.Id);
+            // TODO: 重构为基于Instance
+            await ReasoningExecutionService.ExecuteTransactionAsync(definition.Id);
             Snackbar.Add("任务已开始执行", Severity.Success);
             
             // 重新加载实例详情以获取最新状态和组合缓存
@@ -690,21 +690,16 @@
                 }
             };
             
-            var created = await ReasoningService.CreateDefinitionAsync(copy);
+            // TODO: 重构通用的Instance复制接口
             
+            var created = await ReasoningDefinitionService.CreateDefinitionAsync(copy);
             // 获取新创建定义的默认实例
-            var newInstances = await ReasoningService.GetInstancesAsync(created.Id);
-            var newInstance = newInstances.FirstOrDefault();
+            // var newInstances = await ReasoningService.GetInstancesAsync(created.Id);
+            var newInstance = await ReasoningInstanceService.CreateInstanceAsync(created.Id);
             
-            if (newInstance != null)
-            {
-                Snackbar.Add("任务已复制", Severity.Success);
-                Navigation.NavigateTo($"/ai-inference/detail/{newInstance.InstanceId}");
-            }
-            else
-            {
-                Snackbar.Add("任务复制成功，但无法定位新实例", Severity.Warning);
-            }
+            Snackbar.Add("任务已复制，切换至新任务", Severity.Success);
+            Navigation.NavigateTo($"/ai-inference/detail/{newInstance.InstanceId}");
+
         }
         catch (Exception ex)
         {
@@ -760,13 +755,13 @@
         try
         {
             // 重新生成输入组合
-            realTimeCombinations = await ReasoningService.GenerateInputCombinationsAsync(definition.Id);
+            realTimeCombinations = await ReasoningCombinationService.GenerateInputCombinationsAsync(definition.Id);
             
             // 将生成的组合保存到实例中
             instance.InputCombinations = realTimeCombinations;
             
             // 更新实例到数据库以保存缓存的组合
-            await ReasoningService.UpdateInstanceAsync(instance);
+            await ReasoningInstanceService.UpdateInstanceAsync(instance);
             
             Snackbar.Add($"输入组合已重新生成并缓存: {realTimeCombinations.Count} 个", Severity.Success);
         }
@@ -792,7 +787,7 @@
         try
         {
             // 使用 instance.InstanceId
-            var outputItem = await ReasoningService.ExecuteCombinationAsync(instance.InstanceId, combination.CombinationId);
+            var outputItem = await ReasoningCombinationService.ExecuteCombinationAsync(instance.InstanceId, combination.CombinationId);
             // 根据 outputItem 更新UI或给出提示，例如显示结果或确认执行
             Snackbar.Add($"组合 {combination.CombinationId} 已执行，结果: {(outputItem.IsSuccess ? "成功" : "失败")}", outputItem.IsSuccess ? Severity.Success : Severity.Error);
             // 可能需要重新加载实例详情或部分数据以反映此独立执行的结果（如果服务层支持保存独立执行的输出）
@@ -815,7 +810,7 @@
         try
         {
             // 使用 instance.InstanceId
-            var output = await ReasoningService.GetOutputForCombinationAsync(instance.InstanceId, combination.CombinationId);
+            var output = await ReasoningCombinationService.GetOutputForCombinationAsync(instance.InstanceId, combination.CombinationId);
             if (output != null)
             {
                 await ShowCombinationResult(combination, output);
