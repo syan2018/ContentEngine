@@ -1,0 +1,100 @@
+@using MudBlazor
+
+<MudDialog>
+    <DialogContent>
+        <div class="prompt-preview-container">
+            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.TextSnippet" Class="mr-2" Color="Color.Primary" />
+                生成的Prompt预览
+            </MudText>
+            
+            <MudCard Outlined="true" Class="prompt-card">
+                <MudCardContent Class="pa-3">
+                    <pre class="prompt-content">@Content</pre>
+                </MudCardContent>
+            </MudCard>
+            
+            <div class="prompt-stats mt-3">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                    字符数: @Content?.Length
+                </MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Text">
+                    行数: @(Content?.Split('\n').Length ?? 0)
+                </MudChip>
+            </div>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" 
+                  StartIcon="@Icons.Material.Filled.ContentCopy"
+                  OnClick="CopyToClipboard">
+            复制
+        </MudButton>
+        <MudButton Color="Color.Primary" 
+                  Variant="Variant.Filled" 
+                  OnClick="Submit">
+            关闭
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+.prompt-preview-container {
+    min-width: 600px;
+    max-width: 800px;
+}
+
+.prompt-card {
+    background-color: var(--mud-palette-surface-variant);
+    border: 1px solid var(--mud-palette-divider);
+}
+
+.prompt-content {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    max-height: 400px;
+    overflow-y: auto;
+    color: var(--mud-palette-text-primary);
+    background-color: transparent;
+}
+
+.prompt-stats {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* 响应式设计 */
+@@media (max-width: 768px) {
+    .prompt-preview-container {
+        min-width: unset;
+        max-width: unset;
+        width: 100%;
+    }
+    
+    .prompt-content {
+        font-size: 0.8rem;
+        max-height: 300px;
+    }
+}
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance? MudDialog { get; set; }
+    [Parameter] public string Content { get; set; } = string.Empty;
+
+    private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
+
+    private async Task CopyToClipboard()
+    {
+        // 这里需要使用JavaScript来复制到剪贴板
+        // 在实际实现中，可以通过IJSRuntime来调用JavaScript
+        // 现在先简化处理
+        await Task.CompletedTask;
+        // TODO: 实现复制到剪贴板功能
+    }
+} 

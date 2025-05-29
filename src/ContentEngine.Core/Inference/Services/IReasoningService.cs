@@ -165,5 +165,35 @@ namespace ContentEngine.Core.Inference.Services
             CancellationToken cancellationToken = default);
 
         #endregion
+
+        #region 实时组合生成
+
+        /// <summary>
+        /// 根据推理事务定义实时生成输入组合（不依赖执行记录）
+        /// </summary>
+        /// <param name="definitionId">推理事务定义ID</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>输入组合列表</returns>
+        Task<List<ReasoningInputCombination>> GenerateInputCombinationsAsync(string definitionId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 执行单个组合
+        /// </summary>
+        /// <param name="definitionId">推理事务定义ID</param>
+        /// <param name="combinationId">组合ID</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>执行结果</returns>
+        Task<ReasoningOutputItem> ExecuteCombinationAsync(string definitionId, string combinationId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 获取组合的输出结果
+        /// </summary>
+        /// <param name="definitionId">推理事务定义ID</param>
+        /// <param name="combinationId">组合ID</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>输出结果，如果不存在返回null</returns>
+        Task<ReasoningOutputItem?> GetOutputForCombinationAsync(string definitionId, string combinationId, CancellationToken cancellationToken = default);
+
+        #endregion
     }
 } 

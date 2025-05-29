@@ -3,10 +3,12 @@
 @using ContentEngine.Core.Inference.Models
 @using ContentEngine.Core.DataPipeline.Services
 @using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.AI.Services
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared
 @inject IReasoningService ReasoningService
 @inject ISchemaDefinitionService SchemaService
 @inject IDataEntryService DataService
+@inject IQueryProcessingService QueryProcessingService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -188,94 +190,105 @@
             
             <MudTabPanel Text="输入组合" Icon="@Icons.Material.Filled.DataArray">
                 <div class="pa-4">
+                    <!-- 顶部操作栏 -->
                     <div class="d-flex align-center justify-space-between mb-4">
-                        <MudText Typo="Typo.h6">输入组合列表</MudText>
-                        @if (latestInstance != null && latestInstance.InputCombinations.Any())
+                        <div class="d-flex align-center gap-3">
+                            <MudText Typo="Typo.h6">输入组合列表</MudText>
+                            <MudButton Variant="Variant.Outlined" 
+                                      StartIcon="@Icons.Material.Filled.Refresh"
+                                      OnClick="RefreshCombinations"
+                                      Size="Size.Small"
+                                      Disabled="@isLoadingCombinations">
+                                @if (isLoadingCombinations)
+                                {
+                                    <MudProgressCircular Size="Size.Small" />
+                                    <span class="ml-2">生成中...</span>
+                                }
+                                else
+                                {
+                                    <span>重新生成</span>
+                                }
+                            </MudButton>
+                        </div>
+                        
+                        @if (realTimeCombinations?.Any() == true)
                         {
-                            <div class="d-flex align-center gap-2">
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                    显示 @Math.Min(currentCombinationPage * combinationsPerPage, latestInstance.InputCombinations.Count) / @latestInstance.InputCombinations.Count 个组合
-                                </MudText>
-                                <MudPagination @bind-Selected="currentCombinationPage" 
-                                              Count="@((latestInstance.InputCombinations.Count + combinationsPerPage - 1) / combinationsPerPage)" 
-                                              ShowFirstLast="true" />
+                            <div class="d-flex align-center gap-3">
+                                <!-- 显示模式切换 -->
+                                <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
+                                    <MudButton StartIcon="@Icons.Material.Filled.ViewList"
+                                              Color="@(isCompactView ? Color.Default : Color.Primary)"
+                                              OnClick="() => isCompactView = false">
+                                        标准
+                                    </MudButton>
+                                    <MudButton StartIcon="@Icons.Material.Filled.ViewComfy"
+                                              Color="@(isCompactView ? Color.Primary : Color.Default)"
+                                              OnClick="() => isCompactView = true">
+                                        紧凑
+                                    </MudButton>
+                                </MudButtonGroup>
+                                
+                                <!-- 组合统计 -->
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                                    共 @realTimeCombinations.Count 个组合
+                                </MudChip>
                             </div>
                         }
                     </div>
                     
-                    @if (latestInstance?.InputCombinations?.Any() == true)
+                    <!-- 列表展示 -->
+                    @if (realTimeCombinations?.Any() == true)
                     {
-                        var paginatedCombinations = latestInstance.InputCombinations
-                            .Skip((currentCombinationPage - 1) * combinationsPerPage)
-                            .Take(combinationsPerPage);
-                            
-                        <MudGrid Spacing="3">
-                            @foreach (var combination in paginatedCombinations)
-                            {
-                                <MudItem xs="12">
-                                    <MudCard Outlined="true" Class="hover-card">
-                                        <MudCardContent Class="pa-3">
-                                            <div class="d-flex justify-space-between align-center mb-2">
-                                                <div class="d-flex align-center gap-2">
-                                                    <code class="combination-id">@combination.CombinationId</code>
-                                                    @{
-                                                        var output = GetOutputForCombination(combination.CombinationId);
-                                                        var hasOutput = output != null;
-                                                    }
-                                                    @if (hasOutput && output!.IsSuccess)
-                                                    {
-                                                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">已完成</MudChip>
-                                                    }
-                                                    else if (hasOutput && !output!.IsSuccess)
-                                                    {
-                                                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Error">失败</MudChip>
-                                                    }
-                                                    else
-                                                    {
-                                                        <MudChip T="string" Size="Size.Small" Color="Color.Default">待处理</MudChip>
-                                                    }
-                                                </div>
-                                                
-                                                @if (hasOutput && output!.IsSuccess)
-                                                {
-                                                    <MudButton Variant="Variant.Text" 
-                                                              StartIcon="@Icons.Material.Filled.Visibility"
-                                                              OnClick="() => ShowCombinationResult(combination, output)"
-                                                              Size="Size.Small">
-                                                        查看结果
-                                                    </MudButton>
-                                                }
-                                            </div>
-                                            
-                                            <div class="combination-data">
-                                                @foreach (var kvp in combination.DataMap)
-                                                {
-                                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" 
-                                                            Title="@($"{kvp.Key}: {GetDocumentSummary(kvp.Value)}")">
-                                                        @kvp.Key
-                                                    </MudChip>
-                                                }
-                                            </div>
-                                        </MudCardContent>
-                                    </MudCard>
-                                </MudItem>
-                            }
-                        </MudGrid>
+                        <InputCombinationList 
+                            Combinations="@realTimeCombinations"
+                            ShowActions="true"
+                            ShowPagination="true"
+                            Dense="@isCompactView"
+                            TotalCount="@realTimeCombinations.Count"
+                            PromptTemplate="@definition?.PromptTemplate?.TemplateContent"
+                            OnExecute="ExecuteCombination"
+                            OnPreview="PreviewCombinationData"
+                            OnPromptPreview="ShowPromptPreview" />
+                    }
+                    else if (isLoadingCombinations)
+                    {
+                        <div class="loading-state">
+                            <MudProgressCircular Size="Size.Large" />
+                            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-3">
+                                正在生成输入组合...
+                            </MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                请稍候，这可能需要几秒钟时间
+                            </MudText>
+                        </div>
                     }
                     else
                     {
-                        <div class="text-center pa-8">
+                        <div class="empty-state">
                             <MudIcon Icon="@Icons.Material.Outlined.DataArray" Size="Size.Large" Color="Color.Secondary" />
-                            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">
-                                @if (latestInstance == null)
+                            <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-2 mb-2">
+                                暂无输入组合
+                            </MudText>
+                            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-3">
+                                @if (definition?.QueryDefinitions?.Any() != true)
                                 {
-                                    <span>任务尚未执行</span>
+                                    <span>任务未定义查询，无法生成组合</span>
                                 }
                                 else
                                 {
-                                    <span>暂无组合数据</span>
+                                    <span>点击"重新生成"按钮来创建输入组合</span>
                                 }
                             </MudText>
+                            @if (definition?.QueryDefinitions?.Any() == true)
+                            {
+                                <MudButton Variant="Variant.Filled" 
+                                          Color="Color.Primary"
+                                          StartIcon="@Icons.Material.Filled.Add"
+                                          OnClick="RefreshCombinations"
+                                          Size="Size.Large">
+                                    生成输入组合
+                                </MudButton>
+                            }
                         </div>
                     }
                 </div>
@@ -481,6 +494,41 @@
     font-style: italic;
     line-height: 1.6;
 }
+
+/* 新增的样式 */
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    text-align: center;
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    text-align: center;
+}
+
+.empty-state .mud-icon {
+    opacity: 0.6;
+}
+
+/* 按钮组样式优化 */
+.mud-button-group .mud-button {
+    min-width: 60px;
+}
+
+/* 表格容器优化 */
+.combination-table-container {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
 </style>
 
 @code {
@@ -492,8 +540,9 @@
     private bool isLoading = true;
     private bool isExecuting = false;
     private int activeTab = 0;
-    private int currentCombinationPage = 1;
-    private int combinationsPerPage = 10;
+    private bool isLoadingCombinations = false;
+    private List<ReasoningInputCombination> realTimeCombinations = new();
+    private bool isCompactView = false;
 
     private List<BreadcrumbItem> breadcrumbItems = new()
     {
@@ -687,5 +736,82 @@
             MaxWidth = MaxWidth.Medium,
             FullWidth = true
         });
+    }
+
+    private async Task RefreshCombinations()
+    {
+        if (definition == null) return;
+        
+        isLoadingCombinations = true;
+        try
+        {
+            realTimeCombinations = await ReasoningService.GenerateInputCombinationsAsync(definition.Id);
+            Snackbar.Add("输入组合已重新生成", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"重新生成输入组合失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoadingCombinations = false;
+        }
+    }
+
+    private async Task ExecuteCombination(ReasoningInputCombination combination)
+    {
+        if (definition == null) return;
+        
+        try
+        {
+            await ReasoningService.ExecuteCombinationAsync(definition.Id, combination.CombinationId);
+            Snackbar.Add("组合已执行", Severity.Success);
+            await LoadTaskDetail();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"执行组合失败: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task PreviewCombinationData(ReasoningInputCombination combination)
+    {
+        if (definition == null) return;
+        
+        try
+        {
+            var output = await ReasoningService.GetOutputForCombinationAsync(definition.Id, combination.CombinationId);
+            if (output != null)
+            {
+                await ShowCombinationResult(combination, output);
+            }
+            else
+            {
+                Snackbar.Add("无法获取组合输出", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"预览组合数据失败: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ShowPromptPreview(string promptContent)
+    {
+        try
+        {
+            await DialogService.ShowAsync<PromptPreviewDialog>("Prompt预览", new DialogParameters
+            {
+                ["Content"] = promptContent
+            }, new DialogOptions
+            {
+                MaxWidth = MaxWidth.Medium,
+                FullWidth = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"显示Prompt预览失败: {ex.Message}", Severity.Error);
+        }
     }
 } 

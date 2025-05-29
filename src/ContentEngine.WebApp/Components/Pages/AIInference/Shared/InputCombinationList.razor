@@ -1,0 +1,482 @@
+@using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.Inference.Utils
+@using LiteDB
+
+<MudTable Items="@Combinations" 
+          Hover="true" 
+          Striped="true" 
+          Dense="@Dense"
+          FixedHeader="true"
+          HorizontalScrollbar="true"
+          Breakpoint="Breakpoint.None"
+          Style="overflow-x: auto;"
+          Class="combination-table">
+    <HeaderContent>
+        <MudTh Style="width: 100px; white-space: nowrap;">ID</MudTh>
+        @foreach (var viewName in ViewNames)
+        {
+            <MudTh Style="@($"{GetColumnStyle(viewName)}; white-space: nowrap;")">@viewName</MudTh>
+        }
+        <MudTh Style="width: 80px; white-space: nowrap;">状态</MudTh>
+        @if (ShowActions)
+        {
+            <MudTh Style="width: 140px; white-space: nowrap;">操作</MudTh>
+        }
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd Style="white-space: nowrap;">
+            <code class="combination-id">@GetShortId(context.CombinationId)</code>
+        </MudTd>
+        @foreach (var viewName in ViewNames)
+        {
+            <MudTd Style="white-space: nowrap;">
+                <div class="view-content">
+                    @if (context.DataMap.ContainsKey(viewName))
+                    {
+                        @GetViewContent(context.DataMap[viewName])
+                    }
+                    else
+                    {
+                        <span class="no-data">-</span>
+                    }
+                </div>
+            </MudTd>
+        }
+        <MudTd Style="white-space: nowrap;">
+            <MudChip T="string" 
+                    Size="Size.Small" 
+                    Color="@GetStatusColor(context)" 
+                    Icon="@GetStatusIcon(context)"
+                    Variant="Variant.Filled">
+                @GetStatusText(context)
+            </MudChip>
+        </MudTd>
+        @if (ShowActions)
+        {
+            <MudTd Style="white-space: nowrap;">
+                <div class="action-buttons">
+                    <MudTooltip Text="预览Prompt">
+                        <MudIconButton Icon="@Icons.Material.Filled.TextSnippet"
+                                      Color="Color.Secondary"
+                                      Size="Size.Small"
+                                      OnClick="() => ShowPromptPreview(context)" />
+                    </MudTooltip>
+                    <MudTooltip Text="预览数据">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                      Color="Color.Info"
+                                      Size="Size.Small"
+                                      OnClick="() => OnPreview.InvokeAsync(context)" />
+                    </MudTooltip>
+                    <MudTooltip Text="执行组合">
+                        <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
+                                      Color="Color.Primary"
+                                      Size="Size.Small"
+                                      OnClick="() => OnExecute.InvokeAsync(context)" />
+                    </MudTooltip>
+                </div>
+            </MudTd>
+        }
+    </RowTemplate>
+    <PagerContent>
+        @if (ShowPagination && TotalCount > 0)
+        {
+            <MudTablePager PageSizeOptions="new int[]{10, 25, 50, 100}" 
+                          HideRowsPerPage="false"
+                          HidePagination="false"
+                          InfoFormat="{first_item}-{last_item} / {all_items}" />
+        }
+    </PagerContent>
+</MudTable>
+
+@if (Combinations?.Any() != true)
+{
+    <div class="empty-state">
+        <MudIcon Icon="@Icons.Material.Outlined.DataArray" Size="Size.Large" Color="Color.Secondary" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">
+            @EmptyMessage
+        </MudText>
+    </div>
+}
+
+<style>
+.combination-table {
+    border-radius: 8px;
+    overflow-x: auto;
+    width: 100%;
+}
+
+.combination-id {
+    font-family: 'Courier New', monospace;
+    background-color: var(--mud-palette-grey-lighten-4);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.view-content {
+    line-height: 1.4;
+}
+
+.view-content-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+    height: auto;
+}
+
+.field-chips-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    overflow: hidden;
+    align-items: flex-start;
+}
+
+.field-chip {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--mud-palette-surface-variant);
+    border-radius: 4px;
+    padding: 3px 6px;
+    border: 1px solid var(--mud-palette-divider);
+    transition: all 0.2s ease;
+    min-width: 60px;
+    width: fit-content;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.field-chip:hover {
+    background-color: var(--mud-palette-action-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 10;
+}
+
+.field-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--mud-palette-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 1px;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.field-content {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-primary);
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.more-fields-indicator {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.7rem;
+    padding: 2px 4px;
+    background-color: var(--mud-palette-grey-lighten-5);
+    border-radius: 8px;
+    justify-content: center;
+    border: 1px dashed var(--mud-palette-divider);
+    min-width: 30px;
+    max-width: 50px;
+    height: 20px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.hover-overlay {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-divider);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 8px;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: all 0.2s ease;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.view-content-container:hover .hover-overlay {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.hover-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.field-chip-small {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--mud-palette-surface-variant);
+    border-radius: 3px;
+    padding: 2px 4px;
+    border: 1px solid var(--mud-palette-divider);
+    min-width: 50px;
+    max-width: 80px;
+    flex-shrink: 0;
+}
+
+.field-chip-small .field-label {
+    font-size: 0.55rem;
+}
+
+.field-chip-small .field-content {
+    font-size: 0.7rem;
+}
+
+.no-data {
+    color: var(--mud-palette-text-disabled);
+    font-style: italic;
+}
+
+.action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    text-align: center;
+}
+
+/* 紧凑模式样式 */
+.combination-table.dense .field-chip {
+    padding: 2px 4px;
+    min-width: 50px;
+}
+
+.combination-table.dense .field-label {
+    font-size: 0.55rem;
+}
+
+.combination-table.dense .field-content {
+    font-size: 0.7rem;
+}
+
+.combination-table.dense .more-fields-indicator {
+    font-size: 0.65rem;
+    padding: 1px 3px;
+    min-width: 25px;
+    max-width: 40px;
+    height: 16px;
+}
+
+.combination-table.dense .hover-overlay {
+    display: none;
+}
+
+/* 小屏幕响应式 */
+@@media (max-width: 768px) {
+    .field-chip {
+        padding: 2px 4px;
+        min-width: 50px;
+    }
+    
+    .field-label {
+        font-size: 0.5rem;
+    }
+    
+    .field-content {
+        font-size: 0.65rem;
+    }
+    
+    .more-fields-indicator {
+        font-size: 0.6rem;
+        padding: 1px 3px;
+        min-width: 20px;
+        max-width: 45px;
+        height: 16px;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+        gap: 1px;
+    }
+    
+    .hover-overlay {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 90vw;
+        max-height: 200px;
+    }
+}
+
+/* 表格样式优化 */
+.mud-table tbody tr:hover {
+    background-color: var(--mud-palette-action-hover) !important;
+}
+
+.mud-chip.mud-chip-filled {
+    font-weight: 500;
+}
+
+.mud-table-head .mud-table-cell {
+    font-weight: 600;
+    background-color: var(--mud-palette-surface-variant);
+}
+</style>
+
+@code {
+    [Parameter] public List<ReasoningInputCombination> Combinations { get; set; } = new();
+    [Parameter] public bool ShowActions { get; set; } = true;
+    [Parameter] public bool ShowPagination { get; set; } = true;
+    [Parameter] public bool Dense { get; set; } = false;
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public string EmptyMessage { get; set; } = "暂无组合数据";
+    [Parameter] public string? PromptTemplate { get; set; }
+    
+    [Parameter] public EventCallback<ReasoningInputCombination> OnExecute { get; set; }
+    [Parameter] public EventCallback<ReasoningInputCombination> OnPreview { get; set; }
+    [Parameter] public EventCallback<string> OnPromptPreview { get; set; }
+
+    private List<string> ViewNames = new();
+
+    protected override void OnParametersSet()
+    {
+        // 获取所有唯一的视图名称
+        ViewNames = Combinations
+            .SelectMany(c => c.DataMap.Keys)
+            .Distinct()
+            .OrderBy(name => name)
+            .ToList();
+    }
+
+    private string GetShortId(string combinationId)
+    {
+        return combinationId.Length > 6 ? $"{combinationId[..6]}" : combinationId;
+    }
+
+    private string GetColumnStyle(string viewName)
+    {
+        // 只设置最小宽度，让列可以根据内容自由扩展，配合水平滚动
+        return Dense ? "min-width: 250px;" : "min-width: 350px;";
+    }
+
+    private RenderFragment GetViewContent(BsonDocument doc)
+    {
+        // 过滤掉 _id 字段，只取有意义的字段
+        var allMeaningfulFields = doc
+            .Where(kvp => kvp.Key != "_id" && kvp.Value != null && !kvp.Value.IsNull)
+            .ToList();
+            
+        // 紧凑模式只显示首个字段，标准模式显示前4个字段（支持两行显示）
+        var displayFields = allMeaningfulFields.Take(Dense ? 1 : 4).ToList();
+        var hasMoreFields = allMeaningfulFields.Count > (Dense ? 1 : 4);
+        
+        return @<div class="view-content-container" title="@GetTooltipText(allMeaningfulFields)">
+            <div class="field-chips-row">
+                @foreach (var kvp in displayFields)
+                {
+                    <div class="field-chip">
+                        <span class="field-label">@kvp.Key</span>
+                        <span class="field-content">@GetFieldValuePreview(kvp.Value)</span>
+                    </div>
+                }
+                @if (hasMoreFields)
+                {
+                    <div class="more-fields-indicator">
+                        <MudIcon Icon="@Icons.Material.Filled.MoreHoriz" Size="Size.Small" />
+                        <span>+@(allMeaningfulFields.Count - (Dense ? 1 : 4))</span>
+                    </div>
+                }
+            </div>
+            
+            @if (!Dense && hasMoreFields)
+            {
+                <div class="hover-overlay">
+                    <div class="hover-content">
+                        @foreach (var kvp in allMeaningfulFields.Skip(4))
+                        {
+                            <div class="field-chip-small">
+                                <span class="field-label">@kvp.Key</span>
+                                <span class="field-content">@GetFieldValuePreview(kvp.Value)</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>;
+    }
+
+    private string GetTooltipText(List<KeyValuePair<string, BsonValue>> fields)
+    {
+        return string.Join("\n", fields.Select(kvp => $"{kvp.Key}: {GetFieldValuePreview(kvp.Value)}"));
+    }
+
+    private Color GetStatusColor(ReasoningInputCombination combination)
+    {
+        // 目前是实时生成的组合，状态为待处理
+        return Color.Warning;
+    }
+    
+    private string GetStatusIcon(ReasoningInputCombination combination)
+    {
+        return Icons.Material.Filled.Schedule;
+    }
+    
+    private string GetStatusText(ReasoningInputCombination combination)
+    {
+        return "待处理";
+    }
+    
+    private string GetFieldValuePreview(BsonValue value)
+    {
+        if (value == null || value.IsNull) return "null";
+        
+        var str = value.ToString();
+        // 大幅增加显示字符数，让更多内容能被显示
+        var maxLength = Dense ? 60 : 100;
+        return str.Length > maxLength ? str.Substring(0, maxLength - 3) + "..." : str;
+    }
+
+    private async Task ShowPromptPreview(ReasoningInputCombination combination)
+    {
+        if (string.IsNullOrEmpty(PromptTemplate))
+        {
+            await OnPromptPreview.InvokeAsync("未提供Prompt模板");
+            return;
+        }
+
+        try
+        {
+            // 使用模板引擎填充prompt
+            var filledPrompt = PromptTemplatingEngine.Fill(PromptTemplate, combination.DataMap);
+            await OnPromptPreview.InvokeAsync(filledPrompt);
+        }
+        catch (Exception ex)
+        {
+            await OnPromptPreview.InvokeAsync($"生成Prompt预览失败: {ex.Message}");
+        }
+    }
+} 

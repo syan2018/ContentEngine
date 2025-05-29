@@ -46,6 +46,9 @@ builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IPromptExecutio
 // 注册推理引擎服务
 builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IReasoningService, ContentEngine.Core.Inference.Services.ReasoningService>();
 
+// 注册Query处理服务
+builder.Services.AddScoped<ContentEngine.Core.AI.Services.IQueryProcessingService, ContentEngine.Core.AI.Services.QueryProcessingService>();
+
 // 2. 配置请求本地化选项 (可选，但推荐)
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {

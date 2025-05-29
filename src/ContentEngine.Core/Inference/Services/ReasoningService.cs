@@ -311,6 +311,129 @@ namespace ContentEngine.Core.Inference.Services
 
         #endregion
 
+        #region 实时组合生成
+
+        public async Task<List<ReasoningInputCombination>> GenerateInputCombinationsAsync(string definitionId, CancellationToken cancellationToken = default)
+        {
+            var definition = await GetDefinitionByIdAsync(definitionId, cancellationToken);
+            if (definition == null)
+            {
+                throw new InvalidOperationException($"推理事务定义不存在: {definitionId}");
+            }
+
+            var resolvedViews = new Dictionary<string, ViewData>();
+
+            // 执行所有查询，获取数据视图
+            foreach (var queryDef in definition.QueryDefinitions)
+            {
+                var viewData = await ExecuteQueryDefinitionAsync(queryDef, cancellationToken);
+                resolvedViews[queryDef.OutputViewName] = viewData;
+                _logger.LogInformation("查询 {ViewName} 返回 {RecordCount} 条记录", queryDef.OutputViewName, viewData.Items.Count);
+            }
+
+            var allCombinations = new List<ReasoningInputCombination>();
+
+            // 根据组合规则生成组合
+            foreach (var rule in definition.DataCombinationRules)
+            {
+                var combinations = GenerateDataCombinations(resolvedViews, rule);
+                allCombinations.AddRange(combinations);
+            }
+
+            // 如果没有定义组合规则，则创建默认的完全叉积
+            if (!definition.DataCombinationRules.Any() && resolvedViews.Any())
+            {
+                var defaultRule = new DataCombinationRule
+                {
+                    ViewNamesToCrossProduct = resolvedViews.Keys.ToList(),
+                    MaxCombinations = 1000,
+                    Strategy = CombinationStrategy.CrossProduct
+                };
+                var defaultCombinations = GenerateDataCombinations(resolvedViews, defaultRule);
+                allCombinations.AddRange(defaultCombinations);
+            }
+
+            _logger.LogInformation("为定义 {DefinitionId} 生成了 {CombinationCount} 个输入组合", definitionId, allCombinations.Count);
+            return allCombinations;
+        }
+
+        public async Task<ReasoningOutputItem> ExecuteCombinationAsync(string definitionId, string combinationId, CancellationToken cancellationToken = default)
+        {
+            var definition = await GetDefinitionByIdAsync(definitionId, cancellationToken);
+            if (definition == null)
+            {
+                throw new InvalidOperationException($"推理事务定义不存在: {definitionId}");
+            }
+
+            // 生成组合以找到匹配的组合
+            var combinations = await GenerateInputCombinationsAsync(definitionId, cancellationToken);
+            var targetCombination = combinations.FirstOrDefault(c => c.CombinationId == combinationId);
+            
+            if (targetCombination == null)
+            {
+                throw new InvalidOperationException($"组合不存在: {combinationId}");
+            }
+
+            // 执行单个组合
+            var startTime = DateTime.UtcNow;
+            try
+            {
+                var prompt = PromptTemplatingEngine.Fill(definition.PromptTemplate.TemplateContent, targetCombination.DataMap);
+                
+                var result = await _promptExecutionService.ExecutePromptAsync(prompt, "ContentEngineHelper", cancellationToken);
+                var executionTime = DateTime.UtcNow - startTime;
+
+                var output = new ReasoningOutputItem
+                {
+                    InputCombinationId = combinationId,
+                    IsSuccess = result.IsSuccess,
+                    GeneratedText = result.GeneratedText,
+                    ExecutionTime = executionTime,
+                    CostUSD = result.CostUSD
+                };
+
+                if (!result.IsSuccess)
+                {
+                    output.FailureReason = result.FailureReason;
+                }
+
+                _logger.LogInformation("组合 {CombinationId} 执行完成，成功: {IsSuccess}", combinationId, result.IsSuccess);
+                return output;
+            }
+            catch (Exception ex)
+            {
+                var executionTime = DateTime.UtcNow - startTime;
+                _logger.LogError(ex, "执行组合 {CombinationId} 时发生错误", combinationId);
+                
+                return new ReasoningOutputItem
+                {
+                    InputCombinationId = combinationId,
+                    IsSuccess = false,
+                    FailureReason = ex.Message,
+                    ExecutionTime = executionTime
+                };
+            }
+        }
+
+        public async Task<ReasoningOutputItem?> GetOutputForCombinationAsync(string definitionId, string combinationId, CancellationToken cancellationToken = default)
+        {
+            // 在已有的实例中查找该组合的输出结果
+            var instances = await GetInstancesAsync(definitionId, null, cancellationToken);
+            
+            foreach (var instance in instances)
+            {
+                var output = instance.Outputs.FirstOrDefault(o => o.InputCombinationId == combinationId);
+                if (output != null)
+                {
+                    return output;
+                }
+            }
+
+            return null;
+        }
+
+        #endregion
+
         #region 暂未实现的方法
 
         public Task<ReasoningTransactionInstance> ResumeTransactionAsync(string instanceId, CancellationToken cancellationToken = default)
