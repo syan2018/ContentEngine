@@ -1,0 +1,190 @@
+@using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.Inference.Services
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject IReasoningDefinitionService ReasoningDefinitionService
+@inject IReasoningInstanceService ReasoningInstanceService
+
+<MudCard Class="inference-card" Elevation="2">
+    <MudCardContent Class="pa-6">
+        <!-- 顶部标题和状态 -->
+        <div class="d-flex justify-space-between align-start mb-4">
+            <div class="flex-grow-1">
+                <div class="d-flex align-center gap-3 mb-2">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold task-title">
+                        @Definition?.Name
+                    </MudText>
+                    @GetStatusBadge(Instance.Status)
+                </div>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="task-description">
+                    @(string.IsNullOrEmpty(Definition?.Description) ? "无描述" : Definition?.Description)
+                </MudText>
+            </div>
+        </div>
+
+        <!-- Schema标签 -->
+        @if (Definition?.QueryDefinitions?.Any() == true)
+        {
+            <div class="d-flex flex-wrap gap-2 mb-4">
+                @foreach (var query in Definition?.QueryDefinitions ?? new List<QueryDefinition>())
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text" Class="schema-chip">
+                        @query.SourceSchemaName
+                    </MudChip>
+                }
+            </div>
+        }
+
+        <!-- 进度条（如果有运行中的实例） -->
+        @if (Instance.Status == TransactionStatus.GeneratingOutputs || 
+             Instance.Status == TransactionStatus.FetchingData || 
+             Instance.Status == TransactionStatus.CombiningData)
+        {
+            <div class="mb-4">
+                <div class="d-flex justify-space-between align-center mb-2">
+                    <MudText Typo="Typo.body2" Class="font-weight-medium">执行进度</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Primary" Class="font-weight-medium">
+                        @Instance.Metrics.ProcessedCombinations / @Instance.Metrics.TotalCombinations
+                        (@Instance.Metrics.ProgressPercentage.ToString("F0")%)
+                    </MudText>
+                </div>
+                <MudProgressLinear Value="@Instance.Metrics.ProgressPercentage" 
+                                  Color="Color.Primary" 
+                                  Size="Size.Medium"
+                                  Class="progress-bar" />
+            </div>
+        }
+
+        <!-- 底部信息和操作 -->
+        <div class="d-flex justify-space-between align-center pt-2">
+            <!-- 左侧信息 -->
+            <div class="d-flex align-center gap-4 text-muted">
+                <div class="d-flex align-center gap-1">
+                    <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" />
+                    <MudText Typo="Typo.caption">
+                        @Definition?.CreatedAt.ToString("MM-dd HH:mm")
+                    </MudText>
+                </div>
+                <div class="d-flex align-center gap-1">
+                    <MudIcon Icon="@Icons.Material.Filled.QueryStats" Size="Size.Small" />
+                    <MudText Typo="Typo.caption">
+                        @Definition?.QueryDefinitions.Count 个查询
+                    </MudText>
+                </div>
+                <div class="d-flex align-center gap-1">
+                    <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Small" Color="Color.Success" />
+                    <MudText Typo="Typo.caption" Color="Color.Success" Class="font-weight-medium">
+                        $@Instance.Metrics.ActualCostUSD.ToString("F2")
+                    </MudText>
+                </div>
+            </div>
+
+            <!-- 右侧操作按钮 -->
+            <div class="d-flex align-center gap-2">
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Primary" 
+                          Size="Size.Small"
+                          StartIcon="@Icons.Material.Filled.Visibility"
+                          OnClick="() => OnViewDetail.InvokeAsync(Instance.InstanceId)">
+                    查看详情
+                </MudButton>
+                <MudButton Variant="Variant.Text" 
+                          Color="Color.Secondary" 
+                          Size="Size.Small"
+                          StartIcon="@Icons.Material.Filled.ContentCopy"
+                          OnClick="() => OnCopyTask.InvokeAsync(Instance.InstanceId)">
+                    复制任务
+                </MudButton>
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          Size="Size.Small"
+                          StartIcon="@Icons.Material.Filled.PlayArrow"
+                          OnClick="() => OnExecute.InvokeAsync(Instance.InstanceId)">
+                    重新执行
+                </MudButton>
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Color="Color.Default">
+                    <MudMenuItem Icon="@Icons.Material.Filled.Edit" 
+                                OnClick="() => OnEdit.InvokeAsync(Instance.InstanceId)">
+                        编辑
+                    </MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.History" 
+                                OnClick="() => OnViewHistory.InvokeAsync(Instance.InstanceId)">
+                        执行历史
+                    </MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem Icon="@Icons.Material.Filled.Delete" 
+                                IconColor="Color.Error"
+                                OnClick="() => OnDelete.InvokeAsync(Instance.InstanceId)">
+                        删除
+                    </MudMenuItem>
+                </MudMenu>
+            </div>
+        </div>
+    </MudCardContent>
+</MudCard>
+
+<style>
+    .inference-card {
+        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        transition: all 0.2s ease-in-out;
+    }
+    
+    .inference-card:hover {
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px);
+    }
+    
+    .task-title {
+        color: var(--mud-palette-text-primary);
+        line-height: 1.4;
+    }
+    
+    .task-description {
+        line-height: 1.5;
+        max-width: 600px;
+    }
+    
+    .schema-chip {
+        background-color: rgba(33, 150, 243, 0.08);
+        color: var(--mud-palette-info);
+        font-weight: 500;
+    }
+    
+    .progress-bar {
+        border-radius: 8px;
+        height: 8px;
+    }
+    
+    .text-muted {
+        color: var(--mud-palette-text-secondary);
+    }
+</style>
+
+@code {
+    [Parameter] public ReasoningTransactionInstance Instance { get; set; } = default!;
+    [Parameter] public ReasoningTransactionDefinition? Definition { get; set; }
+    
+    // 事件回调
+    [Parameter] public EventCallback<string> OnViewDetail { get; set; }
+    [Parameter] public EventCallback<string> OnCopyTask { get; set; }
+    [Parameter] public EventCallback<string> OnExecute { get; set; }
+    [Parameter] public EventCallback<string> OnEdit { get; set; }
+    [Parameter] public EventCallback<string> OnViewHistory { get; set; }
+    [Parameter] public EventCallback<string> OnDelete { get; set; }
+
+    private RenderFragment GetStatusBadge(TransactionStatus status)
+    {
+        var (text, color) = status switch
+        {
+            TransactionStatus.Completed => ("完成", Color.Success),
+            TransactionStatus.GeneratingOutputs or TransactionStatus.FetchingData or TransactionStatus.CombiningData => ("进行中", Color.Primary),
+            TransactionStatus.Paused => ("暂停", Color.Warning),
+            TransactionStatus.Failed => ("失败", Color.Error),
+            _ => ("等待中", Color.Default)
+        };
+        
+        return @<MudChip T="string" Size="Size.Small" Color="@color" Class="status-chip">@text</MudChip>;
+    }
+} 

@@ -1,17 +1,20 @@
 @page "/"
 @using ContentEngine.Core.DataPipeline.Services
+@using ContentEngine.Core.Inference.Services
 @inject ISchemaDefinitionService SchemaService
 @inject IDataEntryService DataEntryService
+@inject IReasoningDefinitionService ReasoningDefinitionService
+@inject IReasoningInstanceService ReasoningInstanceService
 @inject NavigationManager Navigation
 
 <PageTitle>ContentEngine 控制台</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-6">
     <MudStack Spacing="6">
         <!-- 页面标题 -->
-        <div>
-            <MudText Typo="Typo.h3" Class="mb-2">ContentEngine 控制台</MudText>
-            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">
+        <div Class="pa-4">
+            <MudText Typo="Typo.h3" Class="mb-2 font-weight-bold">ContentEngine 控制台</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">
                 欢迎使用 ContentEngine，您的 AI 驱动内容结构化与推理引擎
             </MudText>
         </div>
@@ -19,56 +22,56 @@
         <!-- 统计卡片 -->
         <MudGrid>
             <MudItem xs="12" sm="6" md="3">
-                <MudCard>
-                    <MudCardContent>
+                <MudCard Class="stat-card" Elevation="1">
+                    <MudCardContent Class="pa-4">
                         <div class="d-flex justify-space-between align-center">
                             <div>
-                                <MudText Typo="Typo.h4">@totalSchemas</MudText>
+                                <MudText Typo="Typo.h4" Class="font-weight-bold mb-1">@totalSchemas</MudText>
                                 <MudText Typo="Typo.body2" Color="Color.Secondary">数据结构总数</MudText>
                             </div>
-                            <MudIcon Icon="Icons.Material.Filled.Schema" Color="Color.Primary" Size="Size.Large" />
+                            <MudIcon Icon="@Icons.Material.Filled.Schema" Color="Color.Primary" Size="Size.Large" />
                         </div>
                     </MudCardContent>
                 </MudCard>
             </MudItem>
             
             <MudItem xs="12" sm="6" md="3">
-                <MudCard>
-                    <MudCardContent>
+                <MudCard Class="stat-card" Elevation="1">
+                    <MudCardContent Class="pa-4">
                         <div class="d-flex justify-space-between align-center">
                             <div>
-                                <MudText Typo="Typo.h4">@totalRecords</MudText>
+                                <MudText Typo="Typo.h4" Class="font-weight-bold mb-1">@totalRecords.ToString("N0")</MudText>
                                 <MudText Typo="Typo.body2" Color="Color.Secondary">数据记录总数</MudText>
                             </div>
-                            <MudIcon Icon="Icons.Material.Filled.DataObject" Color="Color.Success" Size="Size.Large" />
+                            <MudIcon Icon="@Icons.Material.Filled.DataObject" Color="Color.Success" Size="Size.Large" />
                         </div>
                     </MudCardContent>
                 </MudCard>
             </MudItem>
             
             <MudItem xs="12" sm="6" md="3">
-                <MudCard>
-                    <MudCardContent>
+                <MudCard Class="stat-card" Elevation="1">
+                    <MudCardContent Class="pa-4">
                         <div class="d-flex justify-space-between align-center">
                             <div>
-                                <MudText Typo="Typo.h4">24</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">AI 推理任务</MudText>
+                                <MudText Typo="Typo.h4" Class="font-weight-bold mb-1">@totalReasoningDefinitions</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">推理定义总数</MudText>
                             </div>
-                            <MudIcon Icon="Icons.Material.Filled.AutoAwesome" Color="Color.Warning" Size="Size.Large" />
+                            <MudIcon Icon="@Icons.Material.Filled.Psychology" Color="Color.Warning" Size="Size.Large" />
                         </div>
                     </MudCardContent>
                 </MudCard>
             </MudItem>
             
             <MudItem xs="12" sm="6" md="3">
-                <MudCard>
-                    <MudCardContent>
+                <MudCard Class="stat-card" Elevation="1">
+                    <MudCardContent Class="pa-4">
                         <div class="d-flex justify-space-between align-center">
                             <div>
-                                <MudText Typo="Typo.h4">98%</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">系统可用性</MudText>
+                                <MudText Typo="Typo.h4" Class="font-weight-bold mb-1">@totalReasoningInstances</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">推理实例总数</MudText>
                             </div>
-                            <MudIcon Icon="Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                            <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Color="Color.Info" Size="Size.Large" />
                         </div>
                     </MudCardContent>
                 </MudCard>
@@ -76,67 +79,87 @@
         </MudGrid>
 
         <!-- 快捷操作 -->
-        <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true">
-            <MudTabPanel Text="快捷操作" Icon="Icons.Material.Filled.Bolt">
+        <MudTabs Elevation="0" Rounded="false" Class="modern-tabs">
+            <MudTabPanel Text="快捷操作" Icon="@Icons.Material.Filled.Bolt">
                 <MudGrid Class="mt-4">
                     <MudItem xs="12" sm="6" md="3">
-                        <MudCard Class="cursor-pointer" Style="height: 200px;" @onclick="@(() => NavigateTo("/schema-management/create"))">
-                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center">
-                                <MudIcon Icon="Icons.Material.Filled.Add" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
-                                <MudText Typo="Typo.h6" Class="mb-2">创建数据结构</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">定义新的数据结构（Schema）</MudText>
+                        <MudCard Class="action-card" Elevation="2">
+                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center pa-6">
+                                <MudIcon Icon="@Icons.Material.Filled.Storage" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                                <MudText Typo="Typo.h6" Class="mb-2 font-weight-bold">创建数据结构</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center">
+                                    定义新的数据结构（Schema）
+                                </MudText>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" @onclick="@(() => NavigateTo("/schema-management/create"))">
+                                    开始创建
+                                </MudButton>
                             </MudCardContent>
                         </MudCard>
                     </MudItem>
                     
                     <MudItem xs="12" sm="6" md="3">
-                        <MudCard Class="cursor-pointer" Style="height: 200px;" @onclick="@(() => NavigateTo("/data-entry"))">
-                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center">
-                                <MudIcon Icon="Icons.Material.Filled.Input" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
-                                <MudText Typo="Typo.h6" Class="mb-2">信息注入</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">将原始信息转化为结构化数据</MudText>
+                        <MudCard Class="action-card" Elevation="2">
+                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center pa-6">
+                                <MudIcon Icon="@Icons.Material.Filled.FileUpload" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                                <MudText Typo="Typo.h6" Class="mb-2 font-weight-bold">信息注入</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center">
+                                    将原始信息转化为结构化数据
+                                </MudText>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" @onclick="@(() => NavigateTo("/data-entry"))">
+                                    开始注入
+                                </MudButton>
                             </MudCardContent>
                         </MudCard>
                     </MudItem>
                     
                     <MudItem xs="12" sm="6" md="3">
-                        <MudCard Class="cursor-pointer" Style="height: 200px;" @onclick="@(() => NavigateTo("/data-explorer"))">
-                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center">
-                                <MudIcon Icon="Icons.Material.Filled.Search" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
-                                <MudText Typo="Typo.h6" Class="mb-2">数据洞察</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">浏览和分析您的数据</MudText>
+                        <MudCard Class="action-card" Elevation="2">
+                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center pa-6">
+                                <MudIcon Icon="@Icons.Material.Filled.Search" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                                <MudText Typo="Typo.h6" Class="mb-2 font-weight-bold">数据洞察</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center">
+                                    浏览和查询结构化数据内容
+                                </MudText>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" @onclick="@(() => NavigateTo("/data-explorer"))">
+                                    开始探索
+                                </MudButton>
                             </MudCardContent>
                         </MudCard>
                     </MudItem>
                     
                     <MudItem xs="12" sm="6" md="3">
-                        <MudCard Class="cursor-pointer" Style="height: 200px;" @onclick="@(() => NavigateTo("/ai-inference"))">
-                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center">
-                                <MudIcon Icon="Icons.Material.Filled.AutoAwesome" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
-                                <MudText Typo="Typo.h6" Class="mb-2">AI 推理坊</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">执行 AI 推理和生成任务</MudText>
+                        <MudCard Class="action-card" Elevation="2">
+                            <MudCardContent Class="d-flex flex-column align-center justify-center text-center pa-6">
+                                <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                                <MudText Typo="Typo.h6" Class="mb-2 font-weight-bold">AI 推理</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center">
+                                    基于数据进行 AI 分析与生成
+                                </MudText>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" @onclick="@(() => NavigateTo("/ai-inference"))">
+                                    开始推理
+                                </MudButton>
                             </MudCardContent>
                         </MudCard>
                     </MudItem>
                 </MudGrid>
             </MudTabPanel>
             
-            <MudTabPanel Text="最近活动" Icon="Icons.Material.Filled.History">
-                <MudCard Class="mt-4">
-                    <MudCardContent>
-                        <MudText Typo="Typo.h6" Class="mb-4">最近活动</MudText>
+            <MudTabPanel Text="最近活动" Icon="@Icons.Material.Filled.History">
+                <MudCard Class="mt-4 activity-card" Elevation="1">
+                    <MudCardContent Class="pa-4">
+                        <MudText Typo="Typo.h6" Class="mb-4 font-weight-bold">最近活动</MudText>
                         @if (recentActivities.Any())
                         {
                             <MudList T="ActivityItem">
                                 @foreach (var activity in recentActivities)
                                 {
-                                    <MudListItem T="ActivityItem">
-                                        <div class="d-flex align-center">
-                                            <MudAvatar Color="Color.Primary" Size="Size.Small" Class="mr-3">
+                                    <MudListItem T="ActivityItem" Class="activity-item">
+                                        <div class="d-flex align-center pa-2">
+                                            <MudAvatar Color="@GetActivityColor(activity.Type)" Size="Size.Medium" Class="mr-3">
                                                 <MudIcon Icon="@GetActivityIcon(activity.Type)" />
                                             </MudAvatar>
                                             <div class="flex-grow-1">
-                                                <MudText Typo="Typo.body1">@activity.Description</MudText>
+                                                <MudText Typo="Typo.body1" Class="font-weight-medium">@activity.Description</MudText>
                                                 <MudText Typo="Typo.caption" Color="Color.Secondary">@activity.Timestamp.ToString("yyyy-MM-dd HH:mm")</MudText>
                                             </div>
                                         </div>
@@ -146,7 +169,10 @@
                         }
                         else
                         {
-                            <MudText Color="Color.Secondary">暂无最近活动</MudText>
+                            <div class="text-center pa-4">
+                                <MudIcon Icon="@Icons.Material.Filled.Timeline" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+                                <MudText Color="Color.Secondary">暂无最近活动</MudText>
+                            </div>
                         }
                     </MudCardContent>
                 </MudCard>
@@ -158,6 +184,8 @@
 @code {
     private int totalSchemas = 0;
     private long totalRecords = 0;
+    private int totalReasoningDefinitions = 0;
+    private int totalReasoningInstances = 0;
     private List<ActivityItem> recentActivities = new();
 
     protected override async Task OnInitializedAsync()
@@ -173,7 +201,7 @@
             var schemas = await SchemaService.GetAllSchemasAsync();
             totalSchemas = schemas?.Count ?? 0;
 
-            // 计算总记录数（这里简化处理）
+            // 计算总记录数
             totalRecords = 0;
             if (schemas != null)
             {
@@ -189,6 +217,22 @@
                         // 忽略单个schema的错误
                     }
                 }
+            }
+
+            // 加载推理定义和实例统计
+            try
+            {
+                var reasoningDefinitions = await ReasoningDefinitionService.GetDefinitionsAsync();
+                totalReasoningDefinitions = reasoningDefinitions?.Count ?? 0;
+
+                var reasoningInstances = await ReasoningInstanceService.GetInstancesAsync();
+                totalReasoningInstances = reasoningInstances?.Count ?? 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"加载推理统计失败: {ex.Message}");
+                totalReasoningDefinitions = 0;
+                totalReasoningInstances = 0;
             }
 
             // 模拟最近活动数据
@@ -218,6 +262,14 @@
         _ => Icons.Material.Filled.Info
     };
 
+    private Color GetActivityColor(string type) => type switch
+    {
+        "schema" => Color.Primary,
+        "data" => Color.Success,
+        "ai" => Color.Warning,
+        _ => Color.Default
+    };
+
     private class ActivityItem
     {
         public string Type { get; set; } = "";
@@ -227,13 +279,55 @@
 }
 
 <style>
-    .cursor-pointer {
-        cursor: pointer;
-        transition: transform 0.2s ease-in-out;
+    /* 统计卡片样式 */
+    .stat-card {
+        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        transition: box-shadow 0.2s ease;
     }
     
-    .cursor-pointer:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    .stat-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    /* 快捷操作卡片样式 */
+    .action-card {
+        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        transition: box-shadow 0.2s ease;
+        min-height: 240px;
+    }
+    
+    .action-card:hover {
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    /* 活动列表样式 */
+    .activity-card {
+        border-radius: 12px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    
+    .activity-item {
+        border-radius: 8px;
+        transition: background-color 0.2s ease;
+    }
+    
+    .activity-item:hover {
+        background-color: rgba(0, 0, 0, 0.02);
+    }
+
+    /* 标签页样式 */
+    .modern-tabs {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    /* 通用样式 */
+    .font-weight-bold {
+        font-weight: 700;
+    }
+    
+    .font-weight-medium {
+        font-weight: 500;
     }
 </style> 

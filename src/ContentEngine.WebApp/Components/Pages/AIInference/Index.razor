@@ -2,6 +2,7 @@
 @using ContentEngine.Core.Inference.Services
 @using ContentEngine.Core.Inference.Models
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
+@using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Cards
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -103,144 +104,40 @@
             }
             else if (instances.Any())
             {
-                <MudGrid Spacing="4">
+                <MudGrid Spacing="3">
                     @foreach (var instance in instances)
                     {
                         <MudItem xs="12">
-                            <MudCard Class="task-card hover-card" Outlined="true">
-                                <MudCardContent Class="pa-4">
-                                    <div class="d-flex justify-space-between align-start mb-3">
-                                        <div class="flex-grow-1">
-                                            <MudText Typo="Typo.h6" Class="mb-2">@GetDefinitionForInstance(instance)?.Name</MudText>
-                                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                                                @(string.IsNullOrEmpty(GetDefinitionForInstance(instance)?.Description) ? "无描述" : GetDefinitionForInstance(instance)?.Description)
-                                            </MudText>
-                                        </div>
-                                        <div class="d-flex align-center gap-2">
-                                            @GetStatusBadge(instance.Status)
-                                        </div>
-                                    </div>
-
-                                    <!-- Schema标签 -->
-                                    <div class="d-flex flex-wrap gap-2 mb-3">
-                                        @foreach (var query in GetDefinitionForInstance(instance)?.QueryDefinitions ?? new List<QueryDefinition>())
-                                        {
-                                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
-                                                @query.SourceSchemaName
-                                            </MudChip>
-                                        }
-                                    </div>
-
-                                    <!-- 统计信息 -->
-                                    <MudGrid Spacing="2" Class="mb-3">
-                                        <MudItem xs="12" sm="4">
-                                            <div class="d-flex align-center text-muted">
-                                                <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Class="mr-1" />
-                                                <MudText Typo="Typo.caption">
-                                                    创建于 @GetDefinitionForInstance(instance)?.CreatedAt.ToString("MM-dd HH:mm")
-                                                </MudText>
-                                            </div>
-                                        </MudItem>
-                                        <MudItem xs="12" sm="4">
-                                            <div class="d-flex align-center text-muted">
-                                                <MudText Typo="Typo.caption">
-                                                    查询: @GetDefinitionForInstance(instance)?.QueryDefinitions.Count 个
-                                                </MudText>
-                                            </div>
-                                        </MudItem>
-                                        <MudItem xs="12" sm="4">
-                                            @{
-                                                var cost = instance.Metrics.ActualCostUSD;
-                                            }
-                                            <div class="d-flex align-center">
-                                                <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Small" Color="Color.Success" Class="mr-1" />
-                                                <MudText Typo="Typo.caption" Color="Color.Success" Class="font-weight-medium">
-                                                    $@cost.ToString("F2")
-                                                </MudText>
-                                            </div>
-                                        </MudItem>
-                                    </MudGrid>
-
-                                    <!-- 进度条（如果有运行中的实例） -->
-                                    @{
-                                        if (instance.Status == TransactionStatus.GeneratingOutputs || 
-                                            instance.Status == TransactionStatus.FetchingData || 
-                                            instance.Status == TransactionStatus.CombiningData)
-                                        {
-                                            <div class="mb-3">
-                                                <div class="d-flex justify-space-between align-center mb-1">
-                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">执行进度</MudText>
-                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                        @instance.Metrics.ProcessedCombinations / @instance.Metrics.TotalCombinations
-                                                        (@instance.Metrics.ProgressPercentage.ToString("F0")%)
-                                                    </MudText>
-                                                </div>
-                                                <MudProgressLinear Value="@instance.Metrics.ProgressPercentage" 
-                                                                  Color="Color.Primary" 
-                                                                  Size="Size.Small"
-                                                                  Class="rounded" />
-                                            </div>
-                                        }
-                                    }
-                                </MudCardContent>
-
-                                <MudCardActions Class="pa-4 pt-0">
-                                    <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
-                                        <MudButton StartIcon="@Icons.Material.Filled.Visibility" 
-                                                  Color="Color.Primary"
-                                                  OnClick="() => ViewTaskDetail(instance.InstanceId)">
-                                            查看详情
-                                        </MudButton>
-                                        <MudButton StartIcon="@Icons.Material.Filled.ContentCopy" 
-                                                  Color="Color.Secondary"
-                                                  OnClick="() => CopyTask(instance.InstanceId)">
-                                            复制任务
-                                        </MudButton>
-                                        <MudButton StartIcon="@Icons.Material.Filled.PlayArrow" 
-                                                  Color="Color.Success"
-                                                  OnClick="() => ExecuteInstance(instance.InstanceId)">
-                                            执行
-                                        </MudButton>
-                                    </MudButtonGroup>
-                                    
-                                    <MudSpacer />
-                                    
-                                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small">
-                                        <MudMenuItem Icon="@Icons.Material.Filled.Edit" 
-                                                    OnClick="() => EditDefinition(instance.InstanceId)">
-                                            编辑
-                                        </MudMenuItem>
-                                        <MudMenuItem Icon="@Icons.Material.Filled.History" 
-                                                    OnClick="() => ViewInstances(instance.InstanceId)">
-                                            执行历史
-                                        </MudMenuItem>
-                                        <MudDivider />
-                                        <MudMenuItem Icon="@Icons.Material.Filled.Delete" 
-                                                    IconColor="Color.Error"
-                                                    OnClick="() => DeleteInstance(instance.InstanceId)">
-                                            删除
-                                        </MudMenuItem>
-                                    </MudMenu>
-                                </MudCardActions>
-                            </MudCard>
+                            <ReasoningInstanceCard Instance="@instance" 
+                                                 Definition="@GetDefinitionForInstance(instance)"
+                                                 OnViewDetail="@ViewTaskDetail"
+                                                 OnCopyTask="@CopyTask"
+                                                 OnExecute="@ExecuteInstance"
+                                                 OnEdit="@EditDefinition"
+                                                 OnViewHistory="@ViewInstances"
+                                                 OnDelete="@DeleteInstance" />
                         </MudItem>
                     }
                 </MudGrid>
             }
             else
             {
-                <MudPaper Class="pa-8 text-center" Outlined="true">
-                    <MudIcon Icon="@Icons.Material.Filled.Psychology" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
-                    <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mb-2">暂无推理事务定义</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">创建您的第一个推理事务来开始智能推理</MudText>
-                    <MudButton Variant="Variant.Filled" 
-                              Color="Color.Primary" 
-                              Size="Size.Large"
-                              StartIcon="@Icons.Material.Filled.Add"
-                              OnClick="CreateNewDefinition">
-                        创建推理事务
-                    </MudButton>
-                </MudPaper>
+                <MudCard Class="empty-state-card" Elevation="1">
+                    <MudCardContent Class="pa-8 text-center">
+                        <div class="empty-state-icon mb-4">
+                            <MudIcon Icon="@Icons.Material.Filled.Psychology" Size="Size.Large" Color="Color.Secondary" />
+                        </div>
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mb-2">暂无推理事务定义</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">创建您的第一个推理事务来开始智能推理</MudText>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Primary" 
+                                  Size="Size.Large"
+                                  StartIcon="@Icons.Material.Filled.Add"
+                                  OnClick="CreateNewDefinition">
+                            创建推理事务
+                        </MudButton>
+                    </MudCardContent>
+                </MudCard>
             }
         </div>
     </MudStack>
@@ -256,21 +153,17 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
-.task-card {
-    transition: all 0.2s ease-in-out;
-}
-
-.hover-card:hover {
-    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-    transform: translateY(-1px);
-}
-
 .page-title {
     font-weight: 600;
 }
 
-.rounded {
-    border-radius: 6px;
+.empty-state-card {
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.empty-state-icon {
+    opacity: 0.6;
 }
 </style>
 
@@ -336,20 +229,6 @@
     {
         definitionLookup.TryGetValue(instance.DefinitionId, out var definition);
         return definition;
-    }
-
-    private RenderFragment GetStatusBadge(TransactionStatus status)
-    {
-        var (text, color) = status switch
-        {
-            TransactionStatus.Completed => ("已完成", Color.Success),
-            TransactionStatus.GeneratingOutputs or TransactionStatus.FetchingData or TransactionStatus.CombiningData => ("运行中", Color.Primary),
-            TransactionStatus.Paused => ("已暂停", Color.Warning),
-            TransactionStatus.Failed => ("失败", Color.Error),
-            _ => ("等待中", Color.Default)
-        };
-        
-        return @<MudChip T="string" Size="Size.Small" Color="@color">@text</MudChip>;
     }
 
     private void CreateNewDefinition()
