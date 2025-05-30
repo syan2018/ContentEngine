@@ -478,8 +478,6 @@ namespace ContentEngine.Core.Inference.Services
                     }
                 }
 
-                // 同步更新实例（需要锁定）
-                bool shouldPersist = false;
                 lock (instance)
                 {
                     // 移除已存在的输出
@@ -519,26 +517,20 @@ namespace ContentEngine.Core.Inference.Services
                     {
                         instance.Metrics.ProcessedCombinations++;
                     }
-
-                    // 定期持久化：每处理10个组合就持久化一次
-                    shouldPersist = instance.Metrics.ProcessedCombinations % 5 == 0;
                 }
 
-                // 在锁外执行持久化，避免长时间持有锁
-                if (shouldPersist)
+                try
                 {
-                    try
-                    {
-                        await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
-                        _logger.LogDebug("批量执行定期持久化: {InstanceId}, 已处理: {ProcessedCount}", 
-                            instance.InstanceId, instance.Metrics.ProcessedCombinations);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "批量执行定期持久化失败: {InstanceId}", instance.InstanceId);
-                        // 持久化失败不影响执行继续
-                    }
+                    await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
+                    _logger.LogDebug("批量执行定期持久化: {InstanceId}, 已处理: {ProcessedCount}", 
+                        instance.InstanceId, instance.Metrics.ProcessedCombinations);
                 }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "批量执行定期持久化失败: {InstanceId}", instance.InstanceId);
+                    // 持久化失败不影响执行继续
+                }
+                
             }
             finally
             {
