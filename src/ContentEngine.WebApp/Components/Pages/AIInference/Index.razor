@@ -301,7 +301,7 @@
             instances = await ReasoningInstanceService.GetInstancesAsync();
             
             // 加载所有定义用于显示名称和描述
-            definitions = await ReasoningDefinitionService.GetAllDefinitionsAsync();
+            definitions = await ReasoningDefinitionService.GetDefinitionsAsync();
             definitionLookup = definitions.ToDictionary(d => d.Id, d => d);
             
             totalDefinitions = definitions.Count;

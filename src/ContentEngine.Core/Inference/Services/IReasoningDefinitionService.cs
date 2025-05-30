@@ -23,7 +23,7 @@ namespace ContentEngine.Core.Inference.Services
         /// </summary>
         /// <param name="cancellationToken">取消令牌</param>
         /// <returns>推理事务定义列表</returns>
-        Task<List<ReasoningTransactionDefinition>> GetAllDefinitionsAsync(
+        Task<List<ReasoningTransactionDefinition>> GetDefinitionsAsync(
             CancellationToken cancellationToken = default);
 
         /// <summary>

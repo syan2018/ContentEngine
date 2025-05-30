@@ -57,7 +57,7 @@ namespace ContentEngine.Core.Inference.Services
             }
         }
 
-        public async Task<List<ReasoningTransactionDefinition>> GetAllDefinitionsAsync(
+        public async Task<List<ReasoningTransactionDefinition>> GetDefinitionsAsync(
             CancellationToken cancellationToken = default)
         {
             try
