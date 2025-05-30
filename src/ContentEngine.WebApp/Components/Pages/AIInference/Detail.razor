@@ -4,7 +4,6 @@
 @using ContentEngine.Core.Utils
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
-@using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Cards
 @inject IReasoningDefinitionService ReasoningDefinitionService
 @inject IReasoningInstanceService ReasoningInstanceService
 @inject IReasoningExecutionService ReasoningExecutionService
@@ -23,8 +22,11 @@
 
     @if (isLoading)
     {
-        <div class="d-flex justify-center pa-8">
+        <div class="loading-center">
             <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-3">
+                正在加载任务详情...
+            </MudText>
         </div>
     }
     else if (instance == null)
@@ -36,415 +38,47 @@
     else
     {
         <!-- 任务头部信息 -->
-        <MudCard Class="task-header-card mb-4">
-            <MudCardContent Class="pa-4">
-                <MudGrid Spacing="3" AlignItems="Center.Center">
-                    <MudItem xs="12" md="8">
-                        <MudText Typo="Typo.h4" Class="mb-2">@(definition?.Name ?? "未知任务")</MudText>
-                        <MudText Typo="Typo.body1" Class="mb-3">@(definition?.Description ?? "无描述")</MudText>
-                        <div class="d-flex flex-wrap gap-2">
-                            @GetStatusBadge(instance.Status)
-                            <MudChip T="string" Size="Size.Small" Color="Color.Inherit">
-                                实例ID: @instance.InstanceId[..8]...
-                            </MudChip>
-                            @if (definition != null)
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Secondary">
-                                    定义ID: @definition.Id[..8]...
-                                </MudChip>
-                            }
-                        </div>
-                    </MudItem>
-                    
-                    <MudItem xs="12" md="4" Class="text-right">
-                        <MudStack Spacing="2" AlignItems="AlignItems.End">
-                            <MudButton Variant="Variant.Filled" 
-                                      Color="Color.Primary"
-                                      StartIcon="@Icons.Material.Filled.PlayArrow"
-                                      OnClick="ExecuteTask"
-                                      Disabled="isExecuting">
-                                @if (isExecuting)
-                                {
-                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                                    <span>执行中...</span>
-                                }
-                                else
-                                {
-                                    <span>执行推理</span>
-                                }
-                            </MudButton>
-                            
-                            <div class="d-flex gap-2">
-                                <MudButton Variant="Variant.Outlined" 
-                                          StartIcon="@Icons.Material.Filled.ContentCopy"
-                                          OnClick="CopyTask"
-                                          Size="Size.Small">
-                                    复制任务
-                                </MudButton>
-                                <MudButton Variant="Variant.Outlined" 
-                                          StartIcon="@Icons.Material.Filled.Edit"
-                                          OnClick="EditTask"
-                                          Size="Size.Small">
-                                    编辑
-                                </MudButton>
-                            </div>
-                        </MudStack>
-                    </MudItem>
-                </MudGrid>
-            </MudCardContent>
-        </MudCard>
+        <TaskHeaderCard Instance="@instance"
+                       Definition="@definition"
+                       IsExecuting="@isExecuting"
+                       OnExecute="ExecuteTask"
+                       OnCopy="CopyTask"
+                       OnEdit="EditTask" />
 
         <!-- 详情标签页 -->
         <MudTabs @bind-ActivePanelIndex="activeTab" Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="mb-4">
             <MudTabPanel Text="任务概览" Icon="@Icons.Material.Filled.Dashboard">
-                <div class="pa-4">
-                    <MudGrid Spacing="4">
-                        <!-- 数据查询定义 -->
-                        <MudItem xs="12">
-                            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
-                                <MudIcon Icon="@Icons.Material.Filled.Search" Class="mr-2" Color="Color.Primary" />
-                                数据查询定义
-                            </MudText>
-                            
-                            <MudGrid Spacing="3">
-                                @foreach (var query in definition.QueryDefinitions)
-                                {
-                                    <MudItem xs="12" md="6">
-                                        <QueryCard Query="@query" />
-                                    </MudItem>
-                                }
-                            </MudGrid>
-                        </MudItem>
-                        
-                        <!-- 数据组合规则 -->
-                        <MudItem xs="12">
-                            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
-                                <MudIcon Icon="@Icons.Material.Filled.CallMerge" Class="mr-2" Color="Color.Secondary" />
-                                数据组合规则
-                            </MudText>
-                            
-                            @if (definition.DataCombinationRules.Any())
-                            {
-                                var rule = definition.DataCombinationRules.First();
-                                
-                                <MudGrid Spacing="3">
-                                    <MudItem xs="12" md="6">
-                                        <CombinationOverviewCard Title="叉积视图" 
-                                                               ViewNames="@rule.ViewNamesToCrossProduct" 
-                                                               ChipColor="Color.Primary" />
-                                    </MudItem>
-                                    
-                                    <MudItem xs="12" md="6">
-                                        <CombinationOverviewCard Title="单例上下文视图" 
-                                                               ViewNames="@rule.SingletonViewNamesForContext" 
-                                                               ChipColor="Color.Info" />
-                                    </MudItem>
-                                </MudGrid>
-                            }
-                        </MudItem>
-                        
-                        <!-- Prompt 模板和样例 -->
-                        <MudItem xs="12">
-                            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
-                                <MudIcon Icon="@Icons.Material.Filled.TextSnippet" Class="mr-2" Color="Color.Info" />
-                                Prompt 模板和样例
-                            </MudText>
-                            
-                            <MudGrid Spacing="3">
-                                <MudItem xs="12" md="6">
-                                    <MudCard Outlined="true" Class="h-100">
-                                        <MudCardHeader>
-                                            <CardHeaderContent>
-                                                <MudText Typo="Typo.subtitle1">Prompt 模板</MudText>
-                                            </CardHeaderContent>
-                                        </MudCardHeader>
-                                        <MudCardContent Class="pa-3">
-                                            <pre class="prompt-template">@definition.PromptTemplate.TemplateContent</pre>
-                                        </MudCardContent>
-                                    </MudCard>
-                                </MudItem>
-                                
-                                <MudItem xs="12" md="6">
-                                    <MudCard Outlined="true" Class="h-100">
-                                        <MudCardHeader>
-                                            <CardHeaderContent>
-                                                <MudText Typo="Typo.subtitle1">样例 Prompt</MudText>
-                                                <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                                    @if (instance?.InputCombinations?.Any() == true)
-                                                    {
-                                                        <span>基于第一个组合生成</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span>暂无组合数据</span>
-                                                    }
-                                                </MudText>
-                                            </CardHeaderContent>
-                                        </MudCardHeader>
-                                        <MudCardContent Class="pa-3">
-                                            @if (instance?.InputCombinations?.Any() == true)
-                                            {
-                                                var sampleCombination = instance.InputCombinations.FirstOrDefault();
-                                                <pre class="prompt-sample">@GeneratePromptSample(sampleCombination)</pre>
-                                            }
-                                            else
-                                            {
-                                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center pa-4">
-                                                    请先生成输入组合以查看样例 Prompt
-                                                </MudText>
-                                            }
-                                        </MudCardContent>
-                                    </MudCard>
-                                </MudItem>
-                            </MudGrid>
-                        </MudItem>
-                        
-                        <!-- 执行约束 -->
-                        <MudItem xs="12">
-                            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
-                                <MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-2" Color="Color.Warning" />
-                                执行约束
-                            </MudText>
-                            
-                            <MudGrid Spacing="3">
-                                <MudItem xs="12" md="3">
-                                    <ConstraintCard Icon="@Icons.Material.Filled.AttachMoney"
-                                                  IconColor="Color.Success"
-                                                  Value="@($"${definition.ExecutionConstraints.MaxEstimatedCostUSD}")"
-                                                  ValueColor="Color.Success"
-                                                  Label="最大成本限制" />
-                                </MudItem>
-                                
-                                <MudItem xs="12" md="3">
-                                    <ConstraintCard Icon="@Icons.Material.Filled.Timer"
-                                                  IconColor="Color.Info"
-                                                  Value="@definition.ExecutionConstraints.MaxExecutionTimeMinutes.ToString()"
-                                                  ValueColor="Color.Info"
-                                                  Label="最大执行时间（分钟）" />
-                                </MudItem>
-                                
-                                <MudItem xs="12" md="3">
-                                    <ConstraintCard Icon="@Icons.Material.Filled.Speed"
-                                                  IconColor="Color.Warning"
-                                                  Value="@definition.ExecutionConstraints.MaxConcurrentAICalls.ToString()"
-                                                  ValueColor="Color.Warning"
-                                                  Label="最大并发调用数" />
-                                </MudItem>
-                                
-                                <MudItem xs="12" md="3">
-                                    <ConstraintCard Icon="@Icons.Material.Filled.Layers"
-                                                  IconColor="Color.Info"
-                                                  Value="@definition.ExecutionConstraints.BatchSize.ToString()"
-                                                  ValueColor="Color.Info"
-                                                  Label="批处理大小" />
-                                </MudItem>
-                            </MudGrid>
-                        </MudItem>
-
-                        <!-- 执行统计概览 -->
-                        @if (instance != null && instance.Outputs?.Any() == true)
-                        {
-                            <MudItem xs="12">
-                                <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
-                                    <MudIcon Icon="@Icons.Material.Filled.Assessment" Class="mr-2" Color="Color.Success" />
-                                    执行统计概览
-                                </MudText>
-                                
-                                <MudGrid Spacing="3">
-                                    <MudItem xs="12" md="3">
-                                        <StatCard Value="@instance.InputCombinations.Count.ToString()"
-                                                ValueColor="Color.Primary"
-                                                Label="总组合数" />
-                                    </MudItem>
-                                    
-                                    <MudItem xs="12" md="3">
-                                        <StatCard Value="@instance.Metrics.SuccessfulOutputs.ToString()"
-                                                ValueColor="Color.Success"
-                                                Label="已完成" />
-                                    </MudItem>
-                                    
-                                    <MudItem xs="12" md="3">
-                                        <StatCard Value="@($"${instance.Metrics.ActualCostUSD:F2}")"
-                                                ValueColor="Color.Success"
-                                                Label="实际成本" />
-                                    </MudItem>
-                                    
-                                    <MudItem xs="12" md="3">
-                                        <StatCard Value="@($"{instance.Metrics.ElapsedTime.TotalMinutes:F1} min")"
-                                                ValueColor="Color.Info"
-                                                Label="执行时间" />
-                                    </MudItem>
-                                </MudGrid>
-                            </MudItem>
-                        }
-                    </MudGrid>
-                </div>
+                @if (definition != null)
+                {
+                    <TaskOverviewTab Definition="@definition" Instance="@instance" />
+                }
             </MudTabPanel>
             
             <MudTabPanel Text="推理请求" Icon="@Icons.Material.Filled.DataArray">
-                <div class="pa-4">
-                    <!-- 顶部操作栏 -->
-                    <div class="d-flex align-center justify-space-between mb-4">
-                        <div class="d-flex align-center gap-3">
-                            <MudText Typo="Typo.h6">输入组合与执行结果</MudText>
-                            @if (realTimeCombinations?.Any() == true)
-                            {
-                                @if (instance?.InputCombinations?.Any() == true && instance.InputCombinations.Count == realTimeCombinations.Count)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">
-                                        已缓存
-                                    </MudChip>
-                                }
-                                else
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">
-                                        临时生成
-                                    </MudChip>
-                                }
-                            }
-                            <MudButton Variant="Variant.Outlined" 
-                                      StartIcon="@Icons.Material.Filled.Refresh"
-                                      OnClick="RefreshCombinations"
-                                      Size="Size.Small"
-                                      Disabled="@isLoadingCombinations">
-                                @if (isLoadingCombinations)
-                                {
-                                    <MudProgressCircular Size="Size.Small" />
-                                    <span class="ml-2">生成中...</span>
-                                }
-                                else
-                                {
-                                    <span>重新生成</span>
-                                }
-                            </MudButton>
-                        </div>
-                        
-                        @if (realTimeCombinations?.Any() == true)
-                        {
-                            <div class="d-flex align-center gap-3">
-                                <!-- 显示模式切换 -->
-                                <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
-                                    <MudButton StartIcon="@Icons.Material.Filled.ViewList"
-                                              Color="@(isCompactView ? Color.Default : Color.Primary)"
-                                              OnClick="() => isCompactView = false">
-                                        数据视图
-                                    </MudButton>
-                                    <MudButton StartIcon="@Icons.Material.Filled.ViewComfy"
-                                              Color="@(isCompactView ? Color.Primary : Color.Default)"
-                                              OnClick="() => isCompactView = true">
-                                        结果视图
-                                    </MudButton>
-                                </MudButtonGroup>
-
-                                <!-- 组合统计 -->
-                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
-                                    共 @realTimeCombinations.Count 个组合
-                                </MudChip>
-                            </div>
-                        }
-                    </div>
-                    
-                    <!-- 列表展示 -->
-                    @if (realTimeCombinations?.Any() == true)
-                    {
-                        <InputCombinationList 
-                            Combinations="@realTimeCombinations"
-                            Outputs="@(instance?.Outputs ?? new List<ReasoningOutputItem>())"
-                            ShowActions="true"
-                            ShowPagination="true"
-                            Dense="@isCompactView"
-                            ShowResultsPreview="@isCompactView"
-                            TotalCount="@realTimeCombinations.Count"
-                            PromptTemplate="@definition?.PromptTemplate?.TemplateContent"
-                            OnExecute="ExecuteCombination"
-                            OnPromptPreview="ShowPromptPreview"
-                            OnViewResult="ViewCombinationResult"
-                            OnRetry="RetryCombination"
-                            OnBatchExecute="BatchExecuteCombinations"
-                            OnBatchRetry="BatchRetryCombinations"
-                            OnExportResults="ExportResults" />
-                    }
-                    else if (isLoadingCombinations)
-                    {
-                        <div class="loading-state">
-                            <MudProgressCircular Size="Size.Large" />
-                            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-3">
-                                正在生成输入组合...
-                            </MudText>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
-                                请稍候，这可能需要几秒钟时间
-                            </MudText>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="empty-state">
-                            <MudIcon Icon="@Icons.Material.Outlined.DataArray" Size="Size.Large" Color="Color.Secondary" />
-                            <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-2 mb-2">
-                                暂无输入组合
-                            </MudText>
-                            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-3">
-                                @if (definition?.QueryDefinitions?.Any() != true)
-                                {
-                                    <span>任务未定义查询，无法生成组合</span>
-                                }
-                                else
-                                {
-                                    <span>点击"重新生成"按钮来创建输入组合</span>
-                                }
-                            </MudText>
-                            @if (definition?.QueryDefinitions?.Any() == true)
-                            {
-                                <MudButton Variant="Variant.Filled" 
-                                          Color="Color.Primary"
-                                          StartIcon="@Icons.Material.Filled.Add"
-                                          OnClick="RefreshCombinations"
-                                          Size="Size.Large">
-                                    生成输入组合
-                                </MudButton>
-                            }
-                        </div>
-                    }
-                </div>
+                <CombinationTableView 
+                    Combinations="@realTimeCombinations"
+                    Outputs="@(instance.Outputs ?? new List<ReasoningOutputItem>())"
+                    IsLoadingCombinations="@isLoadingCombinations"
+                    IsCompactView="@isCompactView"
+                    HasCachedCombinations="@(instance.InputCombinations?.Any() == true && instance.InputCombinations.Count == realTimeCombinations.Count)"
+                    HasQueryDefinitions="@(definition?.QueryDefinitions?.Any() == true)"
+                    PromptTemplate="@definition?.PromptTemplate?.TemplateContent"
+                    OnRefreshCombinations="RefreshCombinations"
+                    OnViewModeChanged="HandleViewModeChanged"
+                    OnExecuteCombination="ExecuteCombination"
+                    OnPromptPreview="ShowPromptPreview"
+                    OnViewResult="ViewCombinationResult"
+                    OnRetryCombination="RetryCombination"
+                    OnBatchExecute="BatchExecuteCombinations"
+                    OnBatchRetry="BatchRetryCombinations"
+                    OnExportResults="ExportResults" />
             </MudTabPanel>
         </MudTabs>
     }
 </MudContainer>
 
 <style>
-.task-header-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-}
-
-.task-header-card .mud-text-secondary {
-    color: rgba(255, 255, 255, 0.8) !important;
-}
-
-
-.prompt-template, .prompt-sample {
-    white-space: pre-wrap;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    line-height: 1.6;
-    margin: 0;
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.combination-id {
-    font-family: 'Courier New', monospace;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-}
-
-.result-text {
-    font-style: italic;
-    line-height: 1.6;
-}
-
-/* 新增的样式 */
-.loading-state {
+.loading-center {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -452,26 +86,6 @@
     padding: 4rem;
     text-align: center;
 }
-
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem;
-    text-align: center;
-}
-
-.empty-state .mud-icon {
-    opacity: 0.6;
-}
-
-/* 按钮组样式优化 */
-.mud-button-group .mud-button {
-    min-width: 60px;
-}
-
-
 </style>
 
 @code {
@@ -479,7 +93,6 @@
     
     private ReasoningTransactionInstance? instance;
     private ReasoningTransactionDefinition? definition;
-    private List<ReasoningTransactionInstance> allInstances = new();
     private bool isLoading = true;
     private bool isExecuting = false;
     private int activeTab = 0;
@@ -504,30 +117,21 @@
         isLoading = true;
         try
         {
-            // TaskId 现在是 instanceId
             instance = await ReasoningInstanceService.GetInstanceByIdAsync(TaskId);
             
             if (instance != null)
             {
-                // 加载关联的定义
                 definition = await ReasoningDefinitionService.GetDefinitionByIdAsync(instance.DefinitionId);
                 
-                // 加载所有相关实例（用于历史记录等）
-                allInstances = await ReasoningInstanceService.GetInstancesAsync(instance.DefinitionId);
-                
-                // 检查实例是否已经有缓存的组合，如果有就直接使用
                 if (instance.InputCombinations?.Any() == true)
                 {
                     realTimeCombinations = instance.InputCombinations;
-                    Console.WriteLine($"[INFO] 使用实例缓存的输入组合: {realTimeCombinations.Count} 个");
                 }
                 else
                 {
-                    // 如果没有缓存的组合，清空 realTimeCombinations
                     realTimeCombinations.Clear();
                 }
                 
-                // 更新面包屑
                 var displayName = definition?.Name ?? $"实例 {instance.InstanceId[..8]}...";
                 breadcrumbItems[2] = new BreadcrumbItem(displayName, href: null, disabled: true);
             }
@@ -542,77 +146,15 @@
         }
     }
 
-    private ReasoningOutputItem? GetOutputForCombination(string combinationId)
-    {
-        return instance?.Outputs.FirstOrDefault(o => o.InputCombinationId == combinationId);
-    }
-
-    private string GetDocumentSummary(LiteDB.BsonDocument doc)
-    {
-        var summary = new List<string>();
-        foreach (var kvp in doc)
-        {
-            if (kvp.Value != null && !string.IsNullOrEmpty(kvp.Value.AsString))
-            {
-                var value = kvp.Value.AsString;
-                summary.Add($"{kvp.Key}: {(value.Length > 30 ? value[..30] + "..." : value)}");
-            }
-        }
-        return string.Join(", ", summary.Take(3));
-    }
-
-    private RenderFragment GetStatusBadge(TransactionStatus status)
-    {
-        var (text, color) = status switch
-        {
-            TransactionStatus.Completed => ("已完成", Color.Success),
-            TransactionStatus.GeneratingOutputs or TransactionStatus.FetchingData or TransactionStatus.CombiningData => ("运行中", Color.Primary),
-            TransactionStatus.Paused => ("已暂停", Color.Warning),
-            TransactionStatus.Failed => ("失败", Color.Error),
-            _ => ("等待中", Color.Default)
-        };
-        
-        return @<MudChip T="string" Size="Size.Small" Color="@color">@text</MudChip>;
-    }
-
-    private string GeneratePromptSample(ReasoningInputCombination combination)
-    {
-        if (definition?.PromptTemplate?.TemplateContent == null)
-            return "模板为空";
-            
-        var content = definition.PromptTemplate.TemplateContent;
-        
-        // 替换模板中的占位符
-        foreach (var kvp in combination.DataMap)
-        {
-            var viewName = kvp.Key;
-            var doc = kvp.Value;
-            
-            // 为该视图的每个字段替换占位符
-            foreach (var field in doc)
-            {
-                var placeholder = "{{" + viewName + "." + field.Key + "}}";
-                var value = BsonFormUtils.GetSafeBsonValueAsString(field.Value);
-                content = content.Replace(placeholder, value);
-            }
-        }
-        
-        return content;
-    }
-    
-
     private async Task ExecuteTask()
     {
-        if (definition == null || instance == null) return;
+        if (instance == null) return;
         
         isExecuting = true;
         try
         {
-            // 执行推理事务
             await ReasoningExecutionService.ExecuteTransactionAsync(instance.InstanceId);
             Snackbar.Add("任务已开始执行", Severity.Success);
-            
-            // 重新加载实例详情以获取最新状态和组合缓存
             await LoadInstanceDetail();
         }
         catch (Exception ex)
@@ -631,7 +173,6 @@
         
         try
         {
-            // 创建副本 - 基于当前实例关联的定义
             var copy = new ReasoningTransactionDefinition
             {
                 Name = $"{definition.Name} - 副本",
@@ -653,16 +194,11 @@
                 }
             };
             
-            // TODO: 重构通用的Instance复制接口
-            
             var created = await ReasoningDefinitionService.CreateDefinitionAsync(copy);
-            // 获取新创建定义的默认实例
-            // var newInstances = await ReasoningService.GetInstancesAsync(created.Id);
             var newInstance = await ReasoningInstanceService.CreateInstanceAsync(created.Id);
             
             Snackbar.Add("任务已复制，切换至新任务", Severity.Success);
             Navigation.NavigateTo($"/ai-inference/detail/{newInstance.InstanceId}");
-
         }
         catch (Exception ex)
         {
@@ -676,45 +212,10 @@
         Navigation.NavigateTo($"/ai-inference/create?editId={definition.Id}");
     }
 
-    private async Task ShowCombinationResult(ReasoningInputCombination? combination, ReasoningOutputItem output)
-    {
-        if (string.IsNullOrWhiteSpace(output.GeneratedText))
-        {
-            Snackbar.Add("该输出尚无生成内容", Severity.Warning);
-            return;
-        }
-        
-        // 构建输入数据字典
-        var inputData = new Dictionary<string, object>();
-        if (combination?.DataMap != null)
-        {
-            foreach (var kvp in combination.DataMap)
-            {
-                inputData[kvp.Key] = kvp.Value.AsDocument ?? new LiteDB.BsonDocument();
-            }
-        }
-        
-        var parameters = new DialogParameters
-        {
-            ["Content"] = output.GeneratedText,
-            ["CombinationId"] = combination?.CombinationId ?? output.InputCombinationId,
-            ["InputData"] = inputData,
-            ["Cost"] = output.CostUSD,
-            ["GeneratedAt"] = output.GeneratedAt
-        };
-        
-        await DialogService.ShowAsync<ResultViewDialog>("查看结果", parameters, new DialogOptions
-        {
-            MaxWidth = MaxWidth.Medium,
-            FullWidth = true
-        });
-    }
-
     private async Task RefreshCombinations()
     {
-        if (definition == null || instance == null) return;
+        if (instance == null) return;
         
-        // 如果实例有输出结果，显示确认对话框
         if (instance.Outputs?.Any() == true)
         {
             var result = await DialogService.ShowMessageBox(
@@ -723,21 +224,14 @@
                 yesText: "确认重新生成", 
                 cancelText: "取消");
                 
-            if (result != true)
-            {
-                return;
-            }
+            if (result != true) return;
         }
         
         isLoadingCombinations = true;
         try
         {
-            // 使用新的 API 重新生成组合并重置实例状态
             realTimeCombinations = await ReasoningCombinationService.RegenerateAndResetInstanceAsync(instance.InstanceId);
-            
-            // 重新加载实例详情以获取最新状态
             await LoadInstanceDetail();
-            
             Snackbar.Add($"输入组合已重新生成，实例状态已重置: {realTimeCombinations.Count} 个组合", Severity.Success);
         }
         catch (Exception ex)
@@ -750,46 +244,39 @@
         }
     }
 
+    private async Task HandleViewModeChanged(bool isCompact)
+    {
+        isCompactView = isCompact;
+        await Task.CompletedTask;
+    }
+
     private async Task ExecuteCombination(ReasoningInputCombination combination)
     {
-        if (definition == null) return;
-        if (instance == null)
-        {
-            Snackbar.Add("没有可用的执行实例来执行此组合。请先执行一次完整任务。", Severity.Warning);
-            return;
-        }
+        if (instance == null) return;
         
         try
         {
-            // 使用 instance.InstanceId
             var outputItem = await ReasoningCombinationService.ExecuteCombinationAsync(instance.InstanceId, combination.CombinationId);
-            // 根据 outputItem 更新UI或给出提示，例如显示结果或确认执行
-            Snackbar.Add($"组合 {combination.CombinationId} 已执行，结果: {(outputItem.IsSuccess ? "成功" : "失败")}", outputItem.IsSuccess ? Severity.Success : Severity.Error);
-            // 可能需要重新加载实例详情或部分数据以反映此独立执行的结果（如果服务层支持保存独立执行的输出）
-            // TODO: 处理持久化
-            await LoadInstanceDetail(); // 重新加载以获取最新状态
+            Snackbar.Add($"组合 {combination.CombinationId[..8]}... 已执行{(outputItem.IsSuccess ? "成功" : "失败")}", 
+                outputItem.IsSuccess ? Severity.Success : Severity.Error);
+            await LoadInstanceDetail();
         }
         catch (Exception ex)
-        { Snackbar.Add($"执行组合失败: {ex.Message}", Severity.Error); }
+        {
+            Snackbar.Add($"执行组合失败: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task ShowPromptPreview(string promptContent)
     {
-        try
+        await DialogService.ShowAsync<PromptPreviewDialog>("Prompt预览", new DialogParameters
         {
-            await DialogService.ShowAsync<PromptPreviewDialog>("Prompt预览", new DialogParameters
-            {
-                ["Content"] = promptContent
-            }, new DialogOptions
-            {
-                MaxWidth = MaxWidth.Medium,
-                FullWidth = true
-            });
-        }
-        catch (Exception ex)
+            ["Content"] = promptContent
+        }, new DialogOptions
         {
-            Snackbar.Add($"显示Prompt预览失败: {ex.Message}", Severity.Error);
-        }
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        });
     }
 
     private async Task ViewCombinationResult(ReasoningInputCombination combination)
@@ -801,7 +288,27 @@
             var output = await ReasoningCombinationService.GetOutputForCombinationAsync(instance.InstanceId, combination.CombinationId);
             if (output != null)
             {
-                await ShowCombinationResult(combination, output);
+                var inputData = new Dictionary<string, object>();
+                if (combination.DataMap != null)
+                {
+                    foreach (var kvp in combination.DataMap)
+                    {
+                        inputData[kvp.Key] = kvp.Value.AsDocument ?? new LiteDB.BsonDocument();
+                    }
+                }
+                
+                await DialogService.ShowAsync<ResultViewDialog>("查看结果", new DialogParameters
+                {
+                    ["Content"] = output.GeneratedText,
+                    ["CombinationId"] = combination.CombinationId,
+                    ["InputData"] = inputData,
+                    ["Cost"] = output.CostUSD,
+                    ["GeneratedAt"] = output.GeneratedAt
+                }, new DialogOptions
+                {
+                    MaxWidth = MaxWidth.Medium,
+                    FullWidth = true
+                });
             }
             else
             {
@@ -823,8 +330,6 @@
             var outputItem = await ReasoningCombinationService.ExecuteCombinationAsync(instance.InstanceId, combination.CombinationId);
             Snackbar.Add($"组合 {combination.CombinationId[..8]}... 重试执行{(outputItem.IsSuccess ? "成功" : "失败")}", 
                 outputItem.IsSuccess ? Severity.Success : Severity.Error);
-            
-            // 重新加载实例以获取最新状态
             await LoadInstanceDetail();
         }
         catch (Exception ex)
@@ -835,46 +340,22 @@
 
     private async Task BatchExecuteCombinations(List<string> combinationIds)
     {
-        if (instance == null || !combinationIds.Any()) return;
-        
-        var result = await DialogService.ShowMessageBox(
-            "确认批量执行",
-            $"即将执行 {combinationIds.Count} 个待处理组合，这可能需要一些时间并产生费用。是否继续？",
-            yesText: "确认执行", 
-            cancelText: "取消");
-            
-        if (result != true) return;
-        
-        try
-        {
-            isExecuting = true;
-            var batchResult = await ReasoningCombinationService.BatchExecuteCombinationsAsync(
-                instance.InstanceId, combinationIds, maxConcurrency: 3);
-            
-            Snackbar.Add($"批量执行完成：成功 {batchResult.SuccessfullyExecuted}，失败 {batchResult.Failed}，总成本 ${batchResult.TotalCost:F3}", 
-                Severity.Success);
-            
-            // 重新加载实例以获取最新状态
-            await LoadInstanceDetail();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"批量执行失败: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            isExecuting = false;
-        }
+        await ExecuteBatchOperation(combinationIds, "执行", "确认批量执行");
     }
 
     private async Task BatchRetryCombinations(List<string> combinationIds)
     {
+        await ExecuteBatchOperation(combinationIds, "重试", "确认批量重试");
+    }
+
+    private async Task ExecuteBatchOperation(List<string> combinationIds, string operation, string confirmTitle)
+    {
         if (instance == null || !combinationIds.Any()) return;
         
         var result = await DialogService.ShowMessageBox(
-            "确认批量重试",
-            $"即将重试 {combinationIds.Count} 个失败组合，这可能需要一些时间并产生费用。是否继续？",
-            yesText: "确认重试", 
+            confirmTitle,
+            $"即将{operation} {combinationIds.Count} 个组合，这可能需要一些时间并产生费用。是否继续？",
+            yesText: $"确认{operation}", 
             cancelText: "取消");
             
         if (result != true) return;
@@ -885,15 +366,14 @@
             var batchResult = await ReasoningCombinationService.BatchExecuteCombinationsAsync(
                 instance.InstanceId, combinationIds, maxConcurrency: 3);
             
-            Snackbar.Add($"批量重试完成：成功 {batchResult.SuccessfullyExecuted}，失败 {batchResult.Failed}，总成本 ${batchResult.TotalCost:F3}", 
+            Snackbar.Add($"批量{operation}完成：成功 {batchResult.SuccessfullyExecuted}，失败 {batchResult.Failed}，总成本 ${batchResult.TotalCost:F3}", 
                 Severity.Success);
             
-            // 重新加载实例以获取最新状态
             await LoadInstanceDetail();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"批量重试失败: {ex.Message}", Severity.Error);
+            Snackbar.Add($"批量{operation}失败: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -911,7 +391,6 @@
         
         try
         {
-            // 构建导出数据
             var exportData = instance.Outputs
                 .Where(o => o.IsSuccess && !string.IsNullOrWhiteSpace(o.GeneratedText))
                 .Select(output => new
@@ -921,7 +400,7 @@
                     Cost = output.CostUSD,
                     GeneratedAt = output.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"),
                     InputData = instance.InputCombinations
-                        .FirstOrDefault(c => c.CombinationId == output.InputCombinationId)
+                        ?.FirstOrDefault(c => c.CombinationId == output.InputCombinationId)
                         ?.DataMap?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString())
                 })
                 .ToList();
@@ -933,8 +412,6 @@
             });
             
             var fileName = $"ai_inference_results_{instance.InstanceId[..8]}_{DateTime.Now:yyyyMMdd_HHmmss}.json";
-            
-            // 使用 JavaScript 下载文件
             await JSRuntime.InvokeVoidAsync("downloadFile", fileName, "application/json", json);
             
             Snackbar.Add($"结果已导出：{exportData.Count} 条记录", Severity.Success);

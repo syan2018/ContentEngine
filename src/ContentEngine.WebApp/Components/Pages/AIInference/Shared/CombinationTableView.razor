@@ -1,0 +1,207 @@
+@using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.Inference.Utils
+@using ContentEngine.Core.Utils
+@using LiteDB
+
+<div class="pa-4">
+    <!-- 顶部操作栏 -->
+    <div class="combination-header">
+        <div class="header-info">
+            <MudText Typo="Typo.h6">推理组合列表</MudText>
+            @if (Combinations?.Any() == true)
+            {
+                @if (HasCachedCombinations)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">
+                        已缓存
+                    </MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">
+                        临时生成
+                    </MudChip>
+                }
+            }
+        </div>
+        
+        <div class="header-actions">
+            <MudButton Variant="Variant.Outlined" 
+                      StartIcon="@Icons.Material.Filled.Refresh"
+                      OnClick="OnRefreshCombinations"
+                      Size="Size.Small"
+                      Disabled="@IsLoadingCombinations">
+                @if (IsLoadingCombinations)
+                {
+                    <MudProgressCircular Size="Size.Small" />
+                    <span class="ml-2">生成中...</span>
+                }
+                else
+                {
+                    <span>重新生成推理请求</span>
+                }
+            </MudButton>
+            
+            @if (Combinations?.Any() == true)
+            {
+                <!-- 显示模式切换 -->
+                <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined">
+                    <MudButton StartIcon="@Icons.Material.Filled.ViewList"
+                              Color="@(IsCompactView ? Color.Default : Color.Primary)"
+                              OnClick="() => OnViewModeChanged.InvokeAsync(false)">
+                        数据视图
+                    </MudButton>
+                    <MudButton StartIcon="@Icons.Material.Filled.ViewComfy"
+                              Color="@(IsCompactView ? Color.Primary : Color.Default)"
+                              OnClick="() => OnViewModeChanged.InvokeAsync(true)">
+                        结果视图
+                    </MudButton>
+                </MudButtonGroup>
+
+                <!-- 组合统计 -->
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                    共 @Combinations.Count 个组合
+                </MudChip>
+            }
+        </div>
+    </div>
+    
+    <!-- 组合列表 -->
+    @if (Combinations?.Any() == true)
+    {
+        <InputCombinationList 
+            Combinations="@Combinations"
+            Outputs="@Outputs"
+            ShowActions="true"
+            ShowPagination="true"
+            Dense="@IsCompactView"
+            ShowResultsPreview="@IsCompactView"
+            TotalCount="@Combinations.Count"
+            PromptTemplate="@PromptTemplate"
+            OnExecute="OnExecuteCombination"
+            OnPromptPreview="OnPromptPreview"
+            OnViewResult="OnViewResult"
+            OnRetry="OnRetryCombination"
+            OnBatchExecute="OnBatchExecute"
+            OnBatchRetry="OnBatchRetry"
+            OnExportResults="OnExportResults" />
+    }
+    else if (IsLoadingCombinations)
+    {
+        <div class="loading-state">
+            <MudProgressCircular Size="Size.Large" />
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-3">
+                正在生成输入组合...
+            </MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                请稍候，这可能需要几秒钟时间
+            </MudText>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <MudIcon Icon="@Icons.Material.Outlined.DataArray" Size="Size.Large" Color="Color.Secondary" />
+            <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-2 mb-2">
+                暂无输入组合
+            </MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-3">
+                @if (!HasQueryDefinitions)
+                {
+                    <span>任务未定义查询，无法生成组合</span>
+                }
+                else
+                {
+                    <span>点击"重新生成"按钮来创建输入组合</span>
+                }
+            </MudText>
+            @if (HasQueryDefinitions)
+            {
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Add"
+                          OnClick="OnRefreshCombinations"
+                          Size="Size.Large">
+                    生成输入组合
+                </MudButton>
+            }
+        </div>
+    }
+</div>
+
+<style>
+.combination-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    text-align: center;
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    text-align: center;
+}
+
+.empty-state .mud-icon {
+    opacity: 0.6;
+}
+
+@@media (max-width: 768px) {
+    .combination-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .header-actions {
+        justify-content: center;
+    }
+}
+</style>
+
+@code {
+    [Parameter] public List<ReasoningInputCombination> Combinations { get; set; } = new();
+    [Parameter] public List<ReasoningOutputItem> Outputs { get; set; } = new();
+    [Parameter] public bool IsLoadingCombinations { get; set; }
+    [Parameter] public bool IsCompactView { get; set; }
+    [Parameter] public bool HasCachedCombinations { get; set; }
+    [Parameter] public bool HasQueryDefinitions { get; set; }
+    [Parameter] public string? PromptTemplate { get; set; }
+    
+    [Parameter] public EventCallback OnRefreshCombinations { get; set; }
+    [Parameter] public EventCallback<bool> OnViewModeChanged { get; set; }
+    [Parameter] public EventCallback<ReasoningInputCombination> OnExecuteCombination { get; set; }
+    [Parameter] public EventCallback<string> OnPromptPreview { get; set; }
+    [Parameter] public EventCallback<ReasoningInputCombination> OnViewResult { get; set; }
+    [Parameter] public EventCallback<ReasoningInputCombination> OnRetryCombination { get; set; }
+    [Parameter] public EventCallback<List<string>> OnBatchExecute { get; set; }
+    [Parameter] public EventCallback<List<string>> OnBatchRetry { get; set; }
+    [Parameter] public EventCallback OnExportResults { get; set; }
+} 

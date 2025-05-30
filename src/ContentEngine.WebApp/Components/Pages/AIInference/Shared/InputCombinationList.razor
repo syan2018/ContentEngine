@@ -2,6 +2,8 @@
 @using ContentEngine.Core.Inference.Utils
 @using LiteDB
 
+<link href="/Shared/CombinationStyles.css" rel="stylesheet" />
+
 <MudTable Items="@Combinations" 
           Hover="true" 
           Striped="true" 
@@ -35,126 +37,25 @@
         @foreach (var viewName in ViewNames)
         {
             <MudTd Style="white-space: nowrap;">
-                <div class="view-content">
-                    @if (context.DataMap.ContainsKey(viewName))
-                    {
-                        @GetViewContent(context.DataMap[viewName])
-                    }
-                    else
-                    {
-                        <span class="no-data">-</span>
-                    }
-                </div>
+                @GetViewContent(context.DataMap.GetValueOrDefault(viewName))
             </MudTd>
         }
         <MudTd Style="white-space: nowrap;">
-            <MudChip T="string" 
-                    Size="Size.Small" 
-                    Color="@GetStatusColor(context)" 
-                    Icon="@GetStatusIcon(context)"
-                    Variant="Variant.Filled">
-                @GetStatusText(context)
-            </MudChip>
-            @if (GetOutput(context) != null && !GetOutput(context).IsSuccess)
-            {
-                <MudTooltip Text="@GetOutput(context).FailureReason">
-                    <MudIcon Icon="@Icons.Material.Filled.Error" 
-                            Size="Size.Small" 
-                            Color="Color.Error" 
-                            Class="ml-1" />
-                </MudTooltip>
-            }
+            @GetStatusChip(context)
         </MudTd>
         <MudTd Style="white-space: nowrap;">
-            @{
-                var output = GetOutput(context);
-                var cost = output?.CostUSD ?? 0;
-            }
-            @if (cost > 0)
-            {
-                <span class="cost-display">$@cost.ToString("F3")</span>
-            }
-            else
-            {
-                <span class="no-cost">-</span>
-            }
+            @GetCostDisplay(context)
         </MudTd>
         @if (ShowResultsPreview)
         {
             <MudTd Style="white-space: nowrap;">
-                @{
-                    var output = GetOutput(context);
-                }
-                @if (output != null && output.IsSuccess && !string.IsNullOrWhiteSpace(output.GeneratedText))
-                {
-                    <div class="result-preview @(Dense ? "compact" : "")">
-                        <div class="result-text" title="@output.GeneratedText">
-                            @output.GeneratedText
-                        </div>
-                    </div>
-                }
-                else if (output != null && !output.IsSuccess)
-                {
-                    <div class="result-preview error @(Dense ? "compact" : "")">
-                        <div class="result-text error-text" title="@(output.FailureReason ?? "未知错误")">
-                            @(output.FailureReason ?? "未知错误")
-                        </div>
-                    </div>
-                }
-                else
-                {
-                    <span class="no-data">未执行</span>
-                }
+                @GetResultPreview(context)
             </MudTd>
         }
         @if (ShowActions)
         {
             <MudTd Style="white-space: nowrap;">
-                <div class="action-buttons">
-                    @{
-                        var combinationOutput = GetOutput(context);
-                        var isCompleted = combinationOutput?.IsSuccess == true;
-                        var isFailed = combinationOutput != null && !combinationOutput.IsSuccess;
-                        var isPending = combinationOutput == null;
-                    }
-                    
-                    @* 主要操作按钮 - 根据状态显示不同的主操作 *@
-                    @if (isPending)
-                    {
-                        <MudTooltip Text="执行组合">
-                            <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
-                                          Color="Color.Primary"
-                                          Size="Size.Small"
-                                          OnClick="() => OnExecute.InvokeAsync(context)" />
-                        </MudTooltip>
-                    }
-                    else if (isCompleted)
-                    {
-                        <MudTooltip Text="查看结果">
-                            <MudIconButton Icon="@Icons.Material.Filled.Visibility"
-                                          Color="Color.Success"
-                                          Size="Size.Small"
-                                          OnClick="() => OnViewResult.InvokeAsync(context)" />
-                        </MudTooltip>
-                    }
-                    else if (isFailed)
-                    {
-                        <MudTooltip Text="重试执行">
-                            <MudIconButton Icon="@Icons.Material.Filled.Refresh"
-                                          Color="Color.Warning"
-                                          Size="Size.Small"
-                                          OnClick="() => OnRetry.InvokeAsync(context)" />
-                        </MudTooltip>
-                    }
-                    
-                    @* 辅助操作按钮 - 始终显示 *@
-                    <MudTooltip Text="预览Prompt">
-                        <MudIconButton Icon="@Icons.Material.Filled.TextSnippet"
-                                      Color="Color.Secondary"
-                                      Size="Size.Small"
-                                      OnClick="() => ShowPromptPreview(context)" />
-                    </MudTooltip>
-                </div>
+                @GetActionButtons(context)
             </MudTd>
         }
     </RowTemplate>
@@ -169,53 +70,27 @@
     </PagerContent>
 </MudTable>
 
-@* 添加批量操作工具栏 *@
+@* 批量操作工具栏 *@
 @if (Combinations?.Any() == true && ShowActions)
 {
     <div class="batch-actions-toolbar">
         <div class="batch-stats">
-            <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
-                已完成: @GetCompletedCount()
-            </MudChip>
-            <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Error">
-                失败: @GetFailedCount()
-            </MudChip>
-            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Schedule">
-                待处理: @GetPendingCount()
-            </MudChip>
-            <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.AttachMoney">
-                总成本: $@GetTotalCost().ToString("F3")
-            </MudChip>
+            @foreach (var stat in GetBatchStats())
+            {
+                <MudChip T="string" Size="Size.Small" Color="@stat.Color" Icon="@stat.Icon">
+                    @stat.Label: @stat.Value
+                </MudChip>
+            }
         </div>
         
         <div class="batch-buttons">
-            @if (GetPendingCount() > 0)
+            @foreach (var action in GetBatchActions())
             {
-                <MudButton StartIcon="@Icons.Material.Filled.PlayArrow"
-                          Color="Color.Primary"
+                <MudButton StartIcon="@action.Icon"
+                          Color="@action.Color"
                           Size="Size.Small"
-                          OnClick="ExecutePendingCombinations">
-                    执行待处理 (@GetPendingCount())
-                </MudButton>
-            }
-            
-            @if (GetFailedCount() > 0)
-            {
-                <MudButton StartIcon="@Icons.Material.Filled.Refresh"
-                          Color="Color.Warning"
-                          Size="Size.Small"
-                          OnClick="RetryFailedCombinations">
-                    重试失败 (@GetFailedCount())
-                </MudButton>
-            }
-            
-            @if (GetCompletedCount() > 0)
-            {
-                <MudButton StartIcon="@Icons.Material.Filled.Download"
-                          Color="Color.Secondary"
-                          Size="Size.Small"
-                          OnClick="ExportResults">
-                    导出结果
+                          OnClick="action.OnClick">
+                    @action.Label
                 </MudButton>
             }
         </div>
@@ -231,418 +106,6 @@
         </MudText>
     </div>
 }
-
-<style>
-.combination-table {
-    border-radius: 8px;
-    overflow-x: auto;
-    width: 100%;
-}
-
-.combination-id {
-    font-family: 'Courier New', monospace;
-    background-color: #f5f5f5;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-.view-content {
-    line-height: 1.4;
-}
-
-.view-content-container {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    position: relative;
-    height: auto;
-}
-
-.field-chips-row {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 4px;
-    overflow: hidden;
-    align-items: flex-start;
-}
-
-.field-chip {
-    display: flex;
-    flex-direction: column;
-    background-color: #fafafa;
-    border-radius: 4px;
-    padding: 3px 6px;
-    border: 1px solid #e0e0e0;
-    transition: all 0.2s ease;
-    min-width: 60px;
-    width: fit-content;
-    flex-shrink: 0;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-.field-chip:hover {
-    background-color: #f0f0f0;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    z-index: 10;
-}
-
-.field-label {
-    font-size: 0.6rem;
-    font-weight: 600;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    margin-bottom: 1px;
-    line-height: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.field-content {
-    font-size: 0.75rem;
-    color: #333;
-    font-weight: 500;
-    line-height: 1.2;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 100%;
-}
-
-.more-fields-indicator {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    color: #666;
-    font-size: 0.7rem;
-    padding: 2px 4px;
-    background-color: #f8f8f8;
-    border-radius: 8px;
-    justify-content: center;
-    border: 1px dashed #ddd;
-    min-width: 30px;
-    max-width: 50px;
-    height: 20px;
-    flex-shrink: 0;
-    white-space: nowrap;
-}
-
-.hover-overlay {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    padding: 8px;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-4px);
-    transition: all 0.2s ease;
-    max-height: 150px;
-    overflow-y: auto;
-}
-
-.view-content-container:hover .hover-overlay {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.hover-content {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-
-.field-chip-small {
-    display: flex;
-    flex-direction: column;
-    background-color: #fafafa;
-    border-radius: 3px;
-    padding: 2px 4px;
-    border: 1px solid #e0e0e0;
-    min-width: 50px;
-    max-width: 80px;
-    flex-shrink: 0;
-}
-
-.field-chip-small .field-label {
-    font-size: 0.55rem;
-}
-
-.field-chip-small .field-content {
-    font-size: 0.7rem;
-}
-
-.no-data {
-    color: #999;
-    font-style: italic;
-}
-
-.action-buttons {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    justify-content: flex-start;
-}
-
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 3rem;
-    text-align: center;
-}
-
-/* 紧凑模式样式 */
-.combination-table.dense .field-chip {
-    padding: 2px 4px;
-    min-width: 50px;
-}
-
-.combination-table.dense .field-label {
-    font-size: 0.55rem;
-}
-
-.combination-table.dense .field-content {
-    font-size: 0.7rem;
-}
-
-.combination-table.dense .more-fields-indicator {
-    font-size: 0.65rem;
-    padding: 1px 3px;
-    min-width: 25px;
-    max-width: 40px;
-    height: 16px;
-}
-
-.combination-table.dense .hover-overlay {
-    display: none;
-}
-
-/* 小屏幕响应式 */
-@@media (max-width: 768px) {
-    .field-chip {
-        padding: 2px 4px;
-        min-width: 50px;
-    }
-    
-    .field-label {
-        font-size: 0.5rem;
-    }
-    
-    .field-content {
-        font-size: 0.65rem;
-    }
-    
-    .more-fields-indicator {
-        font-size: 0.6rem;
-        padding: 1px 3px;
-        min-width: 20px;
-        max-width: 45px;
-        height: 16px;
-    }
-    
-    .action-buttons {
-        flex-direction: column;
-        gap: 1px;
-    }
-    
-    .hover-overlay {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        max-width: 90vw;
-        max-height: 200px;
-    }
-}
-
-/* 表格样式优化 */
-.mud-table tbody tr:hover {
-    background-color: #f5f5f5 !important;
-}
-
-.mud-chip.mud-chip-filled {
-    font-weight: 500;
-}
-
-.mud-table-head .mud-table-cell {
-    font-weight: 600;
-    background-color: #fafafa;
-}
-
-/* 批量操作工具栏样式 */
-.batch-actions-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px;
-    background-color: #fafafa;
-    border-radius: 8px;
-    margin-top: 16px;
-    border: 1px solid #e0e0e0;
-}
-
-.batch-stats {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.batch-buttons {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.cost-display {
-    font-family: 'Courier New', monospace;
-    font-weight: 600;
-    color: #2e7d32;
-}
-
-.no-cost {
-    color: #999;
-    font-style: italic;
-}
-
-/* 响应式设计 */
-@@media (max-width: 768px) {
-    .batch-actions-toolbar {
-        flex-direction: column;
-        gap: 12px;
-        align-items: stretch;
-    }
-    
-    .batch-stats {
-        justify-content: center;
-    }
-    
-    .batch-buttons {
-        justify-content: center;
-    }
-}
-
-/* 深色模式支持 */
-@@media (prefers-color-scheme: dark) {
-    .combination-id {
-        background-color: #2d2d30;
-        color: #fff;
-    }
-    
-    .field-chip {
-        background-color: #2d2d30;
-        border-color: #464649;
-        color: #fff;
-    }
-    
-    .field-chip:hover {
-        background-color: #3e3e42;
-    }
-    
-    .field-label {
-        color: #cccccc;
-    }
-    
-    .field-content {
-        color: #ffffff;
-    }
-    
-    .more-fields-indicator {
-        background-color: #252526;
-        color: #cccccc;
-        border-color: #464649;
-    }
-    
-    .hover-overlay {
-        background: #252526;
-        border-color: #464649;
-    }
-    
-    .field-chip-small {
-        background-color: #2d2d30;
-        border-color: #464649;
-    }
-    
-    .no-data {
-        color: #666;
-    }
-    
-    .mud-table tbody tr:hover {
-        background-color: #2d2d30 !important;
-    }
-    
-    .mud-table-head .mud-table-cell {
-        background-color: #2d2d30;
-        color: #fff;
-    }
-    
-    .batch-actions-toolbar {
-        background-color: #2d2d30;
-        border-color: #464649;
-    }
-    
-    .cost-display {
-        color: #4caf50;
-    }
-}
-
-/* 结果预览样式 */
-.result-preview {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    min-width: 0; /* 允许 flex 子元素收缩 */
-}
-
-.result-preview.compact {
-    gap: 4px;
-}
-
-.result-preview .result-text {
-    flex: 1;
-    min-width: 0; /* 允许文本收缩 */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.75rem;
-    line-height: 1.4;
-    color: #333;
-}
-
-.result-preview.compact .result-text {
-    font-size: 0.7rem;
-    line-height: 1.3;
-}
-
-.result-preview .result-text.error-text {
-    color: #d32f2f;
-    font-style: italic;
-}
-
-/* 深色模式支持 */
-@@media (prefers-color-scheme: dark) {
-    .result-preview .result-text {
-        color: #fff;
-    }
-    
-    .result-preview .result-text.error-text {
-        color: #f44336;
-    }
-}
-</style>
 
 @code {
     [Parameter] public List<ReasoningInputCombination> Combinations { get; set; } = new();
@@ -668,7 +131,6 @@
 
     protected override void OnParametersSet()
     {
-        // 获取所有唯一的视图名称
         ViewNames = Combinations
             .SelectMany(c => c.DataMap.Keys)
             .Distinct()
@@ -676,103 +138,144 @@
             .ToList();
     }
 
-    private string GetShortId(string combinationId)
-    {
-        return combinationId.Length > 6 ? $"{combinationId[..6]}" : combinationId;
-    }
+    private string GetShortId(string combinationId) => 
+        combinationId.Length > 6 ? $"{combinationId[..6]}" : combinationId;
 
-    private string GetViewColumnStyle(string viewName)
-    {
-        // 根据是否显示结果预览来调整列宽
-        if (ShowResultsPreview)
-        {
-            // 结果视图：列宽更窄，为结果列腾出空间
-            return Dense ? "min-width: 120px; max-width: 150px;" : "min-width: 150px; max-width: 200px;";
-        }
-        else
-        {
-            // 数据视图：列宽更宽，可以显示更多数据
-            return Dense ? "min-width: 200px;" : "min-width: 300px;";
-        }
-    }
+    private string GetViewColumnStyle(string viewName) =>
+        ShowResultsPreview 
+            ? (Dense ? "min-width: 120px; max-width: 150px;" : "min-width: 150px; max-width: 200px;")
+            : (Dense ? "min-width: 200px;" : "min-width: 300px;");
 
-    private RenderFragment GetViewContent(BsonDocument doc)
+    private RenderFragment GetViewContent(BsonDocument? doc)
     {
-        // 过滤掉 _id 字段，只取有意义的字段
-        var allMeaningfulFields = doc
-            .Where(kvp => kvp.Key != "_id" && kvp.Value != null && !kvp.Value.IsNull)
-            .ToList();
-            
-        // 结果视图模式（紧凑+显示结果）只显示第一个字段，数据视图模式显示更多字段
-        var maxFieldsToShow = (Dense && ShowResultsPreview) ? 1 : (Dense ? 1 : 4);
-        var displayFields = allMeaningfulFields.Take(maxFieldsToShow).ToList();
-        var hasMoreFields = allMeaningfulFields.Count > maxFieldsToShow;
+        if (doc == null) return @<span class="no-data">-</span>;
         
-        return @<div class="view-content-container" title="@GetTooltipText(allMeaningfulFields)">
+        var fields = doc.Where(kvp => kvp.Key != "_id" && kvp.Value != null && !kvp.Value.IsNull).ToList();
+        var maxFields = (Dense && ShowResultsPreview) ? 1 : (Dense ? 1 : 4);
+        var displayFields = fields.Take(maxFields).ToList();
+        var hasMoreFields = fields.Count > maxFields;
+        
+        return @<div class="view-content-container" title="@GetTooltipText(fields)">
             <div class="field-chips-row">
                 @foreach (var kvp in displayFields)
                 {
                     <div class="field-chip" title="@($"{kvp.Key}: {kvp.Value}")">
                         <span class="field-label">@kvp.Key</span>
-                        <span class="field-content">@GetFieldValuePreview(kvp.Value)</span>
+                        <span class="field-content">@kvp.Value.ToString()</span>
                     </div>
                 }
                 @if (hasMoreFields && !ShowResultsPreview)
                 {
                     <div class="more-fields-indicator">
                         <MudIcon Icon="@Icons.Material.Filled.MoreHoriz" Size="Size.Small" />
-                        <span>+@(allMeaningfulFields.Count - maxFieldsToShow)</span>
+                        <span>+@(fields.Count - maxFields)</span>
                     </div>
                 }
             </div>
-            
-            @if (!Dense && hasMoreFields && !ShowResultsPreview)
+        </div>;
+    }
+
+    private string GetTooltipText(List<KeyValuePair<string, BsonValue>> fields) =>
+        string.Join("\n", fields.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+
+    private RenderFragment GetStatusChip(ReasoningInputCombination combination)
+    {
+        var output = GetOutput(combination);
+        var (text, color, icon) = output switch
+        {
+            null => ("待处理", Color.Warning, Icons.Material.Filled.Schedule),
+            { IsSuccess: true } => ("已完成", Color.Success, Icons.Material.Filled.CheckCircle),
+            _ => ("失败", Color.Error, Icons.Material.Filled.Error)
+        };
+        
+        return @<div class="status-container">
+            <MudChip T="string" Size="Size.Small" Color="@color" Icon="@icon" Variant="Variant.Filled">
+                @text
+            </MudChip>
+            @if (output != null && !output.IsSuccess)
             {
-                <div class="hover-overlay">
-                    <div class="hover-content">
-                        @foreach (var kvp in allMeaningfulFields.Skip(4))
-                        {
-                            <div class="field-chip-small">
-                                <span class="field-label">@kvp.Key</span>
-                                <span class="field-content">@GetFieldValuePreview(kvp.Value)</span>
-                            </div>
-                        }
-                    </div>
-                </div>
+                <MudTooltip Text="@output.FailureReason">
+                    <MudIcon Icon="@Icons.Material.Filled.Error" 
+                            Size="Size.Small" 
+                            Color="Color.Error" 
+                            Class="ml-1" />
+                </MudTooltip>
             }
         </div>;
     }
 
-    private string GetTooltipText(List<KeyValuePair<string, BsonValue>> fields)
+    private RenderFragment GetCostDisplay(ReasoningInputCombination combination)
     {
-        return string.Join("\n", fields.Select(kvp => $"{kvp.Key}: {GetFieldValuePreview(kvp.Value)}"));
+        var cost = GetOutput(combination)?.CostUSD ?? 0;
+        return cost > 0 
+            ? @<span class="cost-display">$@cost.ToString("F3")</span>
+            : @<span class="no-cost">-</span>;
     }
 
-    private Color GetStatusColor(ReasoningInputCombination combination)
+    private RenderFragment GetResultPreview(ReasoningInputCombination combination)
     {
         var output = GetOutput(combination);
-        if (output == null) return Color.Warning; // 待处理
-        return output.IsSuccess ? Color.Success : Color.Error; // 成功或失败
+        
+        if (output?.IsSuccess == true && !string.IsNullOrWhiteSpace(output.GeneratedText))
+        {
+            return @<div class="result-preview @(Dense ? "compact" : "")">
+                <div class="result-text" title="@output.GeneratedText">
+                    @output.GeneratedText
+                </div>
+            </div>;
+        }
+        else if (output != null && !output.IsSuccess)
+        {
+            return @<div class="result-preview error @(Dense ? "compact" : "")">
+                <div class="result-text error-text" title="@(output.FailureReason ?? "未知错误")">
+                    @(output.FailureReason ?? "未知错误")
+                </div>
+            </div>;
+        }
+        
+        return @<span class="no-data">未执行</span>;
     }
-    
-    private string GetStatusIcon(ReasoningInputCombination combination)
+
+    private RenderFragment GetActionButtons(ReasoningInputCombination combination)
     {
         var output = GetOutput(combination);
-        if (output == null) return Icons.Material.Filled.Schedule; // 待处理
-        return output.IsSuccess ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error;
-    }
-    
-    private string GetStatusText(ReasoningInputCombination combination)
-    {
-        var output = GetOutput(combination);
-        if (output == null) return "待处理";
-        return output.IsSuccess ? "已完成" : "失败";
-    }
-    
-    private string GetFieldValuePreview(BsonValue value)
-    {
-        if (value == null || value.IsNull) return "null";
-        return value.ToString();
+        
+        return @<div class="action-buttons">
+            @if (output == null)
+            {
+                <MudTooltip Text="执行组合">
+                    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
+                                  Color="Color.Primary"
+                                  Size="Size.Small"
+                                  OnClick="() => OnExecute.InvokeAsync(combination)" />
+                </MudTooltip>
+            }
+            else if (output.IsSuccess)
+            {
+                <MudTooltip Text="查看结果">
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                  Color="Color.Success"
+                                  Size="Size.Small"
+                                  OnClick="() => OnViewResult.InvokeAsync(combination)" />
+                </MudTooltip>
+            }
+            else
+            {
+                <MudTooltip Text="重试执行">
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                                  Color="Color.Warning"
+                                  Size="Size.Small"
+                                  OnClick="() => OnRetry.InvokeAsync(combination)" />
+                </MudTooltip>
+            }
+            
+            <MudTooltip Text="预览Prompt">
+                <MudIconButton Icon="@Icons.Material.Filled.TextSnippet"
+                              Color="Color.Secondary"
+                              Size="Size.Small"
+                              OnClick="() => ShowPromptPreview(combination)" />
+            </MudTooltip>
+        </div>;
     }
 
     private async Task ShowPromptPreview(ReasoningInputCombination combination)
@@ -785,7 +288,6 @@
 
         try
         {
-            // 使用模板引擎填充prompt
             var filledPrompt = PromptTemplatingEngine.Fill(PromptTemplate, combination.DataMap);
             await OnPromptPreview.InvokeAsync(filledPrompt);
         }
@@ -795,30 +297,39 @@
         }
     }
 
-    private ReasoningOutputItem? GetOutput(ReasoningInputCombination combination)
+    private ReasoningOutputItem? GetOutput(ReasoningInputCombination combination) =>
+        Outputs?.FirstOrDefault(o => o.InputCombinationId == combination.CombinationId);
+
+    private record BatchStat(string Label, string Value, Color Color, string Icon);
+    private record BatchAction(string Label, string Icon, Color Color, EventCallback OnClick);
+
+    private IEnumerable<BatchStat> GetBatchStats()
     {
-        return Outputs?.FirstOrDefault(o => o.InputCombinationId == combination.CombinationId);
+        yield return new("已完成", GetCompletedCount().ToString(), Color.Success, Icons.Material.Filled.CheckCircle);
+        yield return new("失败", GetFailedCount().ToString(), Color.Error, Icons.Material.Filled.Error);
+        yield return new("待处理", GetPendingCount().ToString(), Color.Warning, Icons.Material.Filled.Schedule);
+        yield return new("总成本", $"${GetTotalCost():F3}", Color.Info, Icons.Material.Filled.AttachMoney);
     }
 
-    private int GetCompletedCount()
+    private IEnumerable<BatchAction> GetBatchActions()
     {
-        return Combinations.Count(c => GetOutput(c)?.IsSuccess == true);
+        if (GetPendingCount() > 0)
+            yield return new($"执行待处理 ({GetPendingCount()})", Icons.Material.Filled.PlayArrow, Color.Primary, 
+                EventCallback.Factory.Create(this, ExecutePendingCombinations));
+        
+        if (GetFailedCount() > 0)
+            yield return new($"重试失败 ({GetFailedCount()})", Icons.Material.Filled.Refresh, Color.Warning,
+                EventCallback.Factory.Create(this, RetryFailedCombinations));
+        
+        if (GetCompletedCount() > 0)
+            yield return new("导出结果", Icons.Material.Filled.Download, Color.Secondary,
+                EventCallback.Factory.Create(this, () => OnExportResults.InvokeAsync()));
     }
 
-    private int GetFailedCount()
-    {
-        return Combinations.Count(c => GetOutput(c) != null && !GetOutput(c).IsSuccess);
-    }
-
-    private int GetPendingCount()
-    {
-        return Combinations.Count(c => GetOutput(c) == null);
-    }
-
-    private decimal GetTotalCost()
-    {
-        return Outputs?.Where(o => o.IsSuccess).Sum(o => o.CostUSD) ?? 0;
-    }
+    private int GetCompletedCount() => Combinations.Count(c => GetOutput(c)?.IsSuccess == true);
+    private int GetFailedCount() => Combinations.Count(c => GetOutput(c) != null && !GetOutput(c).IsSuccess);
+    private int GetPendingCount() => Combinations.Count(c => GetOutput(c) == null);
+    private decimal GetTotalCost() => Outputs?.Where(o => o.IsSuccess).Sum(o => o.CostUSD) ?? 0;
 
     private async Task ExecutePendingCombinations()
     {
@@ -828,9 +339,7 @@
             .ToList();
             
         if (pendingIds.Any())
-        {
             await OnBatchExecute.InvokeAsync(pendingIds);
-        }
     }
 
     private async Task RetryFailedCombinations()
@@ -841,13 +350,6 @@
             .ToList();
             
         if (failedIds.Any())
-        {
             await OnBatchRetry.InvokeAsync(failedIds);
-        }
-    }
-
-    private async Task ExportResults()
-    {
-        await OnExportResults.InvokeAsync();
     }
 } 

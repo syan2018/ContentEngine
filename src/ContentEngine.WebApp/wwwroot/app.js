@@ -1,77 +1,6 @@
 // ContentEngine WebApp JavaScript Functions
 
 /**
- * 下载文件到用户设备
- * @param {string} filename - 文件名
- * @param {string} contentType - 内容类型
- * @param {string} content - 文件内容
- */
-window.downloadFile = function(filename, contentType, content) {
-    const blob = new Blob([content], { type: contentType });
-    const url = window.URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.style.display = 'none';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // 清理 URL 对象
-    window.URL.revokeObjectURL(url);
-};
-
-/**
- * 复制文本到剪贴板
- * @param {string} text - 要复制的文本
- * @returns {Promise<boolean>} - 是否成功复制
- */
-window.copyToClipboard = async function(text) {
-    try {
-        if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(text);
-            return true;
-        } else {
-            // 降级方案：使用 execCommand
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-999999px';
-            textArea.style.top = '-999999px';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            const result = document.execCommand('copy');
-            document.body.removeChild(textArea);
-            return result;
-        }
-    } catch (error) {
-        console.error('复制到剪贴板失败:', error);
-        return false;
-    }
-};
-
-/**
- * 滚动到页面顶部
- */
-window.scrollToTop = function() {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-
-/**
- * 滚动到指定元素
- * @param {string} elementId - 元素ID
- */
-window.scrollToElement = function(elementId) {
-    const element = document.getElementById(elementId);
-    if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
-    }
-};
-
-/**
  * 获取元素的滚动位置
  * @param {string} elementId - 元素ID
  * @returns {object} - 滚动位置 {x, y}
@@ -118,6 +47,13 @@ window.isElementInViewport = function(elementId) {
         rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
         rect.right <= (window.innerWidth || document.documentElement.clientWidth)
     );
+};
+
+/**
+ * 滚动到页面顶部
+ */
+window.scrollToTop = function() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 /**

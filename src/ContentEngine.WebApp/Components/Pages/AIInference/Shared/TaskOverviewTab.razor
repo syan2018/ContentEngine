@@ -1,0 +1,227 @@
+@using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.Utils
+@using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Cards
+
+<div class="pa-4">
+    <MudGrid Spacing="4">
+        <!-- 数据查询定义 -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Class="mr-2" Color="Color.Primary" />
+                数据查询定义
+            </MudText>
+            
+            <MudGrid Spacing="3">
+                @foreach (var query in Definition.QueryDefinitions)
+                {
+                    <MudItem xs="12" md="6">
+                        <QueryCard Query="@query" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudItem>
+        
+        <!-- 数据组合规则 -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.CallMerge" Class="mr-2" Color="Color.Secondary" />
+                数据组合规则
+            </MudText>
+            
+            @if (Definition.DataCombinationRules.Any())
+            {
+                var rule = Definition.DataCombinationRules.First();
+                
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="6">
+                        <CombinationOverviewCard Title="叉积视图" 
+                                               ViewNames="@rule.ViewNamesToCrossProduct" 
+                                               ChipColor="Color.Primary" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="6">
+                        <CombinationOverviewCard Title="单例上下文视图" 
+                                               ViewNames="@rule.SingletonViewNamesForContext" 
+                                               ChipColor="Color.Info" />
+                    </MudItem>
+                </MudGrid>
+            }
+        </MudItem>
+        
+        <!-- Prompt 模板和样例 -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.TextSnippet" Class="mr-2" Color="Color.Info" />
+                Prompt 模板和样例
+            </MudText>
+            
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudCard Outlined="true" Class="h-100">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.subtitle1">Prompt 模板</MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent Class="pa-3">
+                            <pre class="prompt-template">@Definition.PromptTemplate.TemplateContent</pre>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudCard Outlined="true" Class="h-100">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.subtitle1">样例 Prompt</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    @if (Instance?.InputCombinations?.Any() == true)
+                                    {
+                                        <span>基于第一个组合生成</span>
+                                    }
+                                    else
+                                    {
+                                        <span>暂无组合数据</span>
+                                    }
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent Class="pa-3">
+                            @if (Instance?.InputCombinations?.Any() == true)
+                            {
+                                var sampleCombination = Instance.InputCombinations.FirstOrDefault();
+                                <pre class="prompt-sample">@GeneratePromptSample(sampleCombination)</pre>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-center pa-4">
+                                    请先生成输入组合以查看样例 Prompt
+                                </MudText>
+                            }
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+        
+        <!-- 执行约束 -->
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-2" Color="Color.Warning" />
+                执行约束
+            </MudText>
+            
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="3">
+                    <ConstraintCard Icon="@Icons.Material.Filled.AttachMoney"
+                                  IconColor="Color.Success"
+                                  Value="@($"${Definition.ExecutionConstraints.MaxEstimatedCostUSD}")"
+                                  ValueColor="Color.Success"
+                                  Label="最大成本限制" />
+                </MudItem>
+                
+                <MudItem xs="12" md="3">
+                    <ConstraintCard Icon="@Icons.Material.Filled.Timer"
+                                  IconColor="Color.Info"
+                                  Value="@Definition.ExecutionConstraints.MaxExecutionTimeMinutes.ToString()"
+                                  ValueColor="Color.Info"
+                                  Label="最大执行时间（分钟）" />
+                </MudItem>
+                
+                <MudItem xs="12" md="3">
+                    <ConstraintCard Icon="@Icons.Material.Filled.Speed"
+                                  IconColor="Color.Warning"
+                                  Value="@Definition.ExecutionConstraints.MaxConcurrentAICalls.ToString()"
+                                  ValueColor="Color.Warning"
+                                  Label="最大并发调用数" />
+                </MudItem>
+                
+                <MudItem xs="12" md="3">
+                    <ConstraintCard Icon="@Icons.Material.Filled.Layers"
+                                  IconColor="Color.Info"
+                                  Value="@Definition.ExecutionConstraints.BatchSize.ToString()"
+                                  ValueColor="Color.Info"
+                                  Label="批处理大小" />
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+
+        <!-- 执行统计概览 -->
+        @if (Instance?.Outputs?.Any() == true)
+        {
+            <MudItem xs="12">
+                <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Assessment" Class="mr-2" Color="Color.Success" />
+                    执行统计概览
+                </MudText>
+                
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="3">
+                        <StatCard Value="@Instance.InputCombinations.Count.ToString()"
+                                ValueColor="Color.Primary"
+                                Label="总组合数" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="3">
+                        <StatCard Value="@Instance.Metrics.SuccessfulOutputs.ToString()"
+                                ValueColor="Color.Success"
+                                Label="已完成" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="3">
+                        <StatCard Value="@($"${Instance.Metrics.ActualCostUSD:F2}")"
+                                ValueColor="Color.Success"
+                                Label="实际成本" />
+                    </MudItem>
+                    
+                    <MudItem xs="12" md="3">
+                        <StatCard Value="@($"{Instance.Metrics.ElapsedTime.TotalMinutes:F1} min")"
+                                ValueColor="Color.Info"
+                                Label="执行时间" />
+                    </MudItem>
+                </MudGrid>
+            </MudItem>
+        }
+    </MudGrid>
+</div>
+
+<style>
+.prompt-template, .prompt-sample {
+    white-space: pre-wrap;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+</style>
+
+@code {
+    [Parameter] public ReasoningTransactionDefinition Definition { get; set; } = null!;
+    [Parameter] public ReasoningTransactionInstance? Instance { get; set; }
+
+    private string GeneratePromptSample(ReasoningInputCombination? combination)
+    {
+        if (Definition?.PromptTemplate?.TemplateContent == null || combination == null)
+            return "模板为空";
+            
+        var content = Definition.PromptTemplate.TemplateContent;
+        
+        // 替换模板中的占位符
+        foreach (var kvp in combination.DataMap)
+        {
+            var viewName = kvp.Key;
+            var doc = kvp.Value;
+            
+            // 为该视图的每个字段替换占位符
+            foreach (var field in doc)
+            {
+                var placeholder = "{{" + viewName + "." + field.Key + "}}";
+                var value = BsonFormUtils.GetSafeBsonValueAsString(field.Value);
+                content = content.Replace(placeholder, value);
+            }
+        }
+        
+        return content;
+    }
+} 
