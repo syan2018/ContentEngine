@@ -164,6 +164,47 @@ public class QueryProcessingService : IQueryProcessingService
     }
 
     /// <summary>
+    /// 只解析视图数据，不生成组合
+    /// </summary>
+    public async Task<Dictionary<string, ViewData>> ResolveViewDataAsync(
+        ReasoningTransactionDefinition definition, 
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("开始解析视图数据，定义ID: {DefinitionId}", definition.Id);
+
+            var resolvedViews = new Dictionary<string, ViewData>();
+            
+            // 执行所有查询，获取数据视图
+            foreach (var query in definition.QueryDefinitions)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                
+                var queryResult = await ExecuteQueryAsync(query, cancellationToken);
+                var viewData = new ViewData
+                {
+                    ViewName = query.OutputViewName,
+                    Items = queryResult
+                };
+                
+                resolvedViews[query.OutputViewName] = viewData;
+                
+                _logger.LogInformation("查询 {ViewName} 返回 {Count} 条记录", 
+                    query.OutputViewName, queryResult.Count);
+            }
+
+            _logger.LogInformation("视图数据解析完成，视图数: {ViewCount}", resolvedViews.Count);
+            return resolvedViews;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "解析视图数据时发生错误");
+            throw;
+        }
+    }
+
+    /// <summary>
     /// 执行单个查询定义
     /// </summary>
     public async Task<List<BsonDocument>> ExecuteQueryAsync(

@@ -750,19 +750,31 @@
     {
         if (definition == null || instance == null) return;
         
+        // 如果实例有输出结果，显示确认对话框
+        if (instance.Outputs?.Any() == true)
+        {
+            var result = await DialogService.ShowMessageBox(
+                "确认重新生成组合",
+                "重新生成组合将清空所有现有的输出结果和执行记录，并将实例状态重置为待处理。此操作不可撤销，是否继续？",
+                yesText: "确认重新生成", 
+                cancelText: "取消");
+                
+            if (result != true)
+            {
+                return;
+            }
+        }
+        
         isLoadingCombinations = true;
         try
         {
-            // 重新生成输入组合
-            realTimeCombinations = await ReasoningCombinationService.GenerateInputCombinationsAsync(definition.Id);
+            // 使用新的 API 重新生成组合并重置实例状态
+            realTimeCombinations = await ReasoningCombinationService.RegenerateAndResetInstanceAsync(instance.InstanceId);
             
-            // 将生成的组合保存到实例中
-            instance.InputCombinations = realTimeCombinations;
+            // 重新加载实例详情以获取最新状态
+            await LoadInstanceDetail();
             
-            // 更新实例到数据库以保存缓存的组合
-            await ReasoningInstanceService.UpdateInstanceAsync(instance);
-            
-            Snackbar.Add($"输入组合已重新生成并缓存: {realTimeCombinations.Count} 个", Severity.Success);
+            Snackbar.Add($"输入组合已重新生成，实例状态已重置: {realTimeCombinations.Count} 个组合", Severity.Success);
         }
         catch (Exception ex)
         {

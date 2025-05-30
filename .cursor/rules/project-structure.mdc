@@ -5,27 +5,86 @@ alwaysApply: true
 ---
 # ContentEngine Project Structure
 
-This document outlines the recommended project structure for the ContentEngine application after refactoring.
+This document outlines the current project structure for the ContentEngine application.
+
+## Core Application Structure
 
 *   **`[/src/ContentEngine.WebApp/ContentEngine.WebApp.csproj](mdc:src/ContentEngine.WebApp/ContentEngine.WebApp.csproj)`**: The main Blazor Server project file, responsible for the User Interface (UI) layer and application hosting.
 *   **`[/src/ContentEngine.WebApp/Program.cs](mdc:src/ContentEngine.WebApp/Program.cs)`**: Application entry point, dependency injection (DI) container setup, middleware configuration, and application startup logic.
-*   **`[/src/ContentEngine.WebApp/Components/](mdc:src/ContentEngine.WebApp/Components)`**: Contains Blazor UI components (`.razor`) and pages, organized by feature area (e.g., `SchemaManagement`). UI logic should primarily call services from Core and Core.AI.
-*   **`[/src/ContentEngine.WebApp/wwwroot/](mdc:src/ContentEngine.WebApp/wwwroot)`**: Holds static web assets like CSS, JavaScript, and images.
-*   **`[/src/ContentEngine.WebApp/Resources/](mdc:src/ContentEngine.WebApp/Resources)`**: Contains localization resource files (`.resx`) for the UI layer.
-*   **`[/src/ContentEngine.WebApp/appsettings.json](mdc:src/ContentEngine.WebApp/appsettings.json)`**: Main application configuration file.
-*   ---
-*   **`[/src/ContentEngine.Core/ContentEngine.Core.csproj](mdc:src/ContentEngine.Core/ContentEngine.Core.csproj)`**: Class library containing the core business domain logic, models, and services **not specific to AI**.
-    *   **`[/src/ContentEngine.Core/Models/](mdc:src/ContentEngine.Core/Models)`**: Defines core domain entities and data structures (e.g., `SchemaDefinition`, `FieldDefinition`).
-    *   **`[/src/ContentEngine.Core/Services/](mdc:src/ContentEngine.Core/Services)`**: Contains interfaces and implementations for core business logic services (e.g., `ISchemaDefinitionService`, `IDataEntryService`).
-    *   **`[/src/ContentEngine.Core/Storage/](mdc:src/ContentEngine.Core/Storage)`**: Handles data persistence logic, including DbContext definitions (e.g., `LiteDbContext`) and repository patterns if used.
-    *   **`[/src/ContentEngine.Core/Utils/](mdc:src/ContentEngine.Core/Utils)`**: Provides shared, non-UI, non-AI utility classes.
-*   ---
-*   **`[/src/ContentEngine.Core.AI/ContentEngine.Core.AI.csproj](mdc:src/ContentEngine.Core.AI/ContentEngine.Core.AI.csproj)`**: Class library dedicated to **AI-related application services**. It orchestrates AI tasks using the underlying `ConfigurableAIProvider`.
-    *   **`[/src/ContentEngine.Core.AI/Services/](mdc:src/ContentEngine.Core.AI/Services)`**: Contains interfaces and implementations for AI-driven business capabilities (e.g., `ISchemaSuggestionService`). These services interact with the `Kernel` provided by `IAIKernelFactory` and handle parsing/interpretation of AI results.
-*   ---
-*   **`[/src/ConfigurableAIProvider/ConfigurableAIProvider.csproj](mdc:src/ConfigurableAIProvider/ConfigurableAIProvider.csproj)`**: Infrastructure library providing the configurable AI Kernel factory (`IAIKernelFactory`). Responsible for loading AI configurations from YAML files.
-*   ---
-*   **`[/Profiles/](mdc:Profiles)`**: Central directory for storing YAML configuration files (connections, models, agents, plugins) used by `ConfigurableAIProvider`. Typically included in the WebApp build output.
-*   **`[/Docs/](mdc:Docs)`**: Contains project documentation, design notes, and overviews like `[DataPipeline_Overview.md](mdc:Docs/DataPipeline_Overview.md)`.
-*   **`[README.md](mdc:README.md)` / `[README.zh-CN.md](mdc:README.zh-CN.md)`**: Main project description files.
+*   **`[/src/ContentEngine.WebApp/Components/](mdc:src/ContentEngine.WebApp/Components)`**: Contains Blazor UI components and pages:
+    *   **`[/src/ContentEngine.WebApp/Components/Pages/](mdc:src/ContentEngine.WebApp/Components/Pages)`**: Feature-specific pages organized by domain:
+        *   **`[AIInference/](mdc:src/ContentEngine.WebApp/Components/Pages/AIInference)`**: AI inference related pages and components
+        *   **`[DataEntry/](mdc:src/ContentEngine.WebApp/Components/Pages/DataEntry)`**: Data entry forms and related UI
+        *   **`[DataExplorer/](mdc:src/ContentEngine.WebApp/Components/Pages/DataExplorer)`**: Data browsing and exploration interfaces
+        *   **`[SchemaManagement/](mdc:src/ContentEngine.WebApp/Components/Pages/SchemaManagement)`**: Schema definition and management UI
+        *   **`[Dashboard/](mdc:src/ContentEngine.WebApp/Components/Pages/Dashboard)`**: Main dashboard and overview pages
+        *   **`[Others/](mdc:src/ContentEngine.WebApp/Components/Pages/Others)`**: Miscellaneous pages
+    *   **`[/src/ContentEngine.WebApp/Components/Layout/](mdc:src/ContentEngine.WebApp/Components/Layout)`**: Layout components and templates
+    *   **`[/src/ContentEngine.WebApp/Components/Shared/](mdc:src/ContentEngine.WebApp/Components/Shared)`**: Reusable shared components
+*   **`[/src/ContentEngine.WebApp/wwwroot/](mdc:src/ContentEngine.WebApp/wwwroot)`**: Static web assets like CSS, JavaScript, and images.
+*   **`[/src/ContentEngine.WebApp/Resources/](mdc:src/ContentEngine.WebApp/Resources)`**: Localization resource files (`.resx`) for the UI layer.
+
+## Core Business Logic
+
+*   **`[/src/ContentEngine.Core/ContentEngine.Core.csproj](mdc:src/ContentEngine.Core/ContentEngine.Core.csproj)`**: Core business domain logic library **not specific to AI**.
+    *   **`[/src/ContentEngine.Core/DataPipeline/](mdc:src/ContentEngine.Core/DataPipeline)`**: Data processing pipeline components:
+        *   **`[Models/](mdc:src/ContentEngine.Core/DataPipeline/Models)`**: Data pipeline model definitions
+        *   **`[Services/](mdc:src/ContentEngine.Core/DataPipeline/Services)`**: Data pipeline service implementations
+    *   **`[/src/ContentEngine.Core/Inference/](mdc:src/ContentEngine.Core/Inference)`**: Inference engine components:
+        *   **`[Models/](mdc:src/ContentEngine.Core/Inference/Models)`**: Inference model definitions
+        *   **`[Services/](mdc:src/ContentEngine.Core/Inference/Services)`**: Inference service implementations
+        *   **`[Extensions/](mdc:src/ContentEngine.Core/Inference/Extensions)`**: Inference extension methods
+        *   **`[Utils/](mdc:src/ContentEngine.Core/Inference/Utils)`**: Inference utility classes
+    *   **`[/src/ContentEngine.Core/Storage/](mdc:src/ContentEngine.Core/Storage)`**: Data persistence logic, including DbContext definitions (e.g., `LiteDbContext`)
+    *   **`[/src/ContentEngine.Core/Utils/](mdc:src/ContentEngine.Core/Utils)`**: Shared, non-UI, non-AI utility classes
+
+## AI Services
+
+*   **`[/src/ContentEngine.Core.AI/ContentEngine.Core.AI.csproj](mdc:src/ContentEngine.Core.AI/ContentEngine.Core.AI.csproj)`**: AI-related application services library that orchestrates AI tasks.
+    *   **`[/src/ContentEngine.Core.AI/Services/](mdc:src/ContentEngine.Core.AI/Services)`**: AI-driven business capabilities (e.g., `ISchemaSuggestionService`)
+    *   **`[/src/ContentEngine.Core.AI/Utils/](mdc:src/ContentEngine.Core.AI/Utils)`**: AI-specific utility classes
+
+## AI Infrastructure
+
+*   **`[/src/ConfigurableAIProvider/ConfigurableAIProvider.csproj](mdc:src/ConfigurableAIProvider/ConfigurableAIProvider.csproj)`**: Configurable AI Kernel factory infrastructure library.
+    *   **`[/src/ConfigurableAIProvider/Configuration/](mdc:src/ConfigurableAIProvider/Configuration)`**: Configuration management for AI providers
+    *   **`[/src/ConfigurableAIProvider/Services/](mdc:src/ConfigurableAIProvider/Services)`**: AI provider service implementations:
+        *   **`[Factories/](mdc:src/ConfigurableAIProvider/Services/Factories)`**: Factory pattern implementations for AI components
+        *   **`[Configurators/](mdc:src/ConfigurableAIProvider/Services/Configurators)`**: Configuration service implementations
+        *   **`[Providers/](mdc:src/ConfigurableAIProvider/Services/Providers)`**: AI provider implementations
+        *   **`[Loaders/](mdc:src/ConfigurableAIProvider/Services/Loaders)`**: Configuration and resource loaders
+    *   **`[/src/ConfigurableAIProvider/Models/](mdc:src/ConfigurableAIProvider/Models)`**: AI provider model definitions
+    *   **`[/src/ConfigurableAIProvider/Extensions/](mdc:src/ConfigurableAIProvider/Extensions)`**: Extension methods for AI providers
+    *   **`[/src/ConfigurableAIProvider/Plugins/](mdc:src/ConfigurableAIProvider/Plugins)`**: AI plugin implementations
+
+## Configuration and Profiles
+
+*   **`[/Profiles/](mdc:Profiles)`**: Central directory for AI configuration files:
+    *   **`[connections.yaml](mdc:Profiles/connections.yaml)` / `[connections.dev.yaml](mdc:Profiles/connections.dev.yaml)`**: AI service connection configurations
+    *   **`[models.yaml](mdc:Profiles/models.yaml)`**: AI model definitions and configurations
+    *   **`[/Profiles/Agents/](mdc:Profiles/Agents)`**: AI agent configurations:
+        *   **`[ContentEngineHelper/](mdc:Profiles/Agents/ContentEngineHelper)`**: Content engine specific AI agents
+        *   **`[SimpleChat/](mdc:Profiles/Agents/SimpleChat)`**: Simple chat AI agents
+    *   **`[/Profiles/Plugins/](mdc:Profiles/Plugins)`**: AI plugin configurations
+
+## Support Services
+
+*   **`[/SupportServices/](mdc:SupportServices)`**: External support service integrations:
+    *   **`[MarkItDown/](mdc:SupportServices/MarkItDown)`**: Document processing service integration
+
+## Next.js UI (Reference Only Frontend)
+
+*   **`[/UI/content-engine-ui/](mdc:UI/content-engine-ui)`**: Next.js-based alternative frontend:
+    *   **`[app/](mdc:UI/content-engine-ui/app)`**: Next.js app router pages and layouts
+    *   **`[components/](mdc:UI/content-engine-ui/components)`**: React components organized by feature
+    *   **`[hooks/](mdc:UI/content-engine-ui/hooks)`**: Custom React hooks
+    *   **`[lib/](mdc:UI/content-engine-ui/lib)`**: Utility libraries and configurations
+    *   **`[styles/](mdc:UI/content-engine-ui/styles)`**: CSS and styling files
+    *   **`[public/](mdc:UI/content-engine-ui/public)`**: Static assets for Next.js app
+
+## Documentation and Project Files
+
+*   **`[/Docs/](mdc:Docs)`**: Project documentation, design notes, and overviews
+*   **`[README.md](mdc:README.md)` / `[README.zh-CN.md](mdc:README.zh-CN.md)`**: Main project description files
+*   **`[ContentEngine.sln](mdc:ContentEngine.sln)`**: Visual Studio solution file
 

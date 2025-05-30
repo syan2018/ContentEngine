@@ -101,6 +101,17 @@ namespace ContentEngine.Core.Inference.Services
         Task<List<ReasoningInputCombination>> GetFailedCombinationsAsync(
             string instanceId, 
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 重新生成组合并重置实例状态
+        /// 清空现有的输出、错误记录和指标，将实例状态重置为待处理
+        /// </summary>
+        /// <param name="instanceId">推理事务实例ID</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>重新生成的组合列表</returns>
+        Task<List<ReasoningInputCombination>> RegenerateAndResetInstanceAsync(
+            string instanceId, 
+            CancellationToken cancellationToken = default);
     }
 
     /// <summary>

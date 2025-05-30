@@ -81,6 +81,16 @@ public interface IQueryProcessingService
     Task<int> EstimateCombinationCountAsync(
         ReasoningTransactionDefinition definition, 
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 只解析视图数据，不生成组合
+    /// </summary>
+    /// <param name="definition">推理定义</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>解析后的视图数据</returns>
+    Task<Dictionary<string, ViewData>> ResolveViewDataAsync(
+        ReasoningTransactionDefinition definition, 
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

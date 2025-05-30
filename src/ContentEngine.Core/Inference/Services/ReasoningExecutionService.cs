@@ -6,6 +6,7 @@ namespace ContentEngine.Core.Inference.Services
 {
     /// <summary>
     /// 推理执行服务实现
+    /// 专注于事务级别的执行控制和监控
     /// </summary>
     public class ReasoningExecutionService : IReasoningExecutionService
     {
@@ -13,7 +14,7 @@ namespace ContentEngine.Core.Inference.Services
         private readonly IReasoningInstanceService _instanceService;
         private readonly IReasoningEstimationService _estimationService;
         private readonly IQueryProcessingService _queryProcessingService;
-        private readonly IPromptExecutionService _promptExecutionService;
+        private readonly IReasoningCombinationService _combinationService;
         private readonly ILogger<ReasoningExecutionService> _logger;
 
         public ReasoningExecutionService(
@@ -21,24 +22,23 @@ namespace ContentEngine.Core.Inference.Services
             IReasoningInstanceService instanceService,
             IReasoningEstimationService estimationService,
             IQueryProcessingService queryProcessingService,
-            IPromptExecutionService promptExecutionService,
+            IReasoningCombinationService combinationService,
             ILogger<ReasoningExecutionService> logger)
         {
             _definitionService = definitionService;
             _instanceService = instanceService;
             _estimationService = estimationService;
             _queryProcessingService = queryProcessingService;
-            _promptExecutionService = promptExecutionService;
+            _combinationService = combinationService;
             _logger = logger;
         }
 
-        // TODO: 重构为Instance驱动
         public async Task<ReasoningTransactionInstance> ExecuteTransactionAsync(
             string instanceId, 
             Dictionary<string, object>? executionParams = null, 
             CancellationToken cancellationToken = default)
         {
-            // 创建实例
+            // 获取实例
             var instance = await _instanceService.GetInstanceByIdAsync(instanceId, cancellationToken);
             if (instance == null)
             {
@@ -53,8 +53,11 @@ namespace ContentEngine.Core.Inference.Services
             }
             
             var definition = await _definitionService.GetDefinitionByIdAsync(instance.DefinitionId, cancellationToken);
+            if (definition == null)
+            {
+                throw new InvalidOperationException($"推理事务定义不存在: {instance.DefinitionId}");
+            }
 
-            
             _logger.LogInformation("开始执行推理事务: {DefinitionName} (实例ID: {InstanceId})", definition.Name, instance.InstanceId);
             
             try
@@ -67,30 +70,58 @@ namespace ContentEngine.Core.Inference.Services
                 // 生成AI输出
                 await GenerateOutputsAsync(instance, definition, cancellationToken);
 
+                // 重新获取最新的实例状态，因为批量执行可能已经更新了实例
+                var latestInstance = await _instanceService.GetInstanceByIdAsync(instanceId, cancellationToken);
+                if (latestInstance == null)
+                {
+                    throw new InvalidOperationException($"无法获取最新的实例状态: {instanceId}");
+                }
+
                 // 标记完成
-                instance.Status = TransactionStatus.Completed;
-                instance.CompletedAt = DateTime.UtcNow;
-                instance.Metrics.ElapsedTime = DateTime.UtcNow - instance.StartedAt;
+                latestInstance.Status = TransactionStatus.Completed;
+                latestInstance.CompletedAt = DateTime.UtcNow;
+                latestInstance.Metrics.ElapsedTime = DateTime.UtcNow - latestInstance.StartedAt;
 
-                await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
-                _logger.LogInformation("推理事务执行完成: {InstanceId}", instance.InstanceId);
+                await _instanceService.UpdateInstanceAsync(latestInstance, cancellationToken);
+                _logger.LogInformation("推理事务执行完成: {InstanceId}", latestInstance.InstanceId);
 
-                return instance;
+                return latestInstance;
             }
             catch (Exception ex)
             {
-                instance.Status = TransactionStatus.Failed;
-                instance.CompletedAt = DateTime.UtcNow;
-                instance.Metrics.ElapsedTime = DateTime.UtcNow - instance.StartedAt;
-                instance.Errors.Add(new ErrorRecord
+                // 在异常情况下也需要获取最新实例状态，避免覆盖已有的执行结果
+                var latestInstanceForError = await _instanceService.GetInstanceByIdAsync(instanceId, cancellationToken);
+                if (latestInstanceForError != null)
                 {
-                    ErrorType = ex.GetType().Name,
-                    Message = ex.Message,
-                    IsRetriable = true
-                });
+                    latestInstanceForError.Status = TransactionStatus.Failed;
+                    latestInstanceForError.CompletedAt = DateTime.UtcNow;
+                    latestInstanceForError.Metrics.ElapsedTime = DateTime.UtcNow - latestInstanceForError.StartedAt;
+                    latestInstanceForError.Errors.Add(new ErrorRecord
+                    {
+                        ErrorType = ex.GetType().Name,
+                        Message = ex.Message,
+                        IsRetriable = true
+                    });
 
-                await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
-                _logger.LogError(ex, "推理事务执行失败: {InstanceId}", instance.InstanceId);
+                    await _instanceService.UpdateInstanceAsync(latestInstanceForError, cancellationToken);
+                    _logger.LogError(ex, "推理事务执行失败: {InstanceId}", latestInstanceForError.InstanceId);
+                }
+                else
+                {
+                    // 如果无法获取最新实例，使用原始实例
+                    instance.Status = TransactionStatus.Failed;
+                    instance.CompletedAt = DateTime.UtcNow;
+                    instance.Metrics.ElapsedTime = DateTime.UtcNow - instance.StartedAt;
+                    instance.Errors.Add(new ErrorRecord
+                    {
+                        ErrorType = ex.GetType().Name,
+                        Message = ex.Message,
+                        IsRetriable = true
+                    });
+
+                    await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
+                    _logger.LogError(ex, "推理事务执行失败: {InstanceId}", instance.InstanceId);
+                }
 
                 throw;
             }
@@ -181,18 +212,33 @@ namespace ContentEngine.Core.Inference.Services
 
             _logger.LogInformation("开始处理数据: {InstanceId}", instance.InstanceId);
 
-            // 使用QueryProcessingService一次性完成数据获取和组合
-            var processedData = await _queryProcessingService.GenerateAndResolveInputDataAsync(definition, cancellationToken);
-            
-            instance.ResolvedViews = processedData.ResolvedViews;
-            instance.InputCombinations = processedData.Combinations;
-            instance.Metrics.TotalCombinations = processedData.Combinations.Count;
+            // 检查实例是否已经有组合（可能是用户手动生成的）
+            if (instance.InputCombinations?.Any() == true)
+            {
+                _logger.LogInformation("使用实例现有组合: {InstanceId}, 组合数: {Count}", 
+                    instance.InstanceId, instance.InputCombinations.Count);
+                
+                // 确保指标正确
+                instance.Metrics.TotalCombinations = instance.InputCombinations.Count;
+                
+            }
+            else
+            {
+                // 实例没有组合，需要重新生成
+                _logger.LogInformation("实例无现有组合，重新生成: {InstanceId}", instance.InstanceId);
+                
+                var processedData = await _queryProcessingService.GenerateAndResolveInputDataAsync(definition, cancellationToken);
+                
+                instance.ResolvedViews = processedData.ResolvedViews;
+                instance.InputCombinations = processedData.Combinations;
+                instance.Metrics.TotalCombinations = processedData.Combinations.Count;
+                
+                _logger.LogInformation("数据处理完成: {InstanceId}, 视图数: {ViewCount}, 组合数: {CombinationCount}", 
+                    instance.InstanceId, processedData.Statistics.TotalViews, processedData.Statistics.GeneratedCombinations);
+            }
 
             instance.Status = TransactionStatus.CombiningData;
             await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
-
-            _logger.LogInformation("数据处理完成: {InstanceId}, 视图数: {ViewCount}, 组合数: {CombinationCount}", 
-                instance.InstanceId, processedData.Statistics.TotalViews, processedData.Statistics.GeneratedCombinations);
         }
 
         private async Task GenerateOutputsAsync(ReasoningTransactionInstance instance, ReasoningTransactionDefinition definition, CancellationToken cancellationToken)
@@ -203,102 +249,18 @@ namespace ContentEngine.Core.Inference.Services
             _logger.LogInformation("开始生成AI输出: {InstanceId}, 组合数: {CombinationCount}", 
                 instance.InstanceId, instance.InputCombinations.Count);
 
-            // 这里可以调用 ReasoningCombinationService 来处理组合执行
-            // 为了简化，暂时跳过具体实现
+            // 使用 ReasoningCombinationService 的批量执行功能
+            var combinationIds = instance.InputCombinations.Select(c => c.CombinationId).ToList();
             var constraints = definition.ExecutionConstraints;
-            var semaphore = new SemaphoreSlim(constraints.MaxConcurrentAICalls, constraints.MaxConcurrentAICalls);
-            var tasks = new List<Task>();
 
-            foreach (var combination in instance.InputCombinations)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                    break;
+            var batchResult = await _combinationService.BatchExecuteCombinationsAsync(
+                instance.InstanceId, 
+                combinationIds, 
+                constraints.MaxConcurrentAICalls, 
+                cancellationToken);
 
-                var task = ProcessCombinationAsync(instance, definition, combination, semaphore, cancellationToken);
-                tasks.Add(task);
-
-                // 如果启用批处理，等待一批任务完成
-                if (constraints.EnableBatching && tasks.Count >= constraints.BatchSize)
-                {
-                    await Task.WhenAll(tasks);
-                    tasks.Clear();
-                }
-            }
-
-            // 等待剩余任务完成
-            if (tasks.Any())
-            {
-                await Task.WhenAll(tasks);
-            }
-
-            _logger.LogInformation("AI输出生成完成: {InstanceId}", instance.InstanceId);
-        }
-        
-        /// <summary>
-        /// 处理单个组合
-        /// </summary>
-        private async Task ProcessCombinationAsync(
-            ReasoningTransactionInstance instance, 
-            ReasoningTransactionDefinition definition, 
-            ReasoningInputCombination combination, 
-            SemaphoreSlim semaphore, 
-            CancellationToken cancellationToken)
-        {
-            await semaphore.WaitAsync(cancellationToken);
-            try
-            {
-                // 填充Prompt模板
-                var filledPrompt = PromptTemplatingEngine.Fill(definition.PromptTemplate.TemplateContent, combination.DataMap);
-
-                // 执行AI调用
-                var result = await _promptExecutionService.ExecutePromptAsync(filledPrompt, "ContentEngineHelper", cancellationToken);
-
-                // 创建输出项
-                var outputItem = new ReasoningOutputItem
-                {
-                    InputCombinationId = combination.CombinationId,
-                    GeneratedText = result.GeneratedText,
-                    IsSuccess = result.IsSuccess,
-                    FailureReason = result.FailureReason,
-                    CostUSD = result.CostUSD,
-                    ExecutionTime = result.ExecutionTime
-                };
-
-                lock (instance)
-                {
-                    instance.Outputs.Add(outputItem);
-                    instance.Metrics.ProcessedCombinations++;
-                    instance.Metrics.ActualCostUSD += result.CostUSD;
-
-                    if (result.IsSuccess)
-                    {
-                        instance.Metrics.SuccessfulOutputs++;
-                    }
-                    else
-                    {
-                        instance.Metrics.FailedOutputs++;
-                        instance.Errors.Add(new ErrorRecord
-                        {
-                            ErrorType = "AIExecutionError",
-                            Message = result.FailureReason ?? "AI执行失败",
-                            CombinationId = combination.CombinationId,
-                            IsRetriable = true
-                        });
-                    }
-
-                    instance.LastProcessedCombinationId = combination.CombinationId;
-                }
-
-                // 定期更新实例状态
-                if (instance.Metrics.ProcessedCombinations % 10 == 0)
-                {
-                    await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
-                }
-            }
-            finally
-            {
-                semaphore.Release();
-            }
+            _logger.LogInformation("AI输出生成完成: {InstanceId}, 成功: {Success}, 失败: {Failed}, 总成本: ${Cost:F2}", 
+                instance.InstanceId, batchResult.SuccessfullyExecuted, batchResult.Failed, batchResult.TotalCost);
         }
 
         #endregion
