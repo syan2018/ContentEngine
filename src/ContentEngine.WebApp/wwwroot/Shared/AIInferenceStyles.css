@@ -44,11 +44,9 @@
 .filter-expression, .combination-id {
     font-family: 'Courier New', monospace;
     font-size: 0.875rem;
-    color: var(--mud-palette-text-primary);
 }
 
 .combination-id {
-    background-color: var(--mud-palette-surface);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 0.75rem;
@@ -67,7 +65,6 @@
 /* 结果内容样式 */
 .result-content {
     background-color: #f8f9fa;
-    border-left: 4px solid var(--mud-palette-primary);
 }
 
 .result-text {
@@ -89,7 +86,6 @@
 }
 
 .text-muted {
-    color: var(--mud-palette-text-secondary);
 }
 
 .rounded {
@@ -102,11 +98,9 @@
 
 /* 字段引用样式 */
 .field-reference {
-    background-color: var(--mud-palette-surface);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 0.875rem;
-    border: 1px solid var(--mud-palette-divider);
 }
 
 /* 预览内容样式 */

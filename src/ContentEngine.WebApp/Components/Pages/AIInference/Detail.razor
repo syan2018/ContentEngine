@@ -47,17 +47,17 @@
 
         <!-- 详情标签页 -->
         <MudTabs @bind-ActivePanelIndex="activeTab" Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="mb-4">
-            <MudTabPanel Text="任务概览" Icon="@Icons.Material.Filled.Dashboard">
+            <MudTabPanel Text="任务概览" Icon="@Material.Filled.Dashboard">
                 @if (definition != null)
                 {
                     <TaskOverviewTab Definition="@definition" Instance="@instance" />
                 }
             </MudTabPanel>
             
-            <MudTabPanel Text="推理请求" Icon="@Icons.Material.Filled.DataArray">
+            <MudTabPanel Text="推理请求" Icon="@Material.Filled.DataArray">
                 <CombinationTableView 
                     Combinations="@realTimeCombinations"
-                    Outputs="@(instance.Outputs ?? new List<ReasoningOutputItem>())"
+                    Outputs="@(instance.Outputs)"
                     IsLoadingCombinations="@isLoadingCombinations"
                     IsCompactView="@isCompactView"
                     HasCachedCombinations="@(instance.InputCombinations?.Any() == true && instance.InputCombinations.Count == realTimeCombinations.Count)"

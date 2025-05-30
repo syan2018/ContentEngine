@@ -2,9 +2,8 @@
 @using LiteDB
 @inject IJSRuntime JSRuntime
 @inject ISnackbar Snackbar
-@using ContentEngine.WebApp.Components.Pages.AIInference.Shared
 
-<link href="Components/Pages/AIInference/Shared/AIInferenceStyles.css" rel="stylesheet" />
+<link href="Shared/AIInferenceStyles.css" rel="stylesheet" />
 
 <MudDialog>
     <DialogContent>
@@ -110,7 +109,6 @@
 <style>
 .combination-id {
     font-family: 'Courier New', monospace;
-    background-color: var(--mud-palette-surface);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 0.75rem;
@@ -118,7 +116,6 @@
 
 .result-content {
     background-color: #f8f9fa;
-    border-left: 4px solid var(--mud-palette-primary);
 }
 
 .result-text {
