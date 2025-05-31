@@ -89,7 +89,7 @@ export default function RecordDetailView({ schemaId, recordId }: { schemaId: str
           <Card>
             <CardHeader>
               <CardTitle>角色属性</CardTitle>
-              <CardDescription>角色的详细属性数值</CardDescription>
+              <CardDescription>角色的详细属性���值</CardDescription>
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-1 md:grid-cols-3 gap-4">

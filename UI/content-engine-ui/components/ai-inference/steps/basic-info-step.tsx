@@ -39,6 +39,29 @@ export default function BasicInfoStep({
           onChange={(e) => updateTransactionDefinition({ description: e.target.value })}
         />
       </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="subject-schema">主体Schema（可选）</Label>
+        <Select
+          value={transactionDefinition.subjectSchemaName || ""}
+          onValueChange={(value) => updateTransactionDefinition({ subjectSchemaName: value || undefined })}
+        >
+          <SelectTrigger id="subject-schema">
+            <SelectValue placeholder="选择主体Schema（可选）" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">无（不指定主体Schema）</SelectItem>
+            {availableSchemas.map((schema) => (
+              <SelectItem key={schema.name} value={schema.name}>
+                {schema.displayName} ({schema.fieldCount} 字段)
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-sm text-muted-foreground">
+          主体Schema用于在执行时可能传入一个主体实例ID来限定范围，例如"为特定NPC生成对话"
+        </p>
+      </div>
     </div>
   )
 }
