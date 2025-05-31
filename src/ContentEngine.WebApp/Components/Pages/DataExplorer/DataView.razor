@@ -1,169 +1,277 @@
+@page "/data-explorer/{SchemaId}"
 @page "/data/{SchemaId}"
 
 @rendermode InteractiveServer
 @inject IDataEntryService DataService
 @inject ISchemaDefinitionService SchemaService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 
 @using ContentEngine.Core.Utils
 @using LiteDB
-
 @using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
 
-<PageTitle>Data for @(schemaDefinition?.Name ?? SchemaId)</PageTitle>
+<PageTitle>@(schemaDefinition?.Name ?? "数据浏览") - ContentEngine</PageTitle>
 
-<h1>Data Entries: @(schemaDefinition?.Name ?? SchemaId)</h1>
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
+    <MudStack Spacing="6">
+        <!-- 页面标题和导航 -->
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudStack Spacing="2">
+                <MudBreadcrumbs Items="_breadcrumbItems" />
+                <MudText Typo="Typo.h4" Class="font-weight-bold">
+                    @(schemaDefinition?.Name ?? "数据浏览")
+                </MudText>
+                @if (schemaDefinition != null && !string.IsNullOrEmpty(schemaDefinition.Description))
+                {
+                    <MudText Typo="Typo.body1" Color="Color.Secondary">
+                        @schemaDefinition.Description
+                    </MudText>
+                }
+            </MudStack>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="ShowAddEntryForm">
+                添加记录
+            </MudButton>
+        </MudStack>
 
 @if (isLoading)
 {
-    <p><em>Loading schema and data...</em></p>
+            <MudPaper Class="pa-8 text-center" Elevation="0">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                <MudText Class="mt-2">正在加载数据...</MudText>
+            </MudPaper>
 }
 else if (!string.IsNullOrEmpty(errorMessage))
 {
-    <div class="alert alert-danger">@errorMessage</div>
+            <MudAlert Severity="Severity.Error" Class="mb-4">
+                @errorMessage
+            </MudAlert>
 }
 else if (schemaDefinition == null)
 {
-    <div class="alert alert-warning">Schema '@SchemaId' definition not found.</div>
+            <MudAlert Severity="Severity.Warning" Class="mb-4">
+                未找到数据结构 '@SchemaId'
+            </MudAlert>
 }
 else
 {
-    <button class="btn btn-success mb-3" @onclick="ShowAddEntryForm">+ Add New Entry</button>
+            <!-- 数据操作工具栏 -->
+            <MudTabs Elevation="0" Rounded="false">
+                                <MudTabPanel Text="表格视图" Icon="@Icons.Material.Filled.TableChart">
+                    <div class="mt-4">
+                        <DataTableView Schema="@schemaDefinition"
+                                       DataEntries="@dataEntries"
+                                       OnViewRecord="ViewRecord"
+                                       OnEditRecord="ShowEditEntryForm"
+                                       OnDeleteRecord="DeleteEntryPrompt"
+                                       OnDataChanged="LoadSchemaAndData" />
+                    </div>
+                </MudTabPanel>
 
-    @* Section for Adding/Editing Data - Initially hidden *@
-    @if (showEditForm)
-    {
-        <h3>@(isEditing ? "Edit Entry" : "Add New Entry")</h3>
-        <EditForm EditContext="@editContext" OnValidSubmit="HandleDataSubmit" FormName="DataEntryForm">
-            @* Use the DynamicDataForm component with single dictionary *@
-            <DynamicDataForm Schema="@schemaDefinition"
-                             FormData="@formData"
-                             OnFieldChanged="HandleFormFieldChanged" />
+                <MudTabPanel Text="数据可视化" Icon="@Icons.Material.Filled.BarChart">
+                    <div class="mt-4">
+                        <DataVisualizationPanel SchemaDefinition="@schemaDefinition" DataEntries="@dataEntries" />
+                    </div>
+                </MudTabPanel>
 
-            @* Display general error messages here *@
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger mt-2">@errorMessage</div>
-            }
+                <MudTabPanel Text="自然语言查询" Icon="@Icons.Material.Filled.Psychology">
+                    <div class="mt-4">
+                        <NaturalLanguageQueryPanel SchemaDefinition="@schemaDefinition" OnQueryResult="HandleQueryResult" />
+                    </div>
+                </MudTabPanel>
+            </MudTabs>
+        }
+    </MudStack>
+</MudContainer>
 
-            <button type="submit" class="btn btn-primary" disabled="@(!isFormValid)">@(isEditing ? "Update Entry" : "Save Entry")</button>
-            <button type="button" class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
-        </EditForm>
-        <hr />
-    }
-
-    @* Section for Displaying Data *@
-    <h2>Existing Entries (@totalEntries)</h2>
-    @if (!dataEntries.Any())
-    {
-        <p>No data entries found for this schema.</p>
-    }
-    else
-    {
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    @* Dynamic Headers based on Schema *@
+<!-- 简化的添加/编辑记录对话框 -->
+<MudDialog @bind-IsVisible="showEditForm" Options="dialogOptions">
+    <TitleContent>
+        <div class="d-flex align-center">
+            <MudIcon Icon="@(isEditing ? Icons.Material.Filled.Edit : Icons.Material.Filled.Add)" Class="mr-2" />
+            <MudText Typo="Typo.h6">@(isEditing ? "编辑记录" : "添加新记录")</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (schemaDefinition != null)
+        {
+            <MudStack Spacing="3">
                     @foreach (var field in schemaDefinition.Fields)
                     {
-                        <th>@field.Name</th>
-                    }
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var entry in dataEntries)
-                {
-                    <tr @key="BsonFormUtils.GetEntryKey(entry)">
-                        @* Dynamic Data Cells *@
-                        @foreach (var field in schemaDefinition.Fields)
+                    <div>
+                        @if (field.Type == FieldType.Boolean)
                         {
-                            <td>@BsonFormUtils.GetDisplayValue(entry, field.Name)</td>
+                            <MudCheckBox T="bool" 
+                                         Checked="@GetBoolValue(field.Name)"
+                                         CheckedChanged="@((bool value) => SetFieldValue(field.Name, value))"
+                                         Label="@field.Name" />
                         }
-                        <td>
-                            <button class="btn btn-sm btn-primary" @onclick="() => ShowEditEntryForm(entry)">Edit</button>
-                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteEntryPrompt(entry)">Delete</button>
-                        </td>
-                    </tr>
+                        else if (field.Type == FieldType.Number)
+                        {
+                            <MudNumericField T="double" 
+                                             Value="@GetNumericValue(field.Name)"
+                                             ValueChanged="@(value => SetFieldValue(field.Name, value))"
+                                             Label="@field.Name" 
+                                             Variant="Variant.Outlined"
+                                             Required="@field.IsRequired" />
+                        }
+                        else if (field.Type == FieldType.Date)
+                        {
+                            <MudDatePicker T="DateTime?" 
+                                           Date="@GetDateValue(field.Name)"
+                                           DateChanged="@(value => SetFieldValue(field.Name, value))"
+                                           Label="@field.Name" 
+                                           Variant="Variant.Outlined"
+                                           Required="@field.IsRequired" />
+                        }
+                        else
+                        {
+                            <MudTextField T="string" 
+                                          Value="@GetStringValue(field.Name)"
+                                          ValueChanged="@(value => SetFieldValue(field.Name, value))"
+                                          Label="@field.Name" 
+                                          Variant="Variant.Outlined"
+                                          Required="@field.IsRequired"
+                                          Lines="@(field.Type == FieldType.Text ? 3 : 1)" />
+                        }
+                    </div>
                 }
-            </tbody>
-        </table>
+                
+                @if (!string.IsNullOrEmpty(formErrorMessage))
+                {
+                    <MudAlert Severity="Severity.Error">
+                        @formErrorMessage
+                    </MudAlert>
+                }
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CancelEdit" Variant="Variant.Text">取消</MudButton>
+        <MudButton OnClick="HandleDataSubmit" 
+                   Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   StartIcon="@Icons.Material.Filled.Save">
+            @(isEditing ? "更新" : "保存")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
 
-        @* Pagination Controls *@
-        <nav aria-label="Data pagination">
-            <ul class="pagination">
-                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
-                    <button class="page-link" @onclick="() => ChangePage(currentPage - 1)">Previous</button>
-                </li>
-                @* Simplified pagination display - show current page and total pages *@
-                 <li class="page-item disabled"><span class="page-link">Page @currentPage of @totalPages</span></li>
-                <li class="page-item @(currentPage >= totalPages ? "disabled" : "")">
-                    <button class="page-link" @onclick="() => ChangePage(currentPage + 1)">Next</button>
-                </li>
-            </ul>
-        </nav>
-    }
-}
+<!-- 记录详情对话框 -->
+<MudDialog @bind-IsVisible="showRecordDetail" Options="recordDetailDialogOptions">
+    <TitleContent>
+        <div class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="mr-2" />
+            <MudText Typo="Typo.h6">记录详情</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (selectedRecord != null && schemaDefinition != null)
+        {
+            <RecordDetailView Record="@selectedRecord" Schema="@schemaDefinition" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CloseRecordDetail" Variant="Variant.Text">关闭</MudButton>
+        <MudButton OnClick="@(() => ShowEditEntryForm(selectedRecord))" 
+                   Variant="Variant.Filled" 
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Edit">
+            编辑
+        </MudButton>
+    </DialogActions>
+</MudDialog>
 
 @code {
-    [Parameter]
-    public string SchemaId { get; set; } = "";
+    [Parameter] public string SchemaId { get; set; } = "";
 
+    // 数据相关
     private SchemaDefinition? schemaDefinition;
     private List<BsonDocument> dataEntries = new();
+    private BsonDocument? selectedRecord;
 
-    // Use a single dictionary for form data again
+    // 表单相关
     private Dictionary<string, object?> formData = new();
-
-    private EditContext? editContext;
     private BsonValue? currentEditId = null;
-    private object formModelPlaceholder = new(); // Keep for EditContext
-    private bool isFormValid = false;
-    private bool isLoading = true;
     private bool isEditing = false;
     private bool showEditForm = false;
+    private bool showRecordDetail = false;
+    private string? formErrorMessage;
+
+    // UI状态
+    private bool isLoading = true;
     private string? errorMessage;
+    private List<BreadcrumbItem> _breadcrumbItems = new();
+
+    // 分页
     private int currentPage = 1;
-    private int pageSize = 10; // Items per page
+    private int pageSize = 10;
     private long totalEntries = 0;
-    private int totalPages => (int)Math.Ceiling((double)totalEntries / pageSize);
+
+    // 对话框选项
+    private DialogOptions dialogOptions = new() 
+    { 
+        MaxWidth = MaxWidth.Medium, 
+        FullWidth = true,
+        CloseButton = true
+    };
+
+    private DialogOptions recordDetailDialogOptions = new() 
+    { 
+        MaxWidth = MaxWidth.Large, 
+        FullWidth = true,
+        CloseButton = true
+    };
 
     protected override async Task OnInitializedAsync()
     {
+        SetupBreadcrumbs();
         await LoadSchemaAndData();
+    }
+
+    private void SetupBreadcrumbs()
+    {
+        _breadcrumbItems = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("首页", href: "/"),
+            new BreadcrumbItem("数据洞察", href: "/data-explorer"),
+            new BreadcrumbItem(schemaDefinition?.Name ?? "数据浏览", href: null, disabled: true)
+        };
     }
 
     private async Task LoadSchemaAndData()
     {
         isLoading = true;
         errorMessage = null;
-        ClearFormData(); // Clear the single dictionary
+        ClearFormData();
+        
         try
         {
             if (!int.TryParse(SchemaId, out var schemaIdInt))
             {
-                errorMessage = $"Invalid Schema ID: '{SchemaId}'";
+                errorMessage = $"无效的数据结构ID: '{SchemaId}'";
                 return;
             }
             
             schemaDefinition = await SchemaService.GetSchemaByIdAsync(schemaIdInt);
             if (schemaDefinition != null)
             {   
-                // Load data for the current page
+                SetupBreadcrumbs();
                 totalEntries = await DataService.CountDataAsync(schemaDefinition.Name);
                 dataEntries = await DataService.GetDataAsync(schemaDefinition.Name, (currentPage - 1) * pageSize, pageSize);
             }
             else
             {
-                errorMessage = $"Schema with ID '{SchemaId}' not found.";
+                errorMessage = $"未找到ID为 '{SchemaId}' 的数据结构";
                 dataEntries.Clear();
                 totalEntries = 0;
             }
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error loading data: {ex.Message}";
-            schemaDefinition = null; // Ensure schema is null on error
+            errorMessage = $"加载数据时出错: {ex.Message}";
+            schemaDefinition = null;
             dataEntries.Clear();
             totalEntries = 0;
         }
@@ -171,172 +279,181 @@ else
         {   
             isLoading = false;
         }
-        StateHasChanged(); // Ensure UI updates after loading
+        StateHasChanged();
     }
 
-    private void ClearFormData()
+
+
+    // 记录操作方法
+    private void ViewRecord(BsonDocument record)
     {
-        formData.Clear();
-        if (editContext != null)
-        {
-            // Don't unsubscribe here, let CancelEdit handle it fully
-            // editContext.OnFieldChanged -= HandleFormFieldChanged;
-            editContext = null;
-        }
-        isFormValid = false;
+        selectedRecord = record;
+        showRecordDetail = true;
     }
 
-    private void PopulateFormDataFromBson(BsonDocument doc)
+    private void CloseRecordDetail()
     {
-        if (schemaDefinition == null) return;
-        // Use the utility function to convert BsonDocument to the formData dictionary
-        formData = BsonFormUtils.ConvertBsonToFormData(doc, schemaDefinition);
+        showRecordDetail = false;
+        selectedRecord = null;
     }
 
-    // Method to handle the event callback from DynamicDataForm
-    private void HandleFormFieldChanged()
-    {
-        ValidateFormData();
-        InvokeAsync(StateHasChanged);
-    }
-
-    private void SetupEditContext()
-    {
-        // Pass the placeholder object to EditContext, not the dictionary
-        editContext = new EditContext(formModelPlaceholder);
-        // No need to subscribe to OnFieldChanged here, DynamicDataForm handles it
-        ValidateFormData(); // Perform initial validation
-    }
-
+    // 表单相关方法
     private void ShowAddEntryForm()
     {
-        if (schemaDefinition == null) return;
-        PopulateFormDataFromBson(new BsonDocument());
-        SetupEditContext();
-        currentEditId = null;
         isEditing = false;
+        currentEditId = null;
+        ClearFormData();
+        InitializeFormData();
         showEditForm = true;
     }
 
-    private void ShowEditEntryForm(BsonDocument entryToEdit)
+    private void ShowEditEntryForm(BsonDocument? entry)
     {
-        if (schemaDefinition == null) return;
-        var entryCopy = new BsonDocument(entryToEdit.ToDictionary());
-        PopulateFormDataFromBson(entryCopy);
-        SetupEditContext();
-        currentEditId = entryToEdit["_id"];
+        if (entry == null) return;
+        
         isEditing = true;
+        currentEditId = entry.TryGetValue("_id", out var id) ? id : null;
+        ClearFormData();
+        PopulateFormDataFromBson(entry);
+        showRecordDetail = false;
         showEditForm = true;
     }
 
     private void CancelEdit()
     {
         showEditForm = false;
-        ClearFormData(); // Clears dict and EditContext
-        currentEditId = null;
-        isEditing = false;
+        ClearFormData();
+    }
+
+    private void ClearFormData()
+    {
+        formData.Clear();
+        formErrorMessage = null;
+    }
+
+    private void InitializeFormData()
+    {
+        if (schemaDefinition?.Fields == null) return;
+        
+        foreach (var field in schemaDefinition.Fields)
+        {
+            formData[field.Name] = field.Type switch
+            {
+                FieldType.Boolean => false,
+                FieldType.Number => 0.0,
+                FieldType.Date => DateTime.Today,
+                _ => string.Empty
+            };
+        }
+    }
+
+    private void PopulateFormDataFromBson(BsonDocument doc)
+    {
+        if (schemaDefinition == null) return;
+        formData = BsonFormUtils.ConvertBsonToFormData(doc, schemaDefinition);
     }
 
     private async Task HandleDataSubmit()
     {
-        if (schemaDefinition == null || editContext == null) return;
-        errorMessage = null;
-
-        if (!ValidateFormData()) // Use our custom validation
-        {
-             // errorMessage is set within ValidateFormData
-            return;
-        }
+        if (schemaDefinition == null) return;
 
         try
-        { 
-            // Use the utility function to convert the formData dictionary back to BsonDocument
-            var dataToSave = BsonFormUtils.ConvertFormDataToBson(formData, schemaDefinition);
-            // Validation is now mostly done in ValidateFormData before this point
+        {
+            formErrorMessage = null;
+            var bsonDoc = BsonFormUtils.ConvertFormDataToBson(formData, schemaDefinition);
 
             if (isEditing && currentEditId != null)
             {
-                dataToSave["_id"] = currentEditId;
-                await DataService.UpdateDataAsync(schemaDefinition.Name, currentEditId, dataToSave);
+                bsonDoc["_id"] = currentEditId;
+                await DataService.UpdateDataAsync(schemaDefinition.Name, currentEditId, bsonDoc);
             }
             else
             {
-                await DataService.CreateDataAsync(schemaDefinition.Name, dataToSave);
+                await DataService.CreateDataAsync(schemaDefinition.Name, bsonDoc);
             }
-            CancelEdit();
+            
+            showEditForm = false;
             await LoadSchemaAndData();
         }
-        catch (FormatException fex)
-        { errorMessage = $"Error saving data: {fex.Message}"; }
         catch (Exception ex)
-        { errorMessage = $"Error saving data: {ex.Message}"; }
+        {
+            formErrorMessage = $"保存数据时出错: {ex.Message}";
+        }
     }
 
-    private async Task DeleteEntryPrompt(BsonDocument entryToDelete)
+    private async Task DeleteEntryPrompt(BsonDocument entry)
     {
-        errorMessage = null;
-        // TODO: Implement proper confirmation dialog (e.g., using a modal component)
+        var entryKey = BsonFormUtils.GetEntryKey(entry);
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"确定要删除这条记录吗？\n记录ID: {entryKey}");
+        
+        if (confirmed)
+        {
+            await DeleteEntry(entry);
+        }
+    }
+
+    private async Task DeleteEntry(BsonDocument entry)
+    {
+        if (schemaDefinition == null) return;
+        
         try
         {
-            await DataService.DeleteDataAsync(schemaDefinition.Name, entryToDelete["_id"]);
+            var entryId = entry.TryGetValue("_id", out var id) ? id : null;
+            if (entryId != null)
+            {
+                await DataService.DeleteDataAsync(schemaDefinition.Name, entryId);
             await LoadSchemaAndData();
+            }
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error deleting entry: {ex.Message}";
+            errorMessage = $"删除记录时出错: {ex.Message}";
         }
     }
 
-    private async Task ChangePage(int newPage)
+    private void HandleQueryResult(List<BsonDocument> results)
     {
-        if (newPage >= 1 && newPage <= totalPages)
-        {
-            currentPage = newPage;
-            await LoadSchemaAndData(); // Reload data for the new page
-        }
+        dataEntries = results;
+        StateHasChanged();
     }
 
-    // Modified to use single dictionary for validation
-    private bool ValidateFormData()
+    // 表单字段访问器
+    private bool GetBoolValue(string fieldName)
     {
-        if (schemaDefinition == null) return false;
-        isFormValid = true; // Assume valid
-
-        foreach (var field in schemaDefinition.Fields)
-        {
-            bool isRequired = field.IsRequired;
-            object? value = formData.TryGetValue(field.Name, out var v) ? v : null;
-            bool isEmpty = false;
-
-            // Check if required field is empty/null/whitespace
-            if (isRequired)
-            {
-                isEmpty = value == null || (value is string s && string.IsNullOrWhiteSpace(s));
-                if (isEmpty)
-                {
-                    isFormValid = false;
-                    errorMessage = $"Field '{field.Name}' is required.";
-                    break; // Stop validation on first required error
-                }
-            }
-
-            // Check Reference format if not empty
-            if (field.Type == FieldType.Reference && value is string refString && !string.IsNullOrWhiteSpace(refString))
-            {
-                try { new ObjectId(refString); }
-                catch (FormatException)
-                {
-                    isFormValid = false;
-                    errorMessage = $"Field '{field.Name}' has an invalid ObjectId format.";
-                    break; // Stop validation on first format error
-                }
-            }
-             // TODO: Add other field-specific validations (number ranges, etc.)
-        }
-        
-        if (isFormValid) errorMessage = null; // Clear error if passes
-
-        // Don't need InvokeAsync here, HandleFormFieldChanged does it
-        return isFormValid;
+        if (formData.TryGetValue(fieldName, out var value) && value is bool boolValue)
+            return boolValue;
+        return false;
     }
+
+    private double GetNumericValue(string fieldName)
+    {
+        if (formData.TryGetValue(fieldName, out var value))
+        {
+            if (value is double doubleValue) return doubleValue;
+            if (value is int intValue) return intValue;
+            if (double.TryParse(value?.ToString(), out var parsed)) return parsed;
+        }
+        return 0.0;
+    }
+
+    private DateTime? GetDateValue(string fieldName)
+    {
+        if (formData.TryGetValue(fieldName, out var value) && value is DateTime dateValue)
+            return dateValue;
+        return null;
+    }
+
+    private string GetStringValue(string fieldName)
+    {
+        if (formData.TryGetValue(fieldName, out var value))
+            return value?.ToString() ?? string.Empty;
+        return string.Empty;
+    }
+
+    private void SetFieldValue(string fieldName, object? value)
+    {
+        formData[fieldName] = value;
+        StateHasChanged();
+    }
+
 } 

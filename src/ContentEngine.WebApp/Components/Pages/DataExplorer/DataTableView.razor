@@ -1,0 +1,258 @@
+@using ContentEngine.Core.Utils
+@using LiteDB
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@using QueryBuilder = ContentEngine.Core.Utils.QueryBuilder
+
+@inject IDataEntryService DataService
+@inject IJSRuntime JSRuntime
+
+<!-- 搜索和筛选工具栏 -->
+<MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
+    <MudTextField T="string" @bind-Value="searchText" 
+                  Placeholder="搜索记录..." 
+                  Variant="Variant.Outlined" 
+                  Adornment="Adornment.Start" 
+                  AdornmentIcon="@Icons.Material.Filled.Search" 
+                  Clearable="true" 
+                  Immediate="true" 
+                  DebounceInterval="300"
+                  OnDebounceIntervalElapsed="OnSearchChanged"
+                  Class="flex-grow-1" />
+    
+    <!-- 筛选按钮和菜单 -->
+    <MudMenu Icon="@Icons.Material.Filled.FilterList" 
+             Variant="Variant.Outlined" 
+             Text="@($"筛选{(activeFilters.Count > 0 ? $" ({activeFilters.Count})" : "")}")"
+             Dense="true">
+        <MudPaper Class="pa-4" Style="min-width: 300px;">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.h6">添加筛选条件</MudText>
+                
+                <MudSelect T="string" @bind-Value="newFilterField" 
+                           Label="选择字段" 
+                           Variant="Variant.Outlined"
+                           Dense="true">
+                    @if (Schema?.Fields != null)
+                    {
+                        @foreach (var field in Schema.Fields)
+                        {
+                            <MudSelectItem Value="@field.Name">@field.Name</MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+                
+                <MudSelect T="string" @bind-Value="newFilterOperator" 
+                           Label="操作符" 
+                           Variant="Variant.Outlined"
+                           Dense="true">
+                    @foreach (var op in QueryBuilder.GetAvailableOperators())
+                    {
+                        <MudSelectItem Value="@op.Value">@op.Text</MudSelectItem>
+                    }
+                </MudSelect>
+                
+                <MudTextField T="string" @bind-Value="newFilterValue" 
+                              Label="筛选值" 
+                              Variant="Variant.Outlined"
+                              Dense="true" />
+                
+                <MudButton Variant="Variant.Filled" 
+                           Color="Color.Primary" 
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="AddFilter"
+                           FullWidth="true"
+                           Disabled="@(!CanAddFilter)">
+                    添加筛选
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudMenu>
+    
+    <MudButton Variant="Variant.Outlined" 
+               StartIcon="@Icons.Material.Filled.Download"
+               OnClick="ExportData">
+        导出
+    </MudButton>
+</MudStack>
+
+<!-- 活动筛选条件显示 -->
+@if (activeFilters.Count > 0)
+{
+    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+        @foreach (var filter in activeFilters)
+        {
+            <MudChip T="string" 
+                     Text="@($"{filter.Field} {QueryBuilder.GetOperatorDisplayText(filter.Operator)} {filter.Value}")"
+                     OnClose="@(() => RemoveFilter(filter))"
+                     CloseIcon="@Icons.Material.Filled.Close"
+                     Color="Color.Primary"
+                     Variant="Variant.Filled"
+                     Size="Size.Small" />
+        }
+        <MudButton Variant="Variant.Text" 
+                   Size="Size.Small" 
+                   Color="Color.Error"
+                   StartIcon="@Icons.Material.Filled.ClearAll"
+                   OnClick="ClearAllFilters">
+            清除全部
+        </MudButton>
+    </MudStack>
+}
+
+<!-- 数据表格 -->
+<DataTable DataEntries="@filteredDataEntries"
+           Schema="@Schema"
+           OnViewRecord="OnViewRecord"
+           OnEditRecord="OnEditRecord"
+           OnDeleteRecord="OnDeleteRecord" />
+
+<!-- 分页 -->
+@if (totalEntries > pageSize)
+{
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            显示 @(Math.Min((currentPage - 1) * pageSize + 1, totalEntries)) - @(Math.Min(currentPage * pageSize, totalEntries)) 条，共 @totalEntries 条记录
+        </MudText>
+        <MudPagination Count="@((int)Math.Ceiling((double)totalEntries / pageSize))" 
+                       Selected="@currentPage" 
+                       SelectedChanged="OnPageChanged"
+                       ShowFirstButton="true" 
+                       ShowLastButton="true" />
+    </MudStack>
+}
+
+@code {
+    [Parameter] public SchemaDefinition? Schema { get; set; }
+    [Parameter] public List<BsonDocument> DataEntries { get; set; } = new();
+    [Parameter] public EventCallback<BsonDocument> OnViewRecord { get; set; }
+    [Parameter] public EventCallback<BsonDocument> OnEditRecord { get; set; }
+    [Parameter] public EventCallback<BsonDocument> OnDeleteRecord { get; set; }
+    [Parameter] public EventCallback OnDataChanged { get; set; }
+
+    // 筛选和搜索
+    private string searchText = string.Empty;
+    private List<QueryBuilder.DataFilter> activeFilters = new();
+    private string newFilterField = string.Empty;
+    private string newFilterOperator = string.Empty;
+    private string newFilterValue = string.Empty;
+
+    // 分页
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private long totalEntries = 0;
+
+    // 过滤后的数据
+    private List<BsonDocument> filteredDataEntries = new();
+
+    private bool CanAddFilter => !string.IsNullOrEmpty(newFilterField) && 
+                                !string.IsNullOrEmpty(newFilterOperator) && 
+                                !string.IsNullOrEmpty(newFilterValue);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await ApplyFiltersAndSearch();
+    }
+
+    private async Task OnSearchChanged()
+    {
+        currentPage = 1; // 重置到第一页
+        await ApplyFiltersAndSearch();
+    }
+
+    private async Task AddFilter()
+    {
+        if (!CanAddFilter) return;
+
+        activeFilters.Add(new QueryBuilder.DataFilter
+        {
+            Field = newFilterField,
+            Operator = newFilterOperator,
+            Value = newFilterValue
+        });
+
+        ClearFilterInputs();
+        currentPage = 1; // 重置到第一页
+        await ApplyFiltersAndSearch();
+    }
+
+    private void ClearFilterInputs()
+    {
+        newFilterField = string.Empty;
+        newFilterOperator = string.Empty;
+        newFilterValue = string.Empty;
+    }
+
+    private async Task RemoveFilter(QueryBuilder.DataFilter filter)
+    {
+        activeFilters.Remove(filter);
+        currentPage = 1; // 重置到第一页
+        await ApplyFiltersAndSearch();
+    }
+
+    private async Task ClearAllFilters()
+    {
+        activeFilters.Clear();
+        currentPage = 1; // 重置到第一页
+        await ApplyFiltersAndSearch();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        currentPage = page;
+        await LoadData();
+    }
+
+    private async Task ApplyFiltersAndSearch()
+    {
+        if (Schema == null) return;
+
+        try
+        {
+            // 构建筛选表达式
+            var filterExpression = QueryBuilder.BuildFilterExpression(searchText, activeFilters, Schema);
+            
+            // 获取总数
+            totalEntries = await DataService.CountDataWithFilterAsync(Schema.Name, filterExpression);
+            
+            // 获取分页数据
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            // 处理错误
+            Console.WriteLine($"筛选数据时出错: {ex.Message}");
+        }
+    }
+
+    private async Task LoadData()
+    {
+        if (Schema == null) return;
+
+        try
+        {
+            // 构建筛选表达式
+            var filterExpression = QueryBuilder.BuildFilterExpression(searchText, activeFilters, Schema);
+            
+            // 使用服务端筛选和分页
+            filteredDataEntries = await DataService.GetDataWithFilterAsync(
+                Schema.Name, 
+                (currentPage - 1) * pageSize, 
+                pageSize, 
+                filterExpression);
+                
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"加载数据时出错: {ex.Message}");
+            filteredDataEntries = new List<BsonDocument>();
+            totalEntries = 0;
+        }
+    }
+
+    private async Task ExportData()
+    {
+        // TODO: 实现数据导出功能
+        await Task.CompletedTask;
+    }
+} 

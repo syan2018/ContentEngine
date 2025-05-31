@@ -34,6 +34,17 @@ public interface IDataEntryService
     /// <returns>数据实例列表</returns>
     Task<List<BsonDocument>> GetDataAsync(string schemaName, int skip = 0, int limit = 50);
 
+
+    /// <summary>
+    /// 根据 Schema 名称获取数据实例列表 (支持分页和 LiteDB 筛选表达式)
+    /// </summary>
+    /// <param name="schemaName">目标 Schema 的名称</param>
+    /// <param name="skip">跳过的记录数 (用于分页)</param>
+    /// <param name="limit">返回的最大记录数 (用于分页)</param>
+    /// <param name="filterExpression">LiteDB 筛选表达式字符串</param>
+    /// <returns>数据实例列表</returns>
+    Task<List<BsonDocument>> GetDataWithFilterAsync(string schemaName, int skip, int limit, string? filterExpression);
+
     /// <summary>
     /// 更新一个已存在的数据实例
     /// </summary>
@@ -57,4 +68,12 @@ public interface IDataEntryService
     /// <param name="schemaName">目标 Schema 的名称</param>
     /// <returns>数据实例数量</returns>
     Task<long> CountDataAsync(string schemaName);
+
+    /// <summary>
+    /// 获取指定 Schema 的数据实例总数 (支持 LiteDB 筛选表达式)
+    /// </summary>
+    /// <param name="schemaName">目标 Schema 的名称</param>
+    /// <param name="filterExpression">LiteDB 筛选表达式字符串</param>
+    /// <returns>数据实例数量</returns>
+    Task<long> CountDataWithFilterAsync(string schemaName, string? filterExpression);
 } 

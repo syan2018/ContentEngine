@@ -1,0 +1,122 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.Utils
+@using LiteDB
+
+<MudStack Spacing="4">
+    <!-- 查询输入区域 -->
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-3">自然语言查询</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            使用自然语言描述您的查询需求，AI将帮助您找到相关数据。
+        </MudText>
+        
+        <MudStack Spacing="3">
+            <MudTextField T="string" 
+                          @bind-Value="queryText" 
+                          Label="查询描述" 
+                          Placeholder="例如：查找所有状态为活跃的记录，或者等级大于25的角色"
+                          Variant="Variant.Outlined" 
+                          Lines="3" 
+                          MaxLength="500"
+                          Counter="500"
+                          Disabled="true" />
+            
+            <MudGrid AlignItems="AlignItems.Center" Spacing="2">
+                <MudItem xs="12" sm="8">
+                    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                        <MudChip T="string" 
+                                 Text="查找所有记录" 
+                                 Variant="Variant.Outlined" 
+                                 Size="Size.Small" />
+                        <MudChip T="string" 
+                                 Text="按字段筛选" 
+                                 Variant="Variant.Outlined" 
+                                 Size="Size.Small" />
+                        <MudChip T="string" 
+                                 Text="数值比较" 
+                                 Variant="Variant.Outlined" 
+                                 Size="Size.Small" />
+                        <MudChip T="string" 
+                                 Text="时间范围" 
+                                 Variant="Variant.Outlined" 
+                                 Size="Size.Small" />
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudButton Variant="Variant.Filled" 
+                               Color="Color.Primary" 
+                               StartIcon="@Icons.Material.Filled.Psychology"
+                               FullWidth="true"
+                               Disabled="true">
+                        执行查询
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </MudPaper>
+
+    <!-- 功能占位区域 -->
+    <MudPaper Class="pa-8 text-center" Elevation="1" Style="min-height: 300px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <MudIcon Icon="@Icons.Material.Filled.Psychology" Size="Size.Large" Color="Color.Secondary" Class="mb-4" Style="font-size: 4rem;" />
+        <MudText Typo="Typo.h5" GutterBottom="true" Color="Color.Secondary">AI智能查询</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-4">
+            通过自然语言描述快速查找和分析数据
+        </MudText>
+        <MudStack Row="true" Spacing="2" Justify="Justify.Center" Class="mb-4">
+            <MudChip T="string" Text="语义理解" Variant="Variant.Outlined" Size="Size.Small" />
+            <MudChip T="string" Text="智能推荐" Variant="Variant.Outlined" Size="Size.Small" />
+            <MudChip T="string" Text="查询优化" Variant="Variant.Outlined" Size="Size.Small" />
+        </MudStack>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+            AI服务集成开发中...
+        </MudText>
+    </MudPaper>
+
+    <!-- 示例查询展示 -->
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-3">查询示例</MudText>
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3" Elevation="0" Style="border: 1px solid var(--mud-palette-divider);">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">基础查询</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        "查找所有状态为活跃的用户"
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3" Elevation="0" Style="border: 1px solid var(--mud-palette-divider);">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">条件查询</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        "找出等级大于25且经验值超过1000的角色"
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3" Elevation="0" Style="border: 1px solid var(--mud-palette-divider);">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">时间查询</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        "显示最近一周创建的所有记录"
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3" Elevation="0" Style="border: 1px solid var(--mud-palette-divider);">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">统计查询</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        "统计每个类别的记录数量"
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+</MudStack>
+
+@code {
+    [Parameter] public SchemaDefinition? SchemaDefinition { get; set; }
+    [Parameter] public EventCallback<List<BsonDocument>> OnQueryResult { get; set; }
+
+    private string queryText = string.Empty;
+}
+
+ 

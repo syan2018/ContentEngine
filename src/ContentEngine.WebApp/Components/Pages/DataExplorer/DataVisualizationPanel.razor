@@ -1,0 +1,104 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.Utils
+@using LiteDB
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+
+<MudStack Spacing="4">
+    <!-- 可视化控制面板 -->
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudGrid AlignItems="AlignItems.Center" Spacing="3">
+            <MudItem xs="12" sm="6" md="4">
+                <MudSelect T="string" @bind-Value="selectedField" 
+                           Label="选择字段" 
+                           Variant="Variant.Outlined"
+                           Disabled="true">
+                    @if (SchemaDefinition?.Fields != null)
+                    {
+                        @foreach (var field in SchemaDefinition.Fields.Where(f => f.Type != FieldType.Reference))
+                        {
+                            <MudSelectItem Value="@field.Name">@field.Name</MudSelectItem>
+                        }
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudSelect T="string" @bind-Value="chartType" 
+                           Label="图表类型" 
+                           Variant="Variant.Outlined"
+                           Disabled="true">
+                    <MudSelectItem Value="@("bar")">柱状图</MudSelectItem>
+                    <MudSelectItem Value="@("pie")">饼图</MudSelectItem>
+                    <MudSelectItem Value="@("line")">折线图</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="12" md="4">
+                <MudButton Variant="Variant.Filled" 
+                           Color="Color.Primary" 
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           FullWidth="true"
+                           Disabled="true">
+                    刷新图表
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- 占位内容区域 -->
+    <MudPaper Class="pa-8 text-center" Elevation="1" Style="min-height: 400px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <MudIcon Icon="@Icons.Material.Filled.BarChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" Style="font-size: 4rem;" />
+        <MudText Typo="Typo.h5" GutterBottom="true" Color="Color.Secondary">数据可视化</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-4">
+            这里将展示数据的图表分析功能
+        </MudText>
+        <MudStack Row="true" Spacing="2" Justify="Justify.Center">
+            <MudChip T="string" Text="柱状图" Variant="Variant.Outlined" Size="Size.Small" />
+            <MudChip T="string" Text="饼图" Variant="Variant.Outlined" Size="Size.Small" />
+            <MudChip T="string" Text="折线图" Variant="Variant.Outlined" Size="Size.Small" />
+            <MudChip T="string" Text="散点图" Variant="Variant.Outlined" Size="Size.Small" />
+        </MudStack>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-4">
+            功能开发中...
+        </MudText>
+    </MudPaper>
+
+    <!-- 数据摘要占位 -->
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-3">数据摘要</MudText>
+        <MudGrid Spacing="3">
+            <MudItem xs="12" sm="6" md="3">
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">总记录数</MudText>
+                    <MudText Typo="Typo.h5" Class="font-weight-bold">@(DataEntries?.Count ?? 0)</MudText>
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">字段数量</MudText>
+                    <MudText Typo="Typo.h5" Class="font-weight-bold">@(SchemaDefinition?.Fields?.Count ?? 0)</MudText>
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">数据结构</MudText>
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">@(SchemaDefinition?.Name ?? "未知")</MudText>
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">状态</MudText>
+                    <MudChip T="string" Text="待开发" Color="Color.Warning" Size="Size.Small" />
+                </MudStack>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+</MudStack>
+
+@code {
+    [Parameter] public SchemaDefinition? SchemaDefinition { get; set; }
+    [Parameter] public List<BsonDocument>? DataEntries { get; set; }
+
+    private string selectedField = string.Empty;
+    private string chartType = "bar";
+}
+
+ 

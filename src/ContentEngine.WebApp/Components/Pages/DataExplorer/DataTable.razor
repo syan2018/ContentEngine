@@ -1,0 +1,137 @@
+@using ContentEngine.Core.Utils
+@using LiteDB
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+
+@if (!DataEntries.Any())
+{
+    <MudPaper Class="pa-8 text-center" Elevation="0">
+        <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+        <MudText Typo="Typo.h6" GutterBottom="true">暂无数据记录</MudText>
+        <MudText Color="Color.Secondary">点击上方"添加记录"按钮开始添加数据</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudPaper Elevation="1" Class="rounded-lg">
+        <MudTable Items="@DataEntries" Hover="true" Striped="true" FixedHeader="true" Height="600px" Bordered="false">
+            <HeaderContent>
+                <MudTh Style="width: 80px;">
+                    <MudTableSortLabel SortBy="@(new Func<BsonDocument, object>(x => x.TryGetValue("_id", out var id) ? id.ToString() : ""))">
+                        ID
+                    </MudTableSortLabel>
+                </MudTh>
+                @if (Schema?.Fields != null)
+                {
+                    @foreach (var field in Schema.Fields)
+                    {
+                        <MudTh>
+                            <MudTableSortLabel SortBy="@(new Func<BsonDocument, object>(x => BsonFormUtils.GetDisplayValue(x, field.Name)))">
+                                @field.Name
+                            </MudTableSortLabel>
+                        </MudTh>
+                    }
+                }
+                <MudTh Style="width: 100px;">操作</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="ID" Class="font-weight-medium">
+                    @GetRecordId(context)
+                </MudTd>
+                @if (Schema?.Fields != null)
+                {
+                    @foreach (var field in Schema.Fields)
+                    {
+                        <MudTd DataLabel="@field.Name">
+                            @GetFormattedValue(context, field)
+                        </MudTd>
+                    }
+                }
+                <MudTd>
+                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
+                        <MudMenuItem OnClick="@(() => OnViewRecord.InvokeAsync(context))">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="mr-2" Size="Size.Small" />
+                                查看
+                            </div>
+                        </MudMenuItem>
+                        <MudMenuItem OnClick="@(() => OnEditRecord.InvokeAsync(context))">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" Size="Size.Small" />
+                                编辑
+                            </div>
+                        </MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem OnClick="@(() => OnDeleteRecord.InvokeAsync(context))">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.Delete" Class="mr-2" Size="Size.Small" Color="Color.Error" />
+                                <MudText Color="Color.Error">删除</MudText>
+                            </div>
+                        </MudMenuItem>
+                    </MudMenu>
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[]{5, 10, 25, 50}" 
+                               HideRowsPerPage="false" 
+                               HidePagination="false" 
+                               InfoFormat="{first_item}-{last_item} / {all_items}" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public List<BsonDocument> DataEntries { get; set; } = new();
+    [Parameter] public SchemaDefinition? Schema { get; set; }
+    [Parameter] public EventCallback<BsonDocument> OnViewRecord { get; set; }
+    [Parameter] public EventCallback<BsonDocument> OnEditRecord { get; set; }
+    [Parameter] public EventCallback<BsonDocument> OnDeleteRecord { get; set; }
+
+    private string GetRecordId(BsonDocument document)
+    {
+        if (document.TryGetValue("_id", out var id))
+        {
+            var idStr = id.ToString();
+            return idStr.Length > 8 ? idStr.Substring(0, 8) + "..." : idStr;
+        }
+        return "未知";
+    }
+
+    private RenderFragment GetFormattedValue(BsonDocument document, FieldDefinition field)
+    {
+        var value = BsonFormUtils.GetDisplayValue(document, field.Name);
+        
+        return field.Type switch
+        {
+            FieldType.Boolean => builder =>
+            {
+                var boolValue = bool.TryParse(value, out var b) && b;
+                builder.OpenComponent<MudChip<string>>(0);
+                builder.AddAttribute(1, "Text", boolValue ? "是" : "否");
+                builder.AddAttribute(2, "Color", boolValue ? Color.Success : Color.Default);
+                builder.AddAttribute(3, "Size", Size.Small);
+                builder.AddAttribute(4, "Variant", Variant.Filled);
+                builder.CloseComponent();
+            },
+            FieldType.Date => builder =>
+            {
+                if (DateTime.TryParse(value, out var date))
+                {
+                    builder.AddContent(0, date.ToString("yyyy-MM-dd"));
+                }
+                else
+                {
+                    builder.AddContent(0, value);
+                }
+            },
+            FieldType.Number => builder =>
+            {
+                builder.OpenElement(0, "span");
+                builder.AddAttribute(1, "class", "font-weight-medium");
+                builder.AddContent(2, value);
+                builder.CloseElement();
+            },
+            _ => builder => builder.AddContent(0, value)
+        };
+    }
+} 

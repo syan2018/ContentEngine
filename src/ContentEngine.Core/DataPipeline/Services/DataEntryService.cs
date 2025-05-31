@@ -80,6 +80,40 @@ public class DataEntryService : IDataEntryService
         return deleted;
     }
 
+    public async Task<long> CountDataWithFilterAsync(string schemaName, string? filterExpression)
+    {
+        await ValidateSchemaExistsAsync(schemaName);
+        var collection = _liteDbContext.GetDataCollection(schemaName);
+        
+        if (string.IsNullOrWhiteSpace(filterExpression))
+        {
+            var count = collection.LongCount();
+            return count;
+        }
+        else
+        {
+            var count = collection.Query().Where(filterExpression).LongCount();
+            return count;
+        }
+    }
+
+    public async Task<List<BsonDocument>> GetDataWithFilterAsync(string schemaName, int skip, int limit, string? filterExpression)
+    {
+        await ValidateSchemaExistsAsync(schemaName);
+        var collection = _liteDbContext.GetDataCollection(schemaName);
+        
+        if (string.IsNullOrWhiteSpace(filterExpression))
+        {
+            var dataList = collection.Query().Skip(skip).Limit(limit).ToList();
+            return dataList;
+        }
+        else
+        {
+            var queryResult = collection.Query().Where(filterExpression).Skip(skip).Limit(limit).ToList();
+            return queryResult;
+        }
+    }
+
     /// <summary>
     /// 辅助方法：验证指定的 Schema 名称是否存在
     /// </summary>
@@ -92,5 +126,111 @@ public class DataEntryService : IDataEntryService
             throw new InvalidOperationException($"Schema with name '{schemaName}' does not exist.");
         }
         return schema; // 返回 Schema 定义，以便将来可能的验证
+    }
+
+    /// <summary>
+    /// 将 BsonDocument 查询条件转换为 LiteDB BsonExpression
+    /// </summary>
+    private BsonExpression ConvertBsonDocumentToQuery(BsonDocument queryDoc)
+    {
+        // 处理 $and 操作
+        if (queryDoc.ContainsKey("$and"))
+        {
+            var andConditions = queryDoc["$and"].AsArray;
+            var expressions = new List<string>();
+            
+            foreach (var condition in andConditions)
+            {
+                var expr = ConvertBsonDocumentToQuery(condition.AsDocument);
+                expressions.Add($"({expr})");
+            }
+            
+            return BsonExpression.Create(string.Join(" AND ", expressions));
+        }
+        
+        // 处理 $or 操作
+        if (queryDoc.ContainsKey("$or"))
+        {
+            var orConditions = queryDoc["$or"].AsArray;
+            var expressions = new List<string>();
+            
+            foreach (var condition in orConditions)
+            {
+                var expr = ConvertBsonDocumentToQuery(condition.AsDocument);
+                expressions.Add($"({expr})");
+            }
+            
+            return BsonExpression.Create(string.Join(" OR ", expressions));
+        }
+        
+        // 处理单个字段条件
+        var firstKey = queryDoc.Keys.First();
+        var value = queryDoc[firstKey];
+        
+        if (value.IsDocument)
+        {
+            var valueDoc = value.AsDocument;
+            
+            // 处理正则表达式
+            if (valueDoc.ContainsKey("$regex"))
+            {
+                var pattern = valueDoc["$regex"].AsString;
+                return BsonExpression.Create($"{firstKey} LIKE '%{pattern}%'");
+            }
+            
+            // 处理大于
+            if (valueDoc.ContainsKey("$gt"))
+            {
+                var gtValue = valueDoc["$gt"];
+                return BsonExpression.Create($"{firstKey} > {FormatValue(gtValue)}");
+            }
+            
+            // 处理小于
+            if (valueDoc.ContainsKey("$lt"))
+            {
+                var ltValue = valueDoc["$lt"];
+                return BsonExpression.Create($"{firstKey} < {FormatValue(ltValue)}");
+            }
+            
+            // 处理大于等于
+            if (valueDoc.ContainsKey("$gte"))
+            {
+                var gteValue = valueDoc["$gte"];
+                return BsonExpression.Create($"{firstKey} >= {FormatValue(gteValue)}");
+            }
+            
+            // 处理小于等于
+            if (valueDoc.ContainsKey("$lte"))
+            {
+                var lteValue = valueDoc["$lte"];
+                return BsonExpression.Create($"{firstKey} <= {FormatValue(lteValue)}");
+            }
+        }
+        
+        // 处理等于条件
+        return BsonExpression.Create($"{firstKey} = {FormatValue(value)}");
+    }
+
+    /// <summary>
+    /// 格式化 BsonValue 为查询字符串
+    /// </summary>
+    private string FormatValue(BsonValue value)
+    {
+        if (value.IsString)
+        {
+            return $"'{value.AsString.Replace("'", "''")}'";
+        }
+        else if (value.IsDateTime)
+        {
+            return $"#{value.AsDateTime:yyyy-MM-dd HH:mm:ss}#";
+        }
+        else if (value.IsBoolean)
+        {
+            return value.AsBoolean ? "true" : "false";
+        }
+        else
+        {
+            return value.ToString();
+        }
     }
 } 

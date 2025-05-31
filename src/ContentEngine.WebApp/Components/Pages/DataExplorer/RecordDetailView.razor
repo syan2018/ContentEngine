@@ -1,0 +1,201 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.Utils
+@using LiteDB
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+
+<MudTabs Elevation="0" Rounded="false" Class="record-detail-tabs">
+    <MudTabPanel Text="基本信息" Icon="@Icons.Material.Filled.Info">
+        <MudPaper Class="pa-4 mt-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-3">基本信息</MudText>
+            <MudGrid Spacing="3">
+                @if (Schema?.Fields != null)
+                {
+                    @foreach (var field in Schema.Fields)
+                    {
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudStack Spacing="1">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@field.Name</MudText>
+                                <div>
+                                    @GetFormattedFieldValue(field)
+                                </div>
+                            </MudStack>
+                        </MudItem>
+                    }
+                }
+            </MudGrid>
+        </MudPaper>
+    </MudTabPanel>
+
+    <MudTabPanel Text="原始数据" Icon="@Icons.Material.Filled.Code">
+        <MudPaper Class="pa-4 mt-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-3">原始JSON数据</MudText>
+            <MudTextField T="string" 
+                          Value="@GetFormattedJson()" 
+                          Variant="Variant.Outlined" 
+                          Lines="15" 
+                          ReadOnly="true"
+                          Class="json-display" />
+        </MudPaper>
+    </MudTabPanel>
+
+    <MudTabPanel Text="元数据" Icon="@Icons.Material.Filled.Storage">
+        <MudPaper Class="pa-4 mt-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-3">记录元数据</MudText>
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">记录ID</MudText>
+                        <MudText Typo="Typo.body1">@GetRecordId()</MudText>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudStack Spacing="1">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">数据结构</MudText>
+                        <MudText Typo="Typo.body1">@Schema?.Name</MudText>
+                    </MudStack>
+                </MudItem>
+                @if (Record != null && Record.TryGetValue("_createdAt", out var createdAt))
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">创建时间</MudText>
+                            <MudText Typo="Typo.body1">@GetFormattedDateTime(createdAt)</MudText>
+                        </MudStack>
+                    </MudItem>
+                }
+                @if (Record != null && Record.TryGetValue("_updatedAt", out var updatedAt))
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">更新时间</MudText>
+                            <MudText Typo="Typo.body1">@GetFormattedDateTime(updatedAt)</MudText>
+                        </MudStack>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudPaper>
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    [Parameter] public BsonDocument? Record { get; set; }
+    [Parameter] public SchemaDefinition? Schema { get; set; }
+
+    private RenderFragment GetFormattedFieldValue(FieldDefinition field)
+    {
+        if (Record == null) return builder => { };
+
+        var value = BsonFormUtils.GetDisplayValue(Record, field.Name);
+        
+        return field.Type switch
+        {
+            FieldType.Boolean => builder =>
+            {
+                var boolValue = bool.TryParse(value, out var b) && b;
+                builder.OpenComponent<MudChip<string>>(0);
+                builder.AddAttribute(1, "Text", boolValue ? "是" : "否");
+                builder.AddAttribute(2, "Color", boolValue ? Color.Success : Color.Default);
+                builder.AddAttribute(3, "Size", Size.Small);
+                builder.AddAttribute(4, "Variant", Variant.Filled);
+                builder.CloseComponent();
+            },
+            FieldType.Date => builder =>
+            {
+                if (DateTime.TryParse(value, out var date))
+                {
+                    builder.OpenComponent<MudText>(0);
+                    builder.AddAttribute(1, "Typo", Typo.body1);
+                    builder.AddAttribute(2, "ChildContent", (RenderFragment)(b => b.AddContent(0, date.ToString("yyyy-MM-dd HH:mm"))));
+                    builder.CloseComponent();
+                }
+                else
+                {
+                    builder.OpenComponent<MudText>(0);
+                    builder.AddAttribute(1, "Typo", Typo.body1);
+                    builder.AddAttribute(2, "ChildContent", (RenderFragment)(b => b.AddContent(0, value)));
+                    builder.CloseComponent();
+                }
+            },
+            FieldType.Number => builder =>
+            {
+                builder.OpenComponent<MudText>(0);
+                builder.AddAttribute(1, "Typo", Typo.body1);
+                builder.AddAttribute(2, "Class", "font-weight-medium");
+                builder.AddAttribute(3, "ChildContent", (RenderFragment)(b => b.AddContent(0, value)));
+                builder.CloseComponent();
+            },
+            _ => builder =>
+            {
+                if (string.IsNullOrEmpty(value))
+                {
+                    builder.OpenComponent<MudText>(0);
+                    builder.AddAttribute(1, "Typo", Typo.body2);
+                    builder.AddAttribute(2, "Color", Color.Secondary);
+                    builder.AddAttribute(3, "ChildContent", (RenderFragment)(b => b.AddContent(0, "未设置")));
+                    builder.CloseComponent();
+                }
+                else
+                {
+                    builder.OpenComponent<MudText>(0);
+                    builder.AddAttribute(1, "Typo", Typo.body1);
+                    builder.AddAttribute(2, "ChildContent", (RenderFragment)(b => b.AddContent(0, value)));
+                    builder.CloseComponent();
+                }
+            }
+        };
+    }
+
+    private string GetRecordId()
+    {
+        if (Record == null) return "未知";
+        return Record.TryGetValue("_id", out var id) ? id.ToString() : "未知";
+    }
+
+    private string GetFormattedJson()
+    {
+        if (Record == null) return "{}";
+        
+        try
+        {
+            return Record.ToString();
+        }
+        catch
+        {
+            return "无法格式化JSON数据";
+        }
+    }
+
+    private string GetFormattedDateTime(BsonValue dateValue)
+    {
+        try
+        {
+            if (dateValue.IsDateTime)
+            {
+                return dateValue.AsDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+            }
+            else if (DateTime.TryParse(dateValue.AsString, out var date))
+            {
+                return date.ToString("yyyy-MM-dd HH:mm:ss");
+            }
+            else
+            {
+                return dateValue.ToString();
+            }
+        }
+        catch
+        {
+            return "无效日期";
+        }
+    }
+}
+
+<style>
+    .record-detail-tabs .mud-tabs-toolbar {
+        border-bottom: 1px solid var(--mud-palette-divider);
+    }
+
+    .json-display .mud-input-control {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 0.875rem;
+    }
+</style> 
