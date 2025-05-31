@@ -7,8 +7,8 @@
 {
     <MudPaper Class="pa-8 text-center" Elevation="0">
         <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
-        <MudText Typo="Typo.h6" GutterBottom="true">@EmptyTitle</MudText>
-        <MudText Color="Color.Secondary">@EmptyMessage</MudText>
+        <MudText Typo="Typo.h6" GutterBottom="true">@_effectiveConfig.EmptyTitle</MudText>
+        <MudText Color="Color.Secondary">@_effectiveConfig.EmptyMessage</MudText>
     </MudPaper>
 }
 else
@@ -18,13 +18,13 @@ else
                   Hover="true"
                   Striped="true"
                   FixedHeader="true"
-                  Height="@Height"
+                  Height="@_effectiveConfig.Height"
                   Bordered="false">
             <HeaderContent>
-                @if (ShowIdColumn)
+                @if (_effectiveConfig.ShowIdColumn)
                 {
                     <MudTh Style="width: 80px;">
-                        @if (IsReadOnly)
+                        @if (_effectiveConfig.IsReadOnly)
                         {
                             <MudTableSortLabel SortBy="@(new Func<BsonDocument, object>(x => x.TryGetValue("_id", out var id) ? id.ToString() : ""))">
                                 ID
@@ -41,7 +41,7 @@ else
                     @foreach (var field in Schema.Fields)
                     {
                         <MudTh>
-                            @if (IsReadOnly)
+                            @if (_effectiveConfig.IsReadOnly)
                             {
                                 <MudTableSortLabel SortBy="@(new Func<BsonDocument, object>(x => BsonFormUtils.GetDisplayValue(x, field.Name)))">
                                     @field.Name
@@ -62,7 +62,7 @@ else
                         </MudTh>
                     }
                 }
-                @if (HasActions)
+                @if (_effectiveConfig.HasActions)
                 {
                     <MudTh Style="@($"width: {GetActionColumnWidth()};")">操作</MudTh>
                 }
@@ -72,7 +72,7 @@ else
                     var itemId = GetDocumentId(item);
                     var isEditing = editingRowId == itemId;
                 }
-                @if (ShowIdColumn)
+                @if (_effectiveConfig.ShowIdColumn)
                 {
                     <MudTd DataLabel="ID" Class="font-weight-medium">
                         @GetRecordId(item)
@@ -83,15 +83,15 @@ else
                     @foreach (var field in Schema.Fields)
                     {
                         <MudTd DataLabel="@field.Name">
-                            @if (IsReadOnly)
+                            @if (_effectiveConfig.IsReadOnly)
                             {
                                 @GetFormattedValue(item, field)
                             }
-                            else if (AllowInlineEdit && isEditing)
+                            else if (_effectiveConfig.AllowInlineEdit && isEditing)
                             {
                                 @RenderInlineEditCell(item, field)
                             }
-                            else if (AllowInlineEdit && !isEditing)
+                            else if (_effectiveConfig.AllowInlineEdit && !isEditing)
                             {
                                 <div class="inline-edit-cell" @onclick="() => StartInlineEdit(itemId)">
                                     @GetFormattedValue(item, field)
@@ -105,37 +105,19 @@ else
                         </MudTd>
                     }
                 }
-                @if (HasActions)
+                @if (_effectiveConfig.HasActions)
                 {
                     <MudTd>
                         <div class="action-buttons">
-                            @if (IsReadOnly)
+                            @if (_effectiveConfig.IsReadOnly)
                             {
-                                @if (OnViewRecord.HasDelegate)
+                                @foreach (var action in _effectiveConfig.Actions)
                                 {
-                                    <MudTooltip Text="查看">
-                                        <MudIconButton Icon="@Icons.Material.Filled.Visibility"
-                                                      Color="Color.Primary"
+                                    <MudTooltip Text="@action.Tooltip">
+                                        <MudIconButton Icon="@action.Icon"
+                                                      Color="@action.Color"
                                                       Size="Size.Small"
-                                                      OnClick="() => OnViewRecord.InvokeAsync(item)" />
-                                    </MudTooltip>
-                                }
-                                @if (OnEditRecord.HasDelegate)
-                                {
-                                    <MudTooltip Text="编辑">
-                                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                                      Color="Color.Secondary"
-                                                      Size="Size.Small"
-                                                      OnClick="() => OnEditRecord.InvokeAsync(item)" />
-                                    </MudTooltip>
-                                }
-                                @if (OnDeleteRecord.HasDelegate)
-                                {
-                                    <MudTooltip Text="删除">
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                      Color="Color.Error"
-                                                      Size="Size.Small"
-                                                      OnClick="() => OnDeleteRecord.InvokeAsync(item)" />
+                                                      OnClick="() => action.Action.Invoke(item)" />
                                     </MudTooltip>
                                 }
                             }
@@ -153,17 +135,17 @@ else
                                                   Size="Size.Small"
                                                   OnClick="() => CancelInlineEdit()" />
                                 </MudTooltip>
-                                @if (OnRowRemoved.HasDelegate || OnDeleteRecord.HasDelegate)
+                                @foreach (var action in _effectiveConfig.Actions.Where(a => a.ShowInEditMode))
                                 {
-                                    <MudTooltip Text="删除">
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                      Color="Color.Error"
+                                    <MudTooltip Text="@action.Tooltip">
+                                        <MudIconButton Icon="@action.Icon"
+                                                      Color="@action.Color"
                                                       Size="Size.Small"
-                                                      OnClick="@(() => DeleteRow(item))" />
+                                                      OnClick="() => action.Action.Invoke(item)" />
                                     </MudTooltip>
                                 }
                             }
-                            else if (AllowInlineEdit)
+                            else if (_effectiveConfig.AllowInlineEdit)
                             {
                                 <MudTooltip Text="编辑">
                                     <MudIconButton Icon="@Icons.Material.Filled.Edit"
@@ -171,25 +153,25 @@ else
                                                   Size="Size.Small"
                                                   OnClick="() => StartInlineEdit(itemId)" />
                                 </MudTooltip>
-                                @if (OnRowRemoved.HasDelegate || OnDeleteRecord.HasDelegate)
+                                @foreach (var action in _effectiveConfig.Actions.Where(a => a.ShowInNormalMode))
                                 {
-                                    <MudTooltip Text="删除">
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                      Color="Color.Error"
+                                    <MudTooltip Text="@action.Tooltip">
+                                        <MudIconButton Icon="@action.Icon"
+                                                      Color="@action.Color"
                                                       Size="Size.Small"
-                                                      OnClick="@(() => DeleteRow(item))" />
+                                                      OnClick="() => action.Action.Invoke(item)" />
                                     </MudTooltip>
                                 }
                             }
                             else
                             {
-                                @if (OnRowRemoved.HasDelegate || OnDeleteRecord.HasDelegate)
+                                @foreach (var action in _effectiveConfig.Actions)
                                 {
-                                    <MudTooltip Text="删除">
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                      Color="Color.Error"
+                                    <MudTooltip Text="@action.Tooltip">
+                                        <MudIconButton Icon="@action.Icon"
+                                                      Color="@action.Color"
                                                       Size="Size.Small"
-                                                      OnClick="@(() => DeleteRow(item))" />
+                                                      OnClick="() => action.Action.Invoke(item)" />
                                     </MudTooltip>
                                 }
                             }
@@ -198,7 +180,7 @@ else
                 }
             </RowTemplate>
             <PagerContent>
-                @if (ShowPagination)
+                @if (_effectiveConfig.ShowPagination)
                 {
                     <MudTablePager PageSizeOptions="new int[]{5, 10, 25, 50}"
                                    HideRowsPerPage="false"
@@ -210,12 +192,12 @@ else
     </MudPaper>
 }
 
-@if (ShowRowCount && Data.Any())
+@if (_effectiveConfig.ShowRowCount && Data.Any())
 {
     <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
-        @if (MaxDisplayRows.HasValue && Data.Count > MaxDisplayRows.Value)
+        @if (_effectiveConfig.MaxDisplayRows.HasValue && Data.Count > _effectiveConfig.MaxDisplayRows.Value)
         {
-            <span>显示前@MaxDisplayRows条记录，共 @Data.Count 条</span>
+            <span>显示前@(_effectiveConfig.MaxDisplayRows)条记录，共 @Data.Count 条</span>
         }
         else
         {
@@ -229,27 +211,18 @@ else
     [Parameter] public SchemaDefinition Schema { get; set; } = null!;
     [Parameter] public List<BsonDocument> Data { get; set; } = new();
     
-    // 行为控制
-    [Parameter] public bool IsReadOnly { get; set; } = true;
-    [Parameter] public bool AllowInlineEdit { get; set; } = false;
+    // 模式参数 - 简化使用
+    [Parameter] public DataTableMode Mode { get; set; } = DataTableMode.ReadOnly;
     
-    // 显示控制
-    [Parameter] public bool ShowIdColumn { get; set; } = false;
-    [Parameter] public bool ShowPagination { get; set; } = true;
-    [Parameter] public bool ShowRowCount { get; set; } = true;
-    [Parameter] public int? MaxDisplayRows { get; set; }
+    // 自定义配置 - 高级使用
+    [Parameter] public DataTableConfiguration? CustomConfiguration { get; set; }
     
     // 样式控制
-    [Parameter] public string Height { get; set; } = "600px";
     [Parameter] public string Class { get; set; } = "";
     
-    // 空状态文本
-    [Parameter] public string EmptyTitle { get; set; } = "暂无数据";
-    [Parameter] public string EmptyMessage { get; set; } = "没有可显示的内容";
-    
     // 事件回调
-    [Parameter] public EventCallback<BsonDocument> OnRowRemoved { get; set; }
     [Parameter] public EventCallback<BsonDocument> OnRowChanged { get; set; }
+    [Parameter] public EventCallback<BsonDocument> OnRowRemoved { get; set; }
     [Parameter] public EventCallback<BsonDocument> OnViewRecord { get; set; }
     [Parameter] public EventCallback<BsonDocument> OnEditRecord { get; set; }
     [Parameter] public EventCallback<BsonDocument> OnDeleteRecord { get; set; }
@@ -258,15 +231,38 @@ else
     private string? editingRowId = null;
     private BsonDocument? originalEditingData = null;
     private BsonDocument? editingData = null;
+    private DataTableConfiguration _effectiveConfig = null!;
 
-    // 计算属性
-    private bool HasActions => OnViewRecord.HasDelegate || OnEditRecord.HasDelegate || OnDeleteRecord.HasDelegate || OnRowRemoved.HasDelegate || !IsReadOnly;
+    protected override void OnParametersSet()
+    {
+        InitializeConfiguration();
+    }
+
+    private void InitializeConfiguration()
+    {
+        if (CustomConfiguration != null)
+        {
+            _effectiveConfig = CustomConfiguration;
+        }
+        else
+        {
+            _effectiveConfig = Mode switch
+            {
+                DataTableMode.ReadOnly => DataTableConfiguration.ForReadOnlyMode(this),
+                DataTableMode.BatchEdit => DataTableConfiguration.ForBatchEditMode(this),
+                DataTableMode.InlineEdit => DataTableConfiguration.ForInlineEditMode(this),
+                DataTableMode.DataExplorer => DataTableConfiguration.ForDataExplorerMode(this),
+                DataTableMode.ManualEntry => DataTableConfiguration.ForManualEntryMode(this),
+                _ => DataTableConfiguration.ForReadOnlyMode(this)
+            };
+        }
+    }
 
     private IEnumerable<BsonDocument> GetDisplayData()
     {
-        if (MaxDisplayRows.HasValue)
+        if (_effectiveConfig.MaxDisplayRows.HasValue)
         {
-            return Data.Take(MaxDisplayRows.Value);
+            return Data.Take(_effectiveConfig.MaxDisplayRows.Value);
         }
         return Data;
     }
@@ -292,26 +288,13 @@ else
 
     private string GetActionColumnWidth()
     {
-        var buttonCount = 0;
-        if (IsReadOnly)
+        var actionCount = _effectiveConfig.Actions.Count;
+        if (_effectiveConfig.AllowInlineEdit)
         {
-            if (OnViewRecord.HasDelegate) buttonCount++;
-            if (OnEditRecord.HasDelegate) buttonCount++;
-            if (OnDeleteRecord.HasDelegate) buttonCount++;
-        }
-        else
-        {
-            if (AllowInlineEdit)
-            {
-                buttonCount = 2; // 编辑 + 删除 (或 保存 + 取消 + 删除)
-            }
-            else
-            {
-                buttonCount = 1; // 删除
-            }
+            actionCount = Math.Max(actionCount + 1, 2); // +1 for edit button, min 2 for save/cancel
         }
         
-        return $"{Math.Max(buttonCount * 40, 80)}px";
+        return $"{Math.Max(actionCount * 40, 80)}px";
     }
 
     private void StartInlineEdit(string documentId)
@@ -503,36 +486,6 @@ else
         }
     };
 
-    private async Task RemoveRow(BsonDocument row)
-    {
-        if (Data != null)
-        {
-            Data.Remove(row);
-            await OnRowRemoved.InvokeAsync(row);
-        }
-        if (editingRowId == GetDocumentId(row))
-        {
-            CancelInlineEdit();
-        }
-    }
-
-    private async Task DeleteRow(BsonDocument row)
-    {
-        if (OnDeleteRecord.HasDelegate)
-        {
-            await OnDeleteRecord.InvokeAsync(row);
-        }
-        else if (OnRowRemoved.HasDelegate)
-        {
-            await RemoveRow(row);
-        }
-        
-        if (editingRowId == GetDocumentId(row))
-        {
-            CancelInlineEdit();
-        }
-    }
-
     private async Task SetCellValue(BsonDocument rowData, string fieldName, BsonValue value)
     {
         rowData[fieldName] = value;
@@ -579,6 +532,12 @@ else
         }
         return null;
     }
+
+    // 内部方法供配置类使用
+    internal async Task HandleViewRecord(BsonDocument record) => await OnViewRecord.InvokeAsync(record);
+    internal async Task HandleEditRecord(BsonDocument record) => await OnEditRecord.InvokeAsync(record);
+    internal async Task HandleDeleteRecord(BsonDocument record) => await OnDeleteRecord.InvokeAsync(record);
+    internal async Task HandleRemoveRow(BsonDocument record) => await OnRowRemoved.InvokeAsync(record);
 }
 
 <style>
@@ -652,3 +611,219 @@ else
         box-shadow: none !important;
     }
 </style>
+
+@code {
+    /// <summary>
+    /// DataTable 模式枚举
+    /// </summary>
+    public enum DataTableMode
+    {
+        ReadOnly,      // 只读模式：查看、编辑、删除按钮
+        BatchEdit,     // 批量编辑模式：直接编辑单元格 + 删除行
+        InlineEdit,    // 单行编辑模式：点击编辑 + 保存/取消 + 删除
+        DataExplorer,  // 数据浏览模式：查看、编辑、删除 + ID列
+        ManualEntry    // 手动录入模式：批量编辑 + 删除行
+    }
+
+    /// <summary>
+    /// DataTable 操作按钮定义
+    /// </summary>
+    public class DataTableAction
+    {
+        public string Icon { get; set; } = "";
+        public string Tooltip { get; set; } = "";
+        public Color Color { get; set; } = Color.Default;
+        public Func<BsonDocument, Task> Action { get; set; } = _ => Task.CompletedTask;
+        public bool ShowInNormalMode { get; set; } = true;  // 在普通模式下显示
+        public bool ShowInEditMode { get; set; } = true;    // 在编辑模式下显示
+    }
+
+    /// <summary>
+    /// DataTable 配置类
+    /// </summary>
+    public class DataTableConfiguration
+    {
+        public bool IsReadOnly { get; set; } = true;
+        public bool AllowInlineEdit { get; set; } = false;
+        public bool ShowIdColumn { get; set; } = false;
+        public bool ShowPagination { get; set; } = true;
+        public bool ShowRowCount { get; set; } = true;
+        public int? MaxDisplayRows { get; set; }
+        public string Height { get; set; } = "600px";
+        public string EmptyTitle { get; set; } = "暂无数据";
+        public string EmptyMessage { get; set; } = "没有可显示的内容";
+        
+        public List<DataTableAction> Actions { get; set; } = new();
+
+        public bool HasActions => Actions.Any();
+
+        public static DataTableConfiguration ForReadOnlyMode(DataTable component)
+        {
+            var config = new DataTableConfiguration
+            {
+                IsReadOnly = true,
+                AllowInlineEdit = false,
+                ShowIdColumn = false,
+                ShowPagination = true,
+                ShowRowCount = true,
+                Height = "600px",
+                EmptyTitle = "暂无数据",
+                EmptyMessage = "没有可显示的内容"
+            };
+
+            if (component.OnViewRecord.HasDelegate)
+            {
+                config.Actions.Add(new DataTableAction
+                {
+                    Icon = Icons.Material.Filled.Visibility,
+                    Tooltip = "查看",
+                    Color = Color.Primary,
+                    Action = component.HandleViewRecord
+                });
+            }
+
+            if (component.OnEditRecord.HasDelegate)
+            {
+                config.Actions.Add(new DataTableAction
+                {
+                    Icon = Icons.Material.Filled.Edit,
+                    Tooltip = "编辑",
+                    Color = Color.Secondary,
+                    Action = component.HandleEditRecord
+                });
+            }
+
+            if (component.OnDeleteRecord.HasDelegate)
+            {
+                config.Actions.Add(new DataTableAction
+                {
+                    Icon = Icons.Material.Filled.Delete,
+                    Tooltip = "删除",
+                    Color = Color.Error,
+                    Action = component.HandleDeleteRecord
+                });
+            }
+
+            return config;
+        }
+
+        public static DataTableConfiguration ForBatchEditMode(DataTable component)
+        {
+            var config = new DataTableConfiguration
+            {
+                IsReadOnly = false,
+                AllowInlineEdit = false,
+                ShowIdColumn = false,
+                ShowPagination = false,
+                ShowRowCount = true,
+                Height = "calc(100vh - 380px)",
+                EmptyTitle = "暂无数据行",
+                EmptyMessage = "点击添加行开始批量录入数据"
+            };
+
+            if (component.OnRowRemoved.HasDelegate)
+            {
+                config.Actions.Add(new DataTableAction
+                {
+                    Icon = Icons.Material.Filled.Delete,
+                    Tooltip = "删除行",
+                    Color = Color.Error,
+                    Action = component.HandleRemoveRow
+                });
+            }
+
+            return config;
+        }
+
+        public static DataTableConfiguration ForInlineEditMode(DataTable component)
+        {
+            var config = new DataTableConfiguration
+            {
+                IsReadOnly = false,
+                AllowInlineEdit = true,
+                ShowIdColumn = true,
+                ShowPagination = true,
+                ShowRowCount = true,
+                Height = "600px",
+                EmptyTitle = "暂无数据",
+                EmptyMessage = "没有可显示的内容"
+            };
+
+            if (component.OnDeleteRecord.HasDelegate)
+            {
+                config.Actions.Add(new DataTableAction
+                {
+                    Icon = Icons.Material.Filled.Delete,
+                    Tooltip = "删除",
+                    Color = Color.Error,
+                    Action = component.HandleDeleteRecord,
+                    ShowInNormalMode = true,
+                    ShowInEditMode = true
+                });
+            }
+
+            return config;
+        }
+
+        public static DataTableConfiguration ForDataExplorerMode(DataTable component)
+        {
+            var config = new DataTableConfiguration
+            {
+                IsReadOnly = false,
+                AllowInlineEdit = true,
+                ShowIdColumn = true,
+                ShowPagination = true,
+                ShowRowCount = true,
+                Height = "600px",
+                EmptyTitle = "暂无数据",
+                EmptyMessage = "没有可显示的内容"
+            };
+
+            if (component.OnViewRecord.HasDelegate)
+            {
+                config.Actions.Add(new DataTableAction
+                {
+                    Icon = Icons.Material.Filled.Visibility,
+                    Tooltip = "查看",
+                    Color = Color.Primary,
+                    Action = component.HandleViewRecord,
+                    ShowInNormalMode = false,  // 只在只读模式显示
+                    ShowInEditMode = false
+                });
+            }
+
+            if (component.OnEditRecord.HasDelegate)
+            {
+                config.Actions.Add(new DataTableAction
+                {
+                    Icon = Icons.Material.Filled.Edit,
+                    Tooltip = "编辑",
+                    Color = Color.Secondary,
+                    Action = component.HandleEditRecord,
+                    ShowInNormalMode = false,  // 只在只读模式显示
+                    ShowInEditMode = false
+                });
+            }
+
+            if (component.OnDeleteRecord.HasDelegate)
+            {
+                config.Actions.Add(new DataTableAction
+                {
+                    Icon = Icons.Material.Filled.Delete,
+                    Tooltip = "删除",
+                    Color = Color.Error,
+                    Action = component.HandleDeleteRecord,
+                    ShowInNormalMode = true,
+                    ShowInEditMode = true
+                });
+            }
+
+            return config;
+        }
+
+        public static DataTableConfiguration ForManualEntryMode(DataTable component)
+        {
+            return ForBatchEditMode(component);
+        }
+    }
+}

@@ -5,7 +5,7 @@
 @using ContentEngine.WebApp.Components.Shared
 @using ContentEngine.Core.Utils
 @using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
-@using LiteDB // Added for BsonDocument
+@using LiteDB
 @inject ISchemaDefinitionService SchemaService
 @inject IDataEntryService DataEntryService
 @inject NavigationManager NavigationManager
@@ -45,11 +45,7 @@ else
                     <div class="table-container">
                         <DataTable Schema="@Schema"
                                    Data="@tableData" 
-                                   IsReadOnly="false"
-                                   Height="calc(100vh - 380px)" 
-                                   ShowPagination="false"
-                                   EmptyTitle="暂无数据行"
-                                   EmptyMessage="点击添加行开始批量录入数据"
+                                   Mode="DataTable.DataTableMode.ManualEntry"
                                    OnRowRemoved="OnRowRemoved"
                                    OnRowChanged="OnRowChanged"
                                    Class="data-entry-table" />

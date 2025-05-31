@@ -172,11 +172,16 @@
 
                     <DataTable Schema="@Schema" 
                                Data="@previewRecords" 
-                               IsReadOnly="true" 
-                               ShowRowCount="true"
-                               ShowPagination="false"
-                               MaxDisplayRows="10"
-                               Height="400px"
+                               Mode="DataTable.DataTableMode.ReadOnly"
+                               CustomConfiguration="@(new DataTable.DataTableConfiguration 
+                               { 
+                                   IsReadOnly = true, 
+                                   ShowPagination = false, 
+                                   MaxDisplayRows = 10, 
+                                   Height = "400px",
+                                   EmptyTitle = "暂无数据",
+                                   EmptyMessage = "没有可预览的内容"
+                               })"
                                Class="preview-table" />
 
                     <div class="mt-4 d-flex justify-space-between">

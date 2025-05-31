@@ -103,9 +103,7 @@
 <!-- 数据表格 -->
 <DataTable Data="@filteredDataEntries"
            Schema="@Schema"
-           IsReadOnly="false"
-           AllowInlineEdit="true"
-           ShowIdColumn="true"
+           Mode="DataTable.DataTableMode.DataExplorer"
            OnViewRecord="OnViewRecord"
            OnEditRecord="OnEditRecord"
            OnDeleteRecord="OnDeleteRecordInternal"
