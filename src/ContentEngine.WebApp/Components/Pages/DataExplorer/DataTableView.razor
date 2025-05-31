@@ -101,14 +101,15 @@
 }
 
 <!-- 数据表格 -->
-<DataTable ReadOnlyData="@filteredDataEntries"
+<DataTable Data="@filteredDataEntries"
            Schema="@Schema"
-           IsReadOnly="true"
+           IsReadOnly="false"
+           AllowInlineEdit="true"
            ShowIdColumn="true"
-           ShowActions="true"
            OnViewRecord="OnViewRecord"
            OnEditRecord="OnEditRecord"
-           OnDeleteRecord="OnDeleteRecord" />
+           OnDeleteRecord="OnDeleteRecordInternal"
+           OnRowChanged="OnRowChanged" />
 
 <!-- 分页 -->
 @if (totalEntries > pageSize)
@@ -258,5 +259,41 @@
     {
         // TODO: 实现数据导出功能
         await Task.CompletedTask;
+    }
+
+    private async Task OnRowChanged(BsonDocument changedRow)
+    {
+        // 处理行数据变更，可以在这里保存到数据库
+        try
+        {
+            if (Schema != null && changedRow.TryGetValue("_id", out var id))
+            {
+                await DataService.UpdateDataAsync(Schema.Name, id, changedRow);
+                await OnDataChanged.InvokeAsync(); // 通知父组件数据已更改
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"保存数据时出错: {ex.Message}");
+            // 可以在这里添加错误提示
+        }
+    }
+
+    private async Task OnDeleteRecordInternal(BsonDocument record)
+    {
+        try
+        {
+            if (Schema != null && record.TryGetValue("_id", out var id))
+            {
+                await DataService.DeleteDataAsync(Schema.Name, id);
+                await OnDataChanged.InvokeAsync(); // 通知父组件数据已更改
+                await ApplyFiltersAndSearch(); // 重新加载数据
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"删除数据时出错: {ex.Message}");
+            // 可以在这里添加错误提示
+        }
     }
 } 

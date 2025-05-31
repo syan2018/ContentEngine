@@ -3,30 +3,22 @@
 @using LiteDB
 @using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
 
-@if ((IsReadOnly && !ReadOnlyData.Any()) || (!IsReadOnly && !GetCurrentDataAsBsonDocuments().Any()))
+@if (!Data.Any())
 {
     <MudPaper Class="pa-8 text-center" Elevation="0">
         <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
-        @if (IsReadOnly)
-        {
-            <MudText Typo="Typo.h6" GutterBottom="true">暂无数据记录</MudText>
-            <MudText Color="Color.Secondary">没有可显示的数据</MudText>
-        }
-        else
-        {
-            <MudText Typo="Typo.h6" GutterBottom="true">暂无数据行</MudText>
-            <MudText Color="Color.Secondary">点击"添加行"开始录入数据</MudText>
-        }
+        <MudText Typo="Typo.h6" GutterBottom="true">@EmptyTitle</MudText>
+        <MudText Color="Color.Secondary">@EmptyMessage</MudText>
     </MudPaper>
 }
 else
 {
     <MudPaper Elevation="1" Class="@($"rounded-lg {Class}")">
-        <MudTable Items="@GetCurrentDataAsBsonDocuments()" T="BsonDocument"
+        <MudTable Items="@GetDisplayData()" T="BsonDocument"
                   Hover="true"
                   Striped="true"
                   FixedHeader="true"
-                  Height="@TableHeight"
+                  Height="@Height"
                   Bordered="false">
             <HeaderContent>
                 @if (ShowIdColumn)
@@ -37,6 +29,10 @@ else
                             <MudTableSortLabel SortBy="@(new Func<BsonDocument, object>(x => x.TryGetValue("_id", out var id) ? id.ToString() : ""))">
                                 ID
                             </MudTableSortLabel>
+                        }
+                        else
+                        {
+                            @("ID")
                         }
                     </MudTh>
                 }
@@ -66,12 +62,16 @@ else
                         </MudTh>
                     }
                 }
-                @if (ShowActions)
+                @if (HasActions)
                 {
-                    <MudTh Style="width: 120px;">操作</MudTh>
+                    <MudTh Style="@($"width: {GetActionColumnWidth()};")">操作</MudTh>
                 }
             </HeaderContent>
             <RowTemplate Context="item">
+                @{
+                    var itemId = GetDocumentId(item);
+                    var isEditing = editingRowId == itemId;
+                }
                 @if (ShowIdColumn)
                 {
                     <MudTd DataLabel="ID" Class="font-weight-medium">
@@ -87,6 +87,17 @@ else
                             {
                                 @GetFormattedValue(item, field)
                             }
+                            else if (AllowInlineEdit && isEditing)
+                            {
+                                @RenderInlineEditCell(item, field)
+                            }
+                            else if (AllowInlineEdit && !isEditing)
+                            {
+                                <div class="inline-edit-cell" @onclick="() => StartInlineEdit(itemId)">
+                                    @GetFormattedValue(item, field)
+                                    <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="edit-hint" />
+                                </div>
+                            }
                             else
                             {
                                 @RenderEditableCell(item, field)
@@ -94,38 +105,93 @@ else
                         </MudTd>
                     }
                 }
-                @if (ShowActions)
+                @if (HasActions)
                 {
                     <MudTd>
                         <div class="action-buttons">
                             @if (IsReadOnly)
                             {
-                                <MudTooltip Text="查看">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
-                                                  Color="Color.Primary"
+                                @if (OnViewRecord.HasDelegate)
+                                {
+                                    <MudTooltip Text="查看">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                                      Color="Color.Primary"
+                                                      Size="Size.Small"
+                                                      OnClick="() => OnViewRecord.InvokeAsync(item)" />
+                                    </MudTooltip>
+                                }
+                                @if (OnEditRecord.HasDelegate)
+                                {
+                                    <MudTooltip Text="编辑">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                      Color="Color.Secondary"
+                                                      Size="Size.Small"
+                                                      OnClick="() => OnEditRecord.InvokeAsync(item)" />
+                                    </MudTooltip>
+                                }
+                                @if (OnDeleteRecord.HasDelegate)
+                                {
+                                    <MudTooltip Text="删除">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                      Color="Color.Error"
+                                                      Size="Size.Small"
+                                                      OnClick="() => OnDeleteRecord.InvokeAsync(item)" />
+                                    </MudTooltip>
+                                }
+                            }
+                            else if (isEditing)
+                            {
+                                <MudTooltip Text="保存">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Save"
+                                                  Color="Color.Success"
                                                   Size="Size.Small"
-                                                  OnClick="() => OnViewRecord.InvokeAsync(item)" />
+                                                  OnClick="() => SaveInlineEdit()" />
                                 </MudTooltip>
-                                <MudTooltip Text="编辑">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                <MudTooltip Text="取消">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Cancel"
                                                   Color="Color.Secondary"
                                                   Size="Size.Small"
-                                                  OnClick="() => OnEditRecord.InvokeAsync(item)" />
+                                                  OnClick="() => CancelInlineEdit()" />
                                 </MudTooltip>
-                                <MudTooltip Text="删除">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                  Color="Color.Error"
+                                @if (OnRowRemoved.HasDelegate || OnDeleteRecord.HasDelegate)
+                                {
+                                    <MudTooltip Text="删除">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                      Color="Color.Error"
+                                                      Size="Size.Small"
+                                                      OnClick="@(() => DeleteRow(item))" />
+                                    </MudTooltip>
+                                }
+                            }
+                            else if (AllowInlineEdit)
+                            {
+                                <MudTooltip Text="编辑">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                  Color="Color.Primary"
                                                   Size="Size.Small"
-                                                  OnClick="() => OnDeleteRecord.InvokeAsync(item)" />
+                                                  OnClick="() => StartInlineEdit(itemId)" />
                                 </MudTooltip>
+                                @if (OnRowRemoved.HasDelegate || OnDeleteRecord.HasDelegate)
+                                {
+                                    <MudTooltip Text="删除">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                      Color="Color.Error"
+                                                      Size="Size.Small"
+                                                      OnClick="@(() => DeleteRow(item))" />
+                                    </MudTooltip>
+                                }
                             }
                             else
                             {
-                                <MudTooltip Text="删除行">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                  Size="Size.Small"
-                                                  OnClick="@(() => RemoveRow(item))" />
-                                </MudTooltip>
+                                @if (OnRowRemoved.HasDelegate || OnDeleteRecord.HasDelegate)
+                                {
+                                    <MudTooltip Text="删除">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                      Color="Color.Error"
+                                                      Size="Size.Small"
+                                                      OnClick="@(() => DeleteRow(item))" />
+                                    </MudTooltip>
+                                }
                             }
                         </div>
                     </MudTd>
@@ -144,61 +210,74 @@ else
     </MudPaper>
 }
 
-@if (ShowRowCount && ((IsReadOnly && ReadOnlyData.Any()) || (!IsReadOnly && EditableData.Any())))
+@if (ShowRowCount && Data.Any())
 {
     <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
-        @if (IsReadOnly)
+        @if (MaxDisplayRows.HasValue && Data.Count > MaxDisplayRows.Value)
         {
-            @if (MaxDisplayRows.HasValue && ReadOnlyData.Count > MaxDisplayRows.Value)
-            {
-                <span>显示前@MaxDisplayRows条记录，共 @ReadOnlyData.Count 条</span>
-            }
-            else
-            {
-                <span>共 @ReadOnlyData.Count 条记录</span>
-            }
+            <span>显示前@MaxDisplayRows条记录，共 @Data.Count 条</span>
         }
         else
         {
-            <span>共 @EditableData.Count 行数据</span>
+            <span>共 @Data.Count 条记录</span>
         }
     </MudText>
 }
 
 @code {
+    // 核心参数
     [Parameter] public SchemaDefinition Schema { get; set; } = null!;
-    [Parameter] public List<BsonDocument> ReadOnlyData { get; set; } = new();
-    [Parameter] public List<BsonDocument> EditableData { get; set; } = new();
+    [Parameter] public List<BsonDocument> Data { get; set; } = new();
+    
+    // 行为控制
     [Parameter] public bool IsReadOnly { get; set; } = true;
-    [Parameter] public bool ShowActions { get; set; } = true;
-    [Parameter] public bool ShowRowCount { get; set; } = true;
+    [Parameter] public bool AllowInlineEdit { get; set; } = false;
+    
+    // 显示控制
+    [Parameter] public bool ShowIdColumn { get; set; } = false;
     [Parameter] public bool ShowPagination { get; set; } = true;
-    [Parameter] public bool ShowIdColumn { get; set; } = false; // New parameter for ID column
+    [Parameter] public bool ShowRowCount { get; set; } = true;
     [Parameter] public int? MaxDisplayRows { get; set; }
-    [Parameter] public string TableHeight { get; set; } = "600px";
+    
+    // 样式控制
+    [Parameter] public string Height { get; set; } = "600px";
     [Parameter] public string Class { get; set; } = "";
     
-    // Events for editable mode
+    // 空状态文本
+    [Parameter] public string EmptyTitle { get; set; } = "暂无数据";
+    [Parameter] public string EmptyMessage { get; set; } = "没有可显示的内容";
+    
+    // 事件回调
     [Parameter] public EventCallback<BsonDocument> OnRowRemoved { get; set; }
     [Parameter] public EventCallback<BsonDocument> OnRowChanged { get; set; }
-    
-    // Events for readonly mode (DataExplorer functionality)
     [Parameter] public EventCallback<BsonDocument> OnViewRecord { get; set; }
     [Parameter] public EventCallback<BsonDocument> OnEditRecord { get; set; }
     [Parameter] public EventCallback<BsonDocument> OnDeleteRecord { get; set; }
 
-    private IEnumerable<BsonDocument> GetCurrentDataAsBsonDocuments()
+    // 内部状态
+    private string? editingRowId = null;
+    private BsonDocument? originalEditingData = null;
+    private BsonDocument? editingData = null;
+
+    // 计算属性
+    private bool HasActions => OnViewRecord.HasDelegate || OnEditRecord.HasDelegate || OnDeleteRecord.HasDelegate || OnRowRemoved.HasDelegate || !IsReadOnly;
+
+    private IEnumerable<BsonDocument> GetDisplayData()
     {
-        if (IsReadOnly)
+        if (MaxDisplayRows.HasValue)
         {
-            IEnumerable<BsonDocument> itemsToShow = ReadOnlyData;
-            if (MaxDisplayRows.HasValue)
-            {
-                itemsToShow = itemsToShow.Take(MaxDisplayRows.Value);
-            }
-            return itemsToShow;
+            return Data.Take(MaxDisplayRows.Value);
         }
-        return EditableData;
+        return Data;
+    }
+
+    private string GetDocumentId(BsonDocument document)
+    {
+        if (document.TryGetValue("_id", out var id))
+        {
+            return id.ToString();
+        }
+        return document.GetHashCode().ToString();
     }
 
     private string GetRecordId(BsonDocument document)
@@ -211,18 +290,66 @@ else
         return "未知";
     }
 
-    private string GetColumnStyle(FieldDefinition field)
+    private string GetActionColumnWidth()
     {
-        return field.Type switch
+        var buttonCount = 0;
+        if (IsReadOnly)
         {
-            FieldType.Boolean => "width: 100px; min-width: 100px;",
-            FieldType.Date => "width: 150px; min-width: 150px;",
-            FieldType.Number => "width: 120px; min-width: 120px;",
-            FieldType.Text when field.Name.ToLower().Contains("description") ||
-                               field.Name.ToLower().Contains("comment") ||
-                               field.Name.ToLower().Contains("bio") => "width: 250px; min-width: 200px;",
-            _ => "width: 150px; min-width: 120px;"
-        };
+            if (OnViewRecord.HasDelegate) buttonCount++;
+            if (OnEditRecord.HasDelegate) buttonCount++;
+            if (OnDeleteRecord.HasDelegate) buttonCount++;
+        }
+        else
+        {
+            if (AllowInlineEdit)
+            {
+                buttonCount = 2; // 编辑 + 删除 (或 保存 + 取消 + 删除)
+            }
+            else
+            {
+                buttonCount = 1; // 删除
+            }
+        }
+        
+        return $"{Math.Max(buttonCount * 40, 80)}px";
+    }
+
+    private void StartInlineEdit(string documentId)
+    {
+        var document = Data.FirstOrDefault(d => GetDocumentId(d) == documentId);
+        if (document != null)
+        {
+            editingRowId = documentId;
+            originalEditingData = new BsonDocument(document);
+            editingData = new BsonDocument(document);
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveInlineEdit()
+    {
+        if (editingData != null && originalEditingData != null)
+        {
+            var originalDocument = Data.FirstOrDefault(d => GetDocumentId(d) == editingRowId);
+            if (originalDocument != null)
+            {
+                originalDocument.Clear();
+                foreach (var kvp in editingData)
+                {
+                    originalDocument[kvp.Key] = kvp.Value;
+                }
+                await OnRowChanged.InvokeAsync(originalDocument);
+            }
+        }
+        CancelInlineEdit();
+    }
+
+    private void CancelInlineEdit()
+    {
+        editingRowId = null;
+        originalEditingData = null;
+        editingData = null;
+        StateHasChanged();
     }
 
     private RenderFragment GetFormattedValue(BsonDocument document, FieldDefinition field)
@@ -262,6 +389,66 @@ else
             _ => builder => builder.AddContent(0, value)
         };
     }
+
+    private RenderFragment RenderInlineEditCell(BsonDocument rowData, FieldDefinition field) => __builder =>
+    {
+        var workingData = editingData ?? rowData;
+        
+        switch (field.Type)
+        {
+            case FieldType.Text:
+                <MudTextField T="string"
+                              Value="@GetCellStringValue(workingData, field.Name)"
+                              ValueChanged="@(value => SetInlineEditValue(field.Name, new BsonValue(value)))"
+                              Variant="Variant.Text"
+                              Margin="Margin.None"
+                              Class="inline-edit-field" />
+                break;
+
+            case FieldType.Number:
+                <MudNumericField T="double?"
+                                 Value="@GetCellDoubleValue(workingData, field.Name)"
+                                 ValueChanged="@(value => SetInlineEditValue(field.Name, value.HasValue ? new BsonValue(value.Value) : BsonValue.Null))"
+                                 Variant="Variant.Text"
+                                 Margin="Margin.None"
+                                 Class="inline-edit-field" />
+                break;
+
+            case FieldType.Boolean:
+                <MudCheckBox T="bool"
+                             Checked="@GetCellBoolValue(workingData, field.Name)"
+                             CheckedChanged="@((bool value) => SetInlineEditValue(field.Name, new BsonValue(value)))"
+                             Color="Color.Primary"
+                             Size="Size.Small" />
+                break;
+
+            case FieldType.Date:
+                <MudDatePicker Date="@GetCellDateValue(workingData, field.Name)"
+                               DateChanged="@(value => SetInlineEditValue(field.Name, value.HasValue ? new BsonValue(value.Value) : BsonValue.Null))"
+                               Variant="Variant.Text"
+                               Margin="Margin.None"
+                               Class="inline-edit-field" />
+                break;
+
+            case FieldType.Reference:
+                <MudTextField T="string"
+                              Value="@GetCellStringValue(workingData, field.Name)"
+                              ValueChanged="@(value => SetInlineEditValue(field.Name, new BsonValue(value)))"
+                              Variant="Variant.Text"
+                              Margin="Margin.None"
+                              Class="inline-edit-field" />
+                break;
+
+            default:
+                <MudTextField T="string"
+                              Value="@GetCellStringValue(workingData, field.Name)"
+                              ValueChanged="@(value => SetInlineEditValue(field.Name, new BsonValue(value)))"
+                              Variant="Variant.Text"
+                              Margin="Margin.None"
+                              Class="inline-edit-field" />
+                break;
+        }
+    };
 
     private RenderFragment RenderEditableCell(BsonDocument rowData, FieldDefinition field) => __builder =>
     {
@@ -318,10 +505,31 @@ else
 
     private async Task RemoveRow(BsonDocument row)
     {
-        if (EditableData != null)
+        if (Data != null)
         {
-            EditableData.Remove(row);
+            Data.Remove(row);
             await OnRowRemoved.InvokeAsync(row);
+        }
+        if (editingRowId == GetDocumentId(row))
+        {
+            CancelInlineEdit();
+        }
+    }
+
+    private async Task DeleteRow(BsonDocument row)
+    {
+        if (OnDeleteRecord.HasDelegate)
+        {
+            await OnDeleteRecord.InvokeAsync(row);
+        }
+        else if (OnRowRemoved.HasDelegate)
+        {
+            await RemoveRow(row);
+        }
+        
+        if (editingRowId == GetDocumentId(row))
+        {
+            CancelInlineEdit();
         }
     }
 
@@ -331,7 +539,15 @@ else
         await OnRowChanged.InvokeAsync(rowData);
     }
 
-    // 获取单元格值的辅助方法
+    private void SetInlineEditValue(string fieldName, BsonValue value)
+    {
+        if (editingData != null)
+        {
+            editingData[fieldName] = value;
+            StateHasChanged();
+        }
+    }
+
     private string GetCellStringValue(BsonDocument rowData, string fieldName)
     {
         return rowData.TryGetValue(fieldName, out var bsonValue) && !bsonValue.IsNull ? bsonValue.AsString ?? "" : "";
@@ -381,5 +597,58 @@ else
     .action-buttons .mud-icon-button {
         min-width: 32px;
         min-height: 32px;
+    }
+
+    .inline-edit-cell {
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .inline-edit-cell:hover {
+        background-color: rgba(0, 0, 0, 0.04);
+    }
+
+    .edit-hint {
+        opacity: 0;
+        transition: opacity 0.2s;
+        margin-left: 8px;
+    }
+
+    .inline-edit-cell:hover .edit-hint {
+        opacity: 0.6;
+    }
+
+    .inline-edit-field {
+        min-height: auto !important;
+    }
+
+    .inline-edit-field .mud-input-root {
+        min-height: auto !important;
+    }
+
+    .inline-edit-field .mud-input {
+        padding: 4px 0 !important;
+        font-size: 0.875rem;
+        line-height: 1.43;
+    }
+
+    .inline-edit-field .mud-input-root-text {
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    .inline-edit-field .mud-input-root-text:hover {
+        border: 1px solid rgba(0, 0, 0, 0.23) !important;
+    }
+
+    .inline-edit-field .mud-input-root-text.mud-input-root-focused {
+        border: 2px solid #1976d2 !important;
+        box-shadow: none !important;
     }
 </style>

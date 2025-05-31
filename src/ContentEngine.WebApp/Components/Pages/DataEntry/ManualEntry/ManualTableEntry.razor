@@ -44,12 +44,12 @@ else
                 {
                     <div class="table-container">
                         <DataTable Schema="@Schema"
-                                   EditableData="@tableData" 
+                                   Data="@tableData" 
                                    IsReadOnly="false"
-                                   ShowActions="true"
-                                   ShowRowCount="false"
+                                   Height="calc(100vh - 380px)" 
                                    ShowPagination="false"
-                                   TableHeight="calc(100vh - 380px)" 
+                                   EmptyTitle="暂无数据行"
+                                   EmptyMessage="点击添加行开始批量录入数据"
                                    OnRowRemoved="OnRowRemoved"
                                    OnRowChanged="OnRowChanged"
                                    Class="data-entry-table" />
@@ -128,7 +128,7 @@ else
     private Task OnRowRemoved(BsonDocument row) // Changed type
     {
         // 行已经在DataTable组件中被移除了，这里只需要更新状态 (如果需要)
-        // tableData is already modified by DataTable's RemoveRow -> EditableData.Remove(row)
+        // tableData is already modified by DataTable's RemoveRow -> Data.Remove(row)
         // If this component needs to react, do it here.
         return Task.CompletedTask;
     }

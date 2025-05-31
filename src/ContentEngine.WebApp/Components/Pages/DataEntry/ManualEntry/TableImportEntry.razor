@@ -171,13 +171,12 @@
                     </MudAlert>
 
                     <DataTable Schema="@Schema" 
-                               ReadOnlyData="@previewRecords" 
+                               Data="@previewRecords" 
                                IsReadOnly="true" 
-                               ShowActions="false"
                                ShowRowCount="true"
                                ShowPagination="false"
                                MaxDisplayRows="10"
-                               TableHeight="400px"
+                               Height="400px"
                                Class="preview-table" />
 
                     <div class="mt-4 d-flex justify-space-between">

@@ -42,19 +42,19 @@
 
             <!-- 录入模式选择 -->
             <MudTabs Elevation="0" Rounded="false" Class="modern-tabs" @bind-ActivePanelIndex="activeTabIndex">
-                <MudTabPanel Text="单个录入" Icon="@Icons.Material.Filled.Edit">
-                    <div class="mt-4">
-                        <ManualSingleEntryForm Schema="@schema" OnDataSaved="HandleDataSaved" />
-                    </div>
-                </MudTabPanel>
-                <MudTabPanel Text="表格录入" Icon="@Icons.Material.Filled.TableChart">
-                    <div class="mt-4">
-                        <ManualTableEntry SchemaName="@schema.Name" OnDataSaved="HandleDataSaved" />
-                    </div>
-                </MudTabPanel>
-                <MudTabPanel Text="文件导入" Icon="@Icons.Material.Filled.Upload">
+                <MudTabPanel Text="表格导入" Icon="@Icons.Material.Filled.Upload">
                     <div class="mt-4">
                         <TableImportEntry Schema="@schema" OnDataSaved="HandleDataSaved" />
+                    </div>
+                </MudTabPanel>
+                <MudTabPanel Text="单条录入" Icon="@Icons.Material.Filled.Edit">
+                    <div class="mt-4">
+                        <ManualSingleEntryForm Schema="@schema" OnDataSaved="HandleDataSaved"/>
+                    </div>
+                </MudTabPanel>
+                <MudTabPanel Text="批量录入" Icon="@Icons.Material.Filled.TableChart">
+                    <div class="mt-4">
+                        <ManualTableEntry SchemaName="@schema.Name" OnDataSaved="HandleDataSaved"/>
                     </div>
                 </MudTabPanel>
             </MudTabs>
