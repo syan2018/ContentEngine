@@ -1,282 +1,190 @@
+@page "/data-entry/manual/{SchemaName}/table"
 @using ContentEngine.Core.DataPipeline.Models
 @using ContentEngine.Core.DataPipeline.Services
+@using ContentEngine.Core.Storage
+@using ContentEngine.WebApp.Components.Shared
 @using ContentEngine.Core.Utils
-@using LiteDB
 @using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@using LiteDB // Added for BsonDocument
+@inject ISchemaDefinitionService SchemaService
 @inject IDataEntryService DataEntryService
+@inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
-<MudCard Elevation="1" Class="table-entry-card">
-    <MudCardHeader>
-        <CardHeaderContent>
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.h6">批量录入数据</MudText>
-                <MudStack Row="true" Spacing="2">
-                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" 
-                              OnClick="AddNewRow" Size="Size.Small">
-                        添加行
-                    </MudButton>
-                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Clear" 
-                              OnClick="ClearAllRows" Size="Size.Small" Color="Color.Secondary">
-                        清空所有
-                    </MudButton>
-                </MudStack>
+<PageTitle>批量表格录入 - @Schema?.Name</PageTitle>
+
+@if (Schema == null)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <MudPaper Elevation="1" Class="pa-4 rounded-lg">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                <MudText Typo="Typo.h5">批量表格录入: @Schema.Name</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Info" Color="Color.Default" Link="/docs/data-entry/manual-table" Target="_blank" />
             </MudStack>
-        </CardHeaderContent>
-    </MudCardHeader>
-    <MudCardContent Class="pa-0">
-        @if (tableData.Any())
+
+            <MudToolBar Dense="true" Class="mb-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddNewRow" Class="mr-2">添加行</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteSweep" OnClick="ClearAllRows" Disabled="!tableData.Any()">清空所有</MudButton>
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAllData" Disabled="!tableData.Any() || isSaving">
+                    @if (isSaving)
+                    {
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                    }
+                    保存全部 (@tableData.Count)
+                </MudButton>
+            </MudToolBar>
+
+            <MudCardContent Class="pa-0">
+                @if (tableData.Any())
+                {
+                    <div class="table-container">
+                        <DataTable Schema="@Schema"
+                                   EditableData="@tableData" 
+                                   IsReadOnly="false"
+                                   ShowActions="true"
+                                   ShowRowCount="false"
+                                   ShowPagination="false"
+                                   TableHeight="calc(100vh - 380px)" 
+                                   OnRowRemoved="OnRowRemoved"
+                                   OnRowChanged="OnRowChanged"
+                                   Class="data-entry-table" />
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state pa-8 text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                        <MudText Typo="Typo.h6" GutterBottom="true">暂无数据行</MudText>
+                        <MudText Color="Color.Secondary" Class="mb-4">点击"添加行"开始批量录入数据</MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="AddNewRow">
+                            添加第一行
+                        </MudButton>
+                    </div>
+                }
+            </MudCardContent>
+            @if (tableData.Any())
+            {
+                <MudCardActions Class="d-flex justify-end pt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAllData" Disabled="isSaving">
+                        @if (isSaving)
+                        {
+                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                        }
+                        保存全部 (@tableData.Count)
+                    </MudButton>
+                </MudCardActions>
+            }
+        </MudPaper>
+    </MudContainer>
+}
+
+
+@code {
+    [Parameter] public string SchemaName { get; set; } = null!;
+    [Parameter] public EventCallback OnDataSaved { get; set; }
+
+    private SchemaDefinition? Schema;
+    private List<BsonDocument> tableData = new(); // Changed type
+    private bool isSaving = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Schema = await SchemaService.GetSchemaByNameAsync(SchemaName);
+        if (Schema != null)
         {
-            <div class="table-container">
-                <MudTable Items="@tableData" Hover="true" Dense="true" Class="data-entry-table">
-                    <HeaderContent>
-                        <MudTh Style="width: 60px;">操作</MudTh>
-                        @foreach (var field in Schema.Fields)
-                        {
-                            <MudTh Style="@GetColumnStyle(field)">
-                                @field.Name
-                                @if (field.IsRequired)
-                                {
-                                    <span class="required-indicator">*</span>
-                                }
-                            </MudTh>
-                        }
-                    </HeaderContent>
-                    <RowTemplate>
-                        <MudTd>
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete" 
-                                          Size="Size.Small" 
-                                          Color="Color.Error"
-                                          OnClick="@(() => RemoveRow(context))" />
-                        </MudTd>
-                        @foreach (var field in Schema.Fields)
-                        {
-                            <MudTd>
-                                @RenderTableCell(context, field)
-                            </MudTd>
-                        }
-                    </RowTemplate>
-                </MudTable>
-            </div>
+             // 初始添加一行
+            AddNewRow();
         }
         else
         {
-            <div class="empty-state pa-8 text-center">
-                <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
-                <MudText Typo="Typo.h6" GutterBottom="true">暂无数据行</MudText>
-                <MudText Color="Color.Secondary" Class="mb-4">点击"添加行"开始批量录入数据</MudText>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" 
-                          OnClick="AddNewRow">
-                    添加第一行
-                </MudButton>
-            </div>
+            Snackbar.Add($"未找到名为 {SchemaName} 的结构定义。", Severity.Error);
+            NavigationManager.NavigateTo("/schema-management");
         }
-    </MudCardContent>
-    @if (tableData.Any())
-    {
-        <MudCardActions Class="pa-4">
-            <MudStack Row="true" Spacing="2" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="w-100">
-                <MudText Typo="Typo.body2" Color="Color.Secondary">
-                    共 @tableData.Count 行数据
-                </MudText>
-                <MudStack Row="true" Spacing="2">
-                    <MudButton Variant="Variant.Text" OnClick="ClearAllRows" Disabled="@isSaving">
-                        清空所有
-                    </MudButton>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" 
-                              OnClick="SaveAllData" Disabled="@(!HasValidData() || isSaving)">
-                        @if (isSaving)
-                        {
-                            <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
-                            <span>保存中...</span>
-                        }
-                        else
-                        {
-                            <span>保存所有数据</span>
-                        }
-                    </MudButton>
-                </MudStack>
-            </MudStack>
-        </MudCardActions>
-    }
-</MudCard>
-
-@code {
-    [Parameter] public SchemaDefinition Schema { get; set; } = null!;
-    [Parameter] public EventCallback OnDataSaved { get; set; }
-
-    private List<Dictionary<string, object?>> tableData = new();
-    private bool isSaving = false;
-
-    protected override void OnInitialized()
-    {
-        // 初始添加一行
-        AddNewRow();
     }
 
     private void AddNewRow()
     {
-        var newRow = new Dictionary<string, object?>();
+        var newRow = new BsonDocument();
         foreach (var field in Schema.Fields)
         {
-            newRow[field.Name] = GetDefaultValue(field);
+            newRow[field.Name] = GetDefaultBsonValue(field);
         }
         tableData.Add(newRow);
-        StateHasChanged();
+        //StateHasChanged(); // DataTable will trigger its own state changes
     }
 
-    private void RemoveRow(Dictionary<string, object?> row)
+    private void RemoveRow(BsonDocument row) // Changed type
     {
         tableData.Remove(row);
-        StateHasChanged();
+        //StateHasChanged();
+    }
+
+    private Task OnRowRemoved(BsonDocument row) // Changed type
+    {
+        // 行已经在DataTable组件中被移除了，这里只需要更新状态 (如果需要)
+        // tableData is already modified by DataTable's RemoveRow -> EditableData.Remove(row)
+        // If this component needs to react, do it here.
+        return Task.CompletedTask;
+    }
+
+    private Task OnRowChanged(BsonDocument row) // Changed type
+    {
+        // 数据已经在DataTable组件中被更新了
+        // BsonDocument instance in tableData is directly modified by DataTable
+        return Task.CompletedTask;
     }
 
     private void ClearAllRows()
     {
         tableData.Clear();
-        StateHasChanged();
+        StateHasChanged(); // Ensure UI updates after clearing all
     }
 
-    private object? GetDefaultValue(FieldDefinition field)
+    private BsonValue GetDefaultBsonValue(FieldDefinition field)
     {
         return field.Type switch
         {
-            FieldType.Text => string.Empty,
-            FieldType.Number => 0.0,
-            FieldType.Boolean => false,
-            FieldType.Date => DateTime.Today,
-            FieldType.Reference => string.Empty,
-            _ => null
+            FieldType.Text => new BsonValue(string.Empty),
+            FieldType.Number => new BsonValue(0.0),
+            FieldType.Boolean => new BsonValue(false),
+            FieldType.Date => new BsonValue(DateTime.Today),
+            FieldType.Reference => new BsonValue(string.Empty), // Assuming reference is stored as string ID or similar
+            _ => BsonValue.Null
         };
     }
-
-    private string GetColumnStyle(FieldDefinition field)
-    {
-        return field.Type switch
-        {
-            FieldType.Boolean => "width: 100px; min-width: 100px;",
-            FieldType.Date => "width: 150px; min-width: 150px;",
-            FieldType.Number => "width: 120px; min-width: 120px;",
-            FieldType.Text when field.Name.ToLower().Contains("description") || 
-                               field.Name.ToLower().Contains("comment") ||
-                               field.Name.ToLower().Contains("bio") => "width: 250px; min-width: 200px;",
-            _ => "width: 150px; min-width: 120px;"
-        };
-    }
-
-    private RenderFragment RenderTableCell(Dictionary<string, object?> rowData, FieldDefinition field) => __builder =>
-    {
-        switch (field.Type)
-        {
-            case FieldType.Text:
-                <MudTextField T="string" 
-                              Value="@GetCellStringValue(rowData, field.Name)"
-                              ValueChanged="@(value => SetCellValue(rowData, field.Name, value))"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense"
-                              Class="table-cell-input" />
-                break;
-
-            case FieldType.Number:
-                <MudNumericField T="double" 
-                                 Value="@GetCellDoubleValue(rowData, field.Name)"
-                                 ValueChanged="@(value => SetCellValue(rowData, field.Name, value))"
-                                 Variant="Variant.Outlined"
-                                 Margin="Margin.Dense"
-                                 Class="table-cell-input" />
-                break;
-
-            case FieldType.Boolean:
-                <MudCheckBox T="bool" 
-                             Checked="@GetCellBoolValue(rowData, field.Name)"
-                             CheckedChanged="@((bool value) => SetCellValue(rowData, field.Name, value))"
-                             Color="Color.Primary"
-                             Size="Size.Small" />
-                break;
-
-            case FieldType.Date:
-                <MudDatePicker Date="@GetCellDateValue(rowData, field.Name)"
-                               DateChanged="@(value => SetCellValue(rowData, field.Name, value))"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense"
-                               Class="table-cell-input" />
-                break;
-
-            case FieldType.Reference:
-                <MudTextField T="string" 
-                              Value="@GetCellStringValue(rowData, field.Name)"
-                              ValueChanged="@(value => SetCellValue(rowData, field.Name, value))"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense"
-                              Class="table-cell-input"
-                              Placeholder="引用ID" />
-                break;
-        }
-    };
-
-    private string GetCellStringValue(Dictionary<string, object?> rowData, string fieldName)
-    {
-        return rowData.TryGetValue(fieldName, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
-    }
-
-    private double GetCellDoubleValue(Dictionary<string, object?> rowData, string fieldName)
-    {
-        if (rowData.TryGetValue(fieldName, out var value))
-        {
-            if (value is double d) return d;
-            if (double.TryParse(value?.ToString(), out var parsed)) return parsed;
-        }
-        return 0.0;
-    }
-
-    private bool GetCellBoolValue(Dictionary<string, object?> rowData, string fieldName)
-    {
-        if (rowData.TryGetValue(fieldName, out var value))
-        {
-            if (value is bool b) return b;
-            if (bool.TryParse(value?.ToString(), out var parsed)) return parsed;
-        }
-        return false;
-    }
-
-    private DateTime? GetCellDateValue(Dictionary<string, object?> rowData, string fieldName)
-    {
-        if (rowData.TryGetValue(fieldName, out var value))
-        {
-            if (value is DateTime dt) return dt;
-            if (DateTime.TryParse(value?.ToString(), out var parsed)) return parsed;
-        }
-        return DateTime.Today;
-    }
-
-    private void SetCellValue(Dictionary<string, object?> rowData, string fieldName, object? value)
-    {
-        rowData[fieldName] = value;
-        StateHasChanged();
-    }
-
-    private bool HasValidData()
-    {
-        if (!tableData.Any()) return false;
-
-        foreach (var row in tableData)
-        {
-            foreach (var field in Schema.Fields.Where(f => f.IsRequired))
-            {
-                if (!row.TryGetValue(field.Name, out var value) || 
-                    value == null || 
-                    (value is string str && string.IsNullOrWhiteSpace(str)))
-                {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
+    
     private async Task SaveAllData()
     {
-        if (!HasValidData()) return;
+        if (Schema == null || !tableData.Any())
+        {
+            Snackbar.Add("没有可保存的数据。", Severity.Info);
+            return;
+        }
+
+        // 数据验证
+        for (int i = 0; i < tableData.Count; i++)
+        {
+            var row = tableData[i];
+            foreach (var field in Schema.Fields)
+            {
+                if (field.IsRequired)
+                {
+                    if (!row.ContainsKey(field.Name) || row[field.Name].IsNull || 
+                        (field.Type == FieldType.Text && string.IsNullOrWhiteSpace(row[field.Name].AsString)))
+                    {
+                        Snackbar.Add($"第 {i + 1} 行的字段 '{field.Name}' 是必填项。", Severity.Warning);
+                        return;
+                    }
+                }
+                // Add other field-specific validations if needed
+            }
+        }
 
         isSaving = true;
         try
@@ -284,11 +192,8 @@
             var savedCount = 0;
             foreach (var row in tableData)
             {
-                // 转换为 BsonDocument
-                var bsonDoc = BsonFormUtils.ConvertFormDataToBson(row, Schema);
-                
                 // 保存数据
-                await DataEntryService.CreateDataAsync(Schema.Name, bsonDoc);
+                await DataEntryService.CreateDataAsync(Schema.Name, row);
                 savedCount++;
             }
             
@@ -308,53 +213,17 @@
         finally
         {
             isSaving = false;
+            StateHasChanged();
         }
     }
 }
 
 <style>
-    .table-entry-card {
-        border: 1px solid #E0E0E0;
-        border-radius: 12px;
-    }
-
-    .table-entry-card .mud-card-header {
-        background-color: #FAFAFA;
-        border-bottom: 1px solid #E0E0E0;
-    }
-
     .table-container {
-        max-height: 600px;
-        overflow: auto;
+        height: calc(100vh - 380px); /* Adjust based on your layout */
+        overflow-y: auto;
     }
-
-    .data-entry-table .mud-table-head {
-        background-color: #F8F9FA;
-    }
-
-    .data-entry-table .mud-table-head .mud-table-cell {
-        font-weight: 600;
-        border-bottom: 2px solid #E0E0E0;
-    }
-
-    .table-cell-input {
-        min-width: 100px;
-    }
-
-    .table-cell-input .mud-input-root {
-        font-size: 0.875rem;
-    }
-
-    .required-indicator {
-        color: #F44336;
-        margin-left: 4px;
-    }
-
-    .empty-state {
-        min-height: 300px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
+    .data-entry-table .mud-table-container {
+        max-height: 100% !important; /* Ensure DataTable's internal container takes full height */
     }
 </style> 

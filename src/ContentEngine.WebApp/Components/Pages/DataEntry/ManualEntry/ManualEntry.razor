@@ -49,7 +49,12 @@
                 </MudTabPanel>
                 <MudTabPanel Text="表格录入" Icon="@Icons.Material.Filled.TableChart">
                     <div class="mt-4">
-                        <ManualTableEntry Schema="@schema" OnDataSaved="HandleDataSaved" />
+                        <ManualTableEntry SchemaName="@schema.Name" OnDataSaved="HandleDataSaved" />
+                    </div>
+                </MudTabPanel>
+                <MudTabPanel Text="文件导入" Icon="@Icons.Material.Filled.Upload">
+                    <div class="mt-4">
+                        <TableImportEntry Schema="@schema" OnDataSaved="HandleDataSaved" />
                     </div>
                 </MudTabPanel>
             </MudTabs>

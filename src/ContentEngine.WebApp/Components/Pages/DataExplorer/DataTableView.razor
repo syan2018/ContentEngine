@@ -2,6 +2,7 @@
 @using LiteDB
 @using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
 @using QueryBuilder = ContentEngine.Core.Utils.QueryBuilder
+@using ContentEngine.WebApp.Components.Shared
 
 @inject IDataEntryService DataService
 @inject IJSRuntime JSRuntime
@@ -100,8 +101,11 @@
 }
 
 <!-- 数据表格 -->
-<DataTable DataEntries="@filteredDataEntries"
+<DataTable ReadOnlyData="@filteredDataEntries"
            Schema="@Schema"
+           IsReadOnly="true"
+           ShowIdColumn="true"
+           ShowActions="true"
            OnViewRecord="OnViewRecord"
            OnEditRecord="OnEditRecord"
            OnDeleteRecord="OnDeleteRecord" />

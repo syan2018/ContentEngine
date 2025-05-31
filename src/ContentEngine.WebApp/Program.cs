@@ -38,6 +38,9 @@ builder.Services.AddScoped<ISchemaSuggestionService, SchemaSuggestionService>();
 // 注册文件转换服务
 builder.Services.AddHttpClient<IFileConversionService, FileConversionService>();
 
+// 注册表格数据服务
+builder.Services.AddScoped<ITableDataService, TableDataService>();
+
 // 注册数据结构化服务
 builder.Services.AddScoped<IDataStructuringService, DataStructuringService>();
 

@@ -1,0 +1,385 @@
+@using ContentEngine.Core.Utils
+@using ContentEngine.Core.DataPipeline.Models
+@using LiteDB
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+
+@if ((IsReadOnly && !ReadOnlyData.Any()) || (!IsReadOnly && !GetCurrentDataAsBsonDocuments().Any()))
+{
+    <MudPaper Class="pa-8 text-center" Elevation="0">
+        <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+        @if (IsReadOnly)
+        {
+            <MudText Typo="Typo.h6" GutterBottom="true">暂无数据记录</MudText>
+            <MudText Color="Color.Secondary">没有可显示的数据</MudText>
+        }
+        else
+        {
+            <MudText Typo="Typo.h6" GutterBottom="true">暂无数据行</MudText>
+            <MudText Color="Color.Secondary">点击"添加行"开始录入数据</MudText>
+        }
+    </MudPaper>
+}
+else
+{
+    <MudPaper Elevation="1" Class="@($"rounded-lg {Class}")">
+        <MudTable Items="@GetCurrentDataAsBsonDocuments()" T="BsonDocument"
+                  Hover="true"
+                  Striped="true"
+                  FixedHeader="true"
+                  Height="@TableHeight"
+                  Bordered="false">
+            <HeaderContent>
+                @if (ShowIdColumn)
+                {
+                    <MudTh Style="width: 80px;">
+                        @if (IsReadOnly)
+                        {
+                            <MudTableSortLabel SortBy="@(new Func<BsonDocument, object>(x => x.TryGetValue("_id", out var id) ? id.ToString() : ""))">
+                                ID
+                            </MudTableSortLabel>
+                        }
+                    </MudTh>
+                }
+                @if (Schema?.Fields != null)
+                {
+                    @foreach (var field in Schema.Fields)
+                    {
+                        <MudTh>
+                            @if (IsReadOnly)
+                            {
+                                <MudTableSortLabel SortBy="@(new Func<BsonDocument, object>(x => BsonFormUtils.GetDisplayValue(x, field.Name)))">
+                                    @field.Name
+                                    @if (field.IsRequired)
+                                    {
+                                        <span class="required-indicator">*</span>
+                                    }
+                                </MudTableSortLabel>
+                            }
+                            else
+                            {
+                                @field.Name
+                                @if (field.IsRequired)
+                                {
+                                    <span class="required-indicator">*</span>
+                                }
+                            }
+                        </MudTh>
+                    }
+                }
+                @if (ShowActions)
+                {
+                    <MudTh Style="width: 120px;">操作</MudTh>
+                }
+            </HeaderContent>
+            <RowTemplate Context="item">
+                @if (ShowIdColumn)
+                {
+                    <MudTd DataLabel="ID" Class="font-weight-medium">
+                        @GetRecordId(item)
+                    </MudTd>
+                }
+                @if (Schema?.Fields != null)
+                {
+                    @foreach (var field in Schema.Fields)
+                    {
+                        <MudTd DataLabel="@field.Name">
+                            @if (IsReadOnly)
+                            {
+                                @GetFormattedValue(item, field)
+                            }
+                            else
+                            {
+                                @RenderEditableCell(item, field)
+                            }
+                        </MudTd>
+                    }
+                }
+                @if (ShowActions)
+                {
+                    <MudTd>
+                        <div class="action-buttons">
+                            @if (IsReadOnly)
+                            {
+                                <MudTooltip Text="查看">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                                  Color="Color.Primary"
+                                                  Size="Size.Small"
+                                                  OnClick="() => OnViewRecord.InvokeAsync(item)" />
+                                </MudTooltip>
+                                <MudTooltip Text="编辑">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                  Color="Color.Secondary"
+                                                  Size="Size.Small"
+                                                  OnClick="() => OnEditRecord.InvokeAsync(item)" />
+                                </MudTooltip>
+                                <MudTooltip Text="删除">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                  Color="Color.Error"
+                                                  Size="Size.Small"
+                                                  OnClick="() => OnDeleteRecord.InvokeAsync(item)" />
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <MudTooltip Text="删除行">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                  Size="Size.Small"
+                                                  OnClick="@(() => RemoveRow(item))" />
+                                </MudTooltip>
+                            }
+                        </div>
+                    </MudTd>
+                }
+            </RowTemplate>
+            <PagerContent>
+                @if (ShowPagination)
+                {
+                    <MudTablePager PageSizeOptions="new int[]{5, 10, 25, 50}"
+                                   HideRowsPerPage="false"
+                                   HidePagination="false"
+                                   InfoFormat="{first_item}-{last_item} / {all_items}" />
+                }
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@if (ShowRowCount && ((IsReadOnly && ReadOnlyData.Any()) || (!IsReadOnly && EditableData.Any())))
+{
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+        @if (IsReadOnly)
+        {
+            @if (MaxDisplayRows.HasValue && ReadOnlyData.Count > MaxDisplayRows.Value)
+            {
+                <span>显示前@MaxDisplayRows条记录，共 @ReadOnlyData.Count 条</span>
+            }
+            else
+            {
+                <span>共 @ReadOnlyData.Count 条记录</span>
+            }
+        }
+        else
+        {
+            <span>共 @EditableData.Count 行数据</span>
+        }
+    </MudText>
+}
+
+@code {
+    [Parameter] public SchemaDefinition Schema { get; set; } = null!;
+    [Parameter] public List<BsonDocument> ReadOnlyData { get; set; } = new();
+    [Parameter] public List<BsonDocument> EditableData { get; set; } = new();
+    [Parameter] public bool IsReadOnly { get; set; } = true;
+    [Parameter] public bool ShowActions { get; set; } = true;
+    [Parameter] public bool ShowRowCount { get; set; } = true;
+    [Parameter] public bool ShowPagination { get; set; } = true;
+    [Parameter] public bool ShowIdColumn { get; set; } = false; // New parameter for ID column
+    [Parameter] public int? MaxDisplayRows { get; set; }
+    [Parameter] public string TableHeight { get; set; } = "600px";
+    [Parameter] public string Class { get; set; } = "";
+    
+    // Events for editable mode
+    [Parameter] public EventCallback<BsonDocument> OnRowRemoved { get; set; }
+    [Parameter] public EventCallback<BsonDocument> OnRowChanged { get; set; }
+    
+    // Events for readonly mode (DataExplorer functionality)
+    [Parameter] public EventCallback<BsonDocument> OnViewRecord { get; set; }
+    [Parameter] public EventCallback<BsonDocument> OnEditRecord { get; set; }
+    [Parameter] public EventCallback<BsonDocument> OnDeleteRecord { get; set; }
+
+    private IEnumerable<BsonDocument> GetCurrentDataAsBsonDocuments()
+    {
+        if (IsReadOnly)
+        {
+            IEnumerable<BsonDocument> itemsToShow = ReadOnlyData;
+            if (MaxDisplayRows.HasValue)
+            {
+                itemsToShow = itemsToShow.Take(MaxDisplayRows.Value);
+            }
+            return itemsToShow;
+        }
+        return EditableData;
+    }
+
+    private string GetRecordId(BsonDocument document)
+    {
+        if (document.TryGetValue("_id", out var id))
+        {
+            var idStr = id.ToString();
+            return idStr.Length > 8 ? idStr.Substring(0, 8) + "..." : idStr;
+        }
+        return "未知";
+    }
+
+    private string GetColumnStyle(FieldDefinition field)
+    {
+        return field.Type switch
+        {
+            FieldType.Boolean => "width: 100px; min-width: 100px;",
+            FieldType.Date => "width: 150px; min-width: 150px;",
+            FieldType.Number => "width: 120px; min-width: 120px;",
+            FieldType.Text when field.Name.ToLower().Contains("description") ||
+                               field.Name.ToLower().Contains("comment") ||
+                               field.Name.ToLower().Contains("bio") => "width: 250px; min-width: 200px;",
+            _ => "width: 150px; min-width: 120px;"
+        };
+    }
+
+    private RenderFragment GetFormattedValue(BsonDocument document, FieldDefinition field)
+    {
+        var value = BsonFormUtils.GetDisplayValue(document, field.Name);
+        
+        return field.Type switch
+        {
+            FieldType.Boolean => builder =>
+            {
+                var boolValue = bool.TryParse(value, out var b) && b;
+                builder.OpenComponent<MudChip<string>>(0);
+                builder.AddAttribute(1, "Text", boolValue ? "是" : "否");
+                builder.AddAttribute(2, "Color", boolValue ? Color.Success : Color.Default);
+                builder.AddAttribute(3, "Size", Size.Small);
+                builder.AddAttribute(4, "Variant", Variant.Filled);
+                builder.CloseComponent();
+            },
+            FieldType.Date => builder =>
+            {
+                if (DateTime.TryParse(value, out var date))
+                {
+                    builder.AddContent(0, date.ToString("yyyy-MM-dd"));
+                }
+                else
+                {
+                    builder.AddContent(0, value);
+                }
+            },
+            FieldType.Number => builder =>
+            {
+                builder.OpenElement(0, "span");
+                builder.AddAttribute(1, "class", "font-weight-medium");
+                builder.AddContent(2, value);
+                builder.CloseElement();
+            },
+            _ => builder => builder.AddContent(0, value)
+        };
+    }
+
+    private RenderFragment RenderEditableCell(BsonDocument rowData, FieldDefinition field) => __builder =>
+    {
+        switch (field.Type)
+        {
+            case FieldType.Text:
+                <MudTextField T="string"
+                              Value="@GetCellStringValue(rowData, field.Name)"
+                              ValueChanged="@(value => SetCellValue(rowData, field.Name, new BsonValue(value)))"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense" />
+                break;
+
+            case FieldType.Number:
+                <MudNumericField T="double?"
+                                 Value="@GetCellDoubleValue(rowData, field.Name)"
+                                 ValueChanged="@(value => SetCellValue(rowData, field.Name, value.HasValue ? new BsonValue(value.Value) : BsonValue.Null))"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" />
+                break;
+
+            case FieldType.Boolean:
+                <MudCheckBox T="bool"
+                             Checked="@GetCellBoolValue(rowData, field.Name)"
+                             CheckedChanged="@((bool value) => SetCellValue(rowData, field.Name, new BsonValue(value)))"
+                             Color="Color.Primary"
+                             Size="Size.Small" />
+                break;
+
+            case FieldType.Date:
+                <MudDatePicker Date="@GetCellDateValue(rowData, field.Name)"
+                               DateChanged="@(value => SetCellValue(rowData, field.Name, value.HasValue ? new BsonValue(value.Value) : BsonValue.Null))"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense" />
+                break;
+
+            case FieldType.Reference:
+                <MudTextField T="string"
+                              Value="@GetCellStringValue(rowData, field.Name)"
+                              ValueChanged="@(value => SetCellValue(rowData, field.Name, new BsonValue(value)))"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense" />
+                break;
+
+            default:
+                <MudTextField T="string"
+                              Value="@GetCellStringValue(rowData, field.Name)"
+                              ValueChanged="@(value => SetCellValue(rowData, field.Name, new BsonValue(value)))"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense" />
+                break;
+        }
+    };
+
+    private async Task RemoveRow(BsonDocument row)
+    {
+        if (EditableData != null)
+        {
+            EditableData.Remove(row);
+            await OnRowRemoved.InvokeAsync(row);
+        }
+    }
+
+    private async Task SetCellValue(BsonDocument rowData, string fieldName, BsonValue value)
+    {
+        rowData[fieldName] = value;
+        await OnRowChanged.InvokeAsync(rowData);
+    }
+
+    // 获取单元格值的辅助方法
+    private string GetCellStringValue(BsonDocument rowData, string fieldName)
+    {
+        return rowData.TryGetValue(fieldName, out var bsonValue) && !bsonValue.IsNull ? bsonValue.AsString ?? "" : "";
+    }
+
+    private double? GetCellDoubleValue(BsonDocument rowData, string fieldName)
+    {
+        if (rowData.TryGetValue(fieldName, out var bsonValue) && bsonValue.IsNumber)
+        {
+            return bsonValue.AsDouble;
+        }
+        return null;
+    }
+
+    private bool GetCellBoolValue(BsonDocument rowData, string fieldName)
+    {
+        if (rowData.TryGetValue(fieldName, out var bsonValue) && bsonValue.IsBoolean)
+        {
+            return bsonValue.AsBoolean;
+        }
+        return false;
+    }
+
+    private DateTime? GetCellDateValue(BsonDocument rowData, string fieldName)
+    {
+        if (rowData.TryGetValue(fieldName, out var bsonValue) && bsonValue.IsDateTime)
+        {
+            return bsonValue.AsDateTime;
+        }
+        return null;
+    }
+}
+
+<style>
+    .required-indicator {
+        color: #F44336;
+        margin-left: 4px;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        justify-content: flex-start;
+    }
+
+    .action-buttons .mud-icon-button {
+        min-width: 32px;
+        min-height: 32px;
+    }
+</style>

@@ -1,0 +1,435 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.DataPipeline.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using ContentEngine.WebApp.Components.Shared
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@inject ITableDataService TableDataService
+@inject IDataEntryService DataEntryService
+@inject ISnackbar Snackbar
+
+<MudCard Elevation="1" Class="table-import-card">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">表格文件导入</MudText>
+                @if (currentStep > 0)
+                {
+                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Refresh" 
+                              OnClick="ResetImport" Size="Size.Small">
+                        重新导入
+                    </MudButton>
+                }
+            </MudStack>
+        </CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent>
+        @if (currentStep == 0)
+        {
+            <!-- 步骤1: 文件上传 -->
+            <div class="upload-section">
+                <MudText Typo="Typo.h6" Class="mb-3">选择Excel或CSV文件</MudText>
+                
+                <FileUploadArea @ref="fileUploadArea"
+                                AcceptedTypes=".xlsx,.xls,.csv"
+                                MaxFileCount="1"
+                                IsProcessing="isProcessing"
+                                ProcessingText="正在读取文件..."
+                                UploadIcon="@Icons.Material.Filled.TableChart"
+                                Title="上传表格文件"
+                                Description="拖放文件到此处，或点击选择文件"
+                                SupportedFormats="支持 Excel (.xlsx, .xls) 和 CSV 文件"
+                                FilesChanged="OnFileSelected" />
+
+                @if (selectedFile != null && !isProcessing)
+                {
+                    <MudAlert Severity="Severity.Info" Class="mt-3">
+                        已选择文件: <strong>@selectedFile.Name</strong> (@((selectedFile.Size / 1024.0).ToString("F1")) KB)
+                    </MudAlert>
+                }
+            </div>
+        }
+        else if (currentStep == 1)
+        {
+            <!-- 步骤2: 工作表选择（仅Excel） -->
+            @if (sheetNames.Count > 1)
+            {
+                <div class="sheet-selection mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">选择工作表</MudText>
+                    <MudSelect @bind-Value="selectedSheetIndex" Label="工作表" Variant="Variant.Outlined">
+                        @for (int i = 0; i < sheetNames.Count; i++)
+                        {
+                            var index = i;
+                            <MudSelectItem Value="index">@sheetNames[i]</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                              OnClick="LoadTableData" Class="mt-3" Disabled="isProcessing">
+                        读取数据
+                    </MudButton>
+                </div>
+            }
+        }
+        else if (currentStep == 2)
+        {
+            <!-- 步骤3: 字段映射 -->
+            <div class="mapping-section">
+                <MudText Typo="Typo.h6" Class="mb-3">字段映射配置</MudText>
+                
+                @if (tableData != null)
+                {
+                    <MudAlert Severity="Severity.Info" Class="mb-4">
+                        文件: <strong>@tableData.FileName</strong> | 
+                        工作表: <strong>@tableData.SheetName</strong> | 
+                        数据行: <strong>@tableData.Rows.Count</strong> | 
+                        列数: <strong>@tableData.Headers.Count</strong>
+                    </MudAlert>
+
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle1" Class="mb-2">Schema字段</MudText>
+                            <MudPaper Outlined="true" Class="pa-3 mapping-panel">
+                                @foreach (var mapping in fieldMappings)
+                                {
+                                    <div class="mapping-row mb-3">
+                                        <MudText Typo="Typo.body1" Class="mb-1">
+                                            @mapping.SchemaFieldName
+                                            @if (Schema.Fields.FirstOrDefault(f => f.Name == mapping.SchemaFieldName)?.IsRequired == true)
+                                            {
+                                                <span class="required-indicator">*</span>
+                                            }
+                                        </MudText>
+                                        <MudSelect Value="mapping.ColumnIndex" 
+                                                   Label="映射到表格列" 
+                                                   Variant="Variant.Outlined"
+                                                   Margin="Margin.Dense"
+                                                   ValueChanged="@((int value) => UpdateMapping(mapping, value))">
+                                            <MudSelectItem Value="-1">-- 不映射 --</MudSelectItem>
+                                            @if (tableData?.Headers != null)
+                                            {
+                                                @for (int i = 0; i < tableData.Headers.Count; i++)
+                                                {
+                                                    var index = i;
+                                                    var header = tableData.Headers[index];
+                                                    <MudSelectItem Value="index">@($"{header} (列{index + 1})")</MudSelectItem>
+                                                }
+                                            }
+                                        </MudSelect>
+                                    </div>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.subtitle1" Class="mb-2">数据预览</MudText>
+                            <MudPaper Outlined="true" Class="pa-3 preview-panel">
+                                <MudTable Items="@tableData.Rows.Take(5)" Dense="true" Hover="true">
+                                    <HeaderContent>
+                                        @foreach (var header in tableData.Headers)
+                                        {
+                                            <MudTh>@header</MudTh>
+                                        }
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        @foreach (var cell in context)
+                                        {
+                                            <MudTd>@(string.IsNullOrEmpty(cell) ? "-" : cell)</MudTd>
+                                        }
+                                    </RowTemplate>
+                                </MudTable>
+                                @if (tableData.Rows.Count > 5)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                                        显示前5行，共 @tableData.Rows.Count 行数据
+                                    </MudText>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                    <div class="mt-4 d-flex justify-space-between">
+                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.AutoAwesome" 
+                                  OnClick="AutoMapFields">
+                            自动映射
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                                  OnClick="PreviewImport" Disabled="@(!HasValidMappings())">
+                            预览导入
+                        </MudButton>
+                    </div>
+                }
+            </div>
+        }
+        else if (currentStep == 3)
+        {
+            <!-- 步骤4: 导入预览和确认 -->
+            <div class="import-preview">
+                <MudText Typo="Typo.h6" Class="mb-3">导入预览</MudText>
+                
+                @if (previewRecords.Any())
+                {
+                    <MudAlert Severity="Severity.Success" Class="mb-4">
+                        将导入 <strong>@previewRecords.Count</strong> 条记录到 <strong>@Schema.Name</strong>
+                    </MudAlert>
+
+                    <DataTable Schema="@Schema" 
+                               ReadOnlyData="@previewRecords" 
+                               IsReadOnly="true" 
+                               ShowActions="false"
+                               ShowRowCount="true"
+                               ShowPagination="false"
+                               MaxDisplayRows="10"
+                               TableHeight="400px"
+                               Class="preview-table" />
+
+                    <div class="mt-4 d-flex justify-space-between">
+                        <MudButton Variant="Variant.Text" OnClick="BackToMapping">
+                            返回映射
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" 
+                                  OnClick="ExecuteImport" Disabled="isImporting">
+                            @if (isImporting)
+                            {
+                                <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                                <span>导入中...</span>
+                            }
+                            else
+                            {
+                                <span>确认导入</span>
+                            }
+                        </MudButton>
+                    </div>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Warning">
+                        没有可导入的数据，请检查字段映射配置。
+                    </MudAlert>
+                }
+            </div>
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter] public SchemaDefinition Schema { get; set; } = null!;
+    [Parameter] public EventCallback OnDataSaved { get; set; }
+
+    private FileUploadArea? fileUploadArea;
+    private IBrowserFile? selectedFile;
+    private List<string> sheetNames = new();
+    private int selectedSheetIndex = 0;
+    private TableImportData? tableData;
+    private List<FieldMapping> fieldMappings = new();
+    private List<LiteDB.BsonDocument> previewRecords = new();
+    
+    private int currentStep = 0; // 0: 文件选择, 1: 工作表选择, 2: 字段映射, 3: 预览导入
+    private bool isProcessing = false;
+    private bool isImporting = false;
+
+    private async Task OnFileSelected(IBrowserFile file)
+    {
+        if (file == null) return;
+
+        selectedFile = file;
+        isProcessing = true;
+        StateHasChanged();
+
+        try
+        {
+            if (!TableDataService.IsTableFileSupported(file.Name, file.ContentType))
+            {
+                Snackbar.Add("不支持的文件类型，请选择Excel或CSV文件", Severity.Warning);
+                return;
+            }
+
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            
+            if (extension == ".xlsx" || extension == ".xls")
+            {
+                // Excel文件，获取工作表列表
+                sheetNames = await TableDataService.GetExcelSheetNamesAsync(file);
+                if (sheetNames.Count > 1)
+                {
+                    currentStep = 1; // 需要选择工作表
+                }
+                else
+                {
+                    selectedSheetIndex = 0;
+                    await LoadTableData();
+                }
+            }
+            else if (extension == ".csv")
+            {
+                // CSV文件，直接读取
+                tableData = await TableDataService.ReadCsvAsync(file);
+                InitializeFieldMappings();
+                currentStep = 2; // 直接到字段映射
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"读取文件失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadTableData()
+    {
+        if (selectedFile == null) return;
+
+        isProcessing = true;
+        try
+        {
+            tableData = await TableDataService.ReadExcelAsync(selectedFile, selectedSheetIndex);
+            InitializeFieldMappings();
+            currentStep = 2; // 到字段映射步骤
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"读取Excel数据失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private void InitializeFieldMappings()
+    {
+        if (tableData == null) return;
+
+        fieldMappings = TableDataService.SuggestFieldMappings(tableData.Headers, Schema);
+        StateHasChanged();
+    }
+
+    private void UpdateMapping(FieldMapping mapping, int columnIndex)
+    {
+        mapping.ColumnIndex = columnIndex;
+        mapping.IsMapped = columnIndex >= 0;
+        if (mapping.IsMapped && tableData != null && columnIndex < tableData.Headers.Count)
+        {
+            mapping.TableColumnName = tableData.Headers[columnIndex];
+        }
+        else
+        {
+            mapping.TableColumnName = string.Empty;
+        }
+        StateHasChanged();
+    }
+
+    private void AutoMapFields()
+    {
+        if (tableData == null) return;
+
+        fieldMappings = TableDataService.SuggestFieldMappings(tableData.Headers, Schema);
+        Snackbar.Add("已自动映射字段", Severity.Success);
+        StateHasChanged();
+    }
+
+    private bool HasValidMappings()
+    {
+        return fieldMappings.Any(m => m.IsMapped);
+    }
+
+    private async Task PreviewImport()
+    {
+        if (tableData == null) return;
+
+        try
+        {
+            var config = new TableImportConfig
+            {
+                FieldMappings = fieldMappings,
+                StartRowIndex = 0,
+                EndRowIndex = -1,
+                IgnoreEmptyRows = true
+            };
+
+            previewRecords = await TableDataService.ConvertTableDataToBsonAsync(tableData, Schema, config);
+            currentStep = 3;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"预览数据失败: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void BackToMapping()
+    {
+        currentStep = 2;
+        StateHasChanged();
+    }
+
+    private async Task ExecuteImport()
+    {
+        if (!previewRecords.Any()) return;
+
+        isImporting = true;
+        try
+        {
+            var savedCount = 0;
+            foreach (var record in previewRecords)
+            {
+                await DataEntryService.CreateDataAsync(Schema.Name, record);
+                savedCount++;
+            }
+
+            await OnDataSaved.InvokeAsync();
+            Snackbar.Add($"成功导入 {savedCount} 条记录！", Severity.Success);
+            
+            // 重置状态
+            await ResetImport();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"导入数据失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isImporting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ResetImport()
+    {
+        currentStep = 0;
+        selectedFile = null;
+        tableData = null;
+        fieldMappings.Clear();
+        previewRecords.Clear();
+        sheetNames.Clear();
+        selectedSheetIndex = 0;
+        if (fileUploadArea != null)
+            await fileUploadArea.ClearAsync();
+        StateHasChanged();
+    }
+
+
+}
+
+<style>
+    .mapping-panel, .preview-panel {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .mapping-row {
+        padding-bottom: 8px;
+        border-bottom: 1px solid #F0F0F0;
+    }
+
+    .mapping-row:last-child {
+        border-bottom: none;
+    }
+
+    .required-indicator {
+        color: #F44336;
+        margin-left: 4px;
+    }
+</style> 

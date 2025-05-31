@@ -1,0 +1,116 @@
+@using Microsoft.AspNetCore.Components.Forms
+
+<MudFileUpload T="IBrowserFile"
+               @ref="fileUpload"
+               FilesChanged="OnFilesChanged"
+               Accept="@AcceptedTypes"
+               MaximumFileCount="@MaxFileCount"
+               Disabled="@IsProcessing"
+               Hidden="false"
+               Class="mud-width-full">
+    <ActivatorContent>
+        <MudPaper Height="@Height" 
+                  Outlined="true" 
+                  Class="@GetUploadAreaClass()"
+                  @ondragenter="@SetDragClass"
+                  @ondragleave="@ClearDragClass">
+            @if (IsProcessing)
+            {
+                <div class="d-flex flex-column align-center justify-center mud-width-full mud-height-full">
+                    <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true"/>
+                    <MudText Typo="Typo.h6" Class="mt-3">@ProcessingText</MudText>
+                    @if (!string.IsNullOrEmpty(CurrentFileName))
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                            当前: @CurrentFileName
+                        </MudText>
+                    }
+                    @if (ShowProgress && TotalCount > 0)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                            进度: @ProcessedCount / @TotalCount
+                        </MudText>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="d-flex flex-column align-center justify-center mud-width-full mud-height-full">
+                    <MudIcon Icon="@UploadIcon" Style="font-size: 3rem;" Color="Color.Primary"/>
+                    <MudText Typo="Typo.h6" Class="mt-2">@Title</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        @Description
+                    </MudText>
+                    @if (!string.IsNullOrEmpty(SupportedFormats))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                            @SupportedFormats
+                        </MudText>
+                    }
+                </div>
+            }
+        </MudPaper>
+    </ActivatorContent>
+</MudFileUpload>
+
+@code {
+    [Parameter] public string AcceptedTypes { get; set; } = "*";
+    [Parameter] public int MaxFileCount { get; set; } = 1;
+    [Parameter] public bool IsProcessing { get; set; } = false;
+    [Parameter] public string Height { get; set; } = "200px";
+    [Parameter] public string ProcessingText { get; set; } = "正在处理文件...";
+    [Parameter] public string CurrentFileName { get; set; } = string.Empty;
+    [Parameter] public bool ShowProgress { get; set; } = false;
+    [Parameter] public int ProcessedCount { get; set; } = 0;
+    [Parameter] public int TotalCount { get; set; } = 0;
+    [Parameter] public string UploadIcon { get; set; } = Icons.Material.Filled.CloudUpload;
+    [Parameter] public string Title { get; set; } = "上传文件";
+    [Parameter] public string Description { get; set; } = "拖放文件到此处，或点击选择文件";
+    [Parameter] public string SupportedFormats { get; set; } = string.Empty;
+    [Parameter] public EventCallback<IBrowserFile> FilesChanged { get; set; }
+
+    private MudFileUpload<IBrowserFile> fileUpload = null!;
+    private bool isDragOver = false;
+
+    private async Task OnFilesChanged(IBrowserFile file)
+    {
+        await FilesChanged.InvokeAsync(file);
+    }
+
+    private void SetDragClass()
+    {
+        isDragOver = true;
+        StateHasChanged();
+    }
+
+    private void ClearDragClass()
+    {
+        isDragOver = false;
+        StateHasChanged();
+    }
+
+    private string GetUploadAreaClass()
+    {
+        var baseClass = "mud-width-full cursor-pointer file-upload-area";
+        return isDragOver ? $"{baseClass} drag-over" : baseClass;
+    }
+
+    public async Task ClearAsync()
+    {
+        await fileUpload.ClearAsync();
+    }
+}
+
+<style>
+    .file-upload-area {
+        border: 2px dashed #E0E0E0;
+        border-radius: 8px;
+        transition: all 0.2s ease-in-out;
+    }
+
+    .file-upload-area:hover,
+    .file-upload-area.drag-over {
+        border-color: #1976D2;
+        background-color: #F3F7FF;
+    }
+</style> 
