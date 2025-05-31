@@ -38,6 +38,9 @@
                                 Title="上传表格文件"
                                 Description="拖放文件到此处，或点击选择文件"
                                 SupportedFormats="支持 Excel (.xlsx, .xls) 和 CSV 文件"
+                                MaxFileSizeMB="20"
+                                AllowedExtensions="@GetTableFileExtensions()"
+                                AllowedMimeTypes="@GetTableFileMimeTypes()"
                                 FilesChanged="OnFileSelected" />
 
                 @if (selectedFile != null && !isProcessing)
@@ -414,6 +417,15 @@
         StateHasChanged();
     }
 
+    private List<string> GetTableFileExtensions()
+    {
+        return FileUploadArea.FileTypePresets.SpreadsheetExtensions;
+    }
+
+    private List<string> GetTableFileMimeTypes()
+    {
+        return FileUploadArea.FileTypePresets.SpreadsheetMimeTypes;
+    }
 
 }
 

@@ -1,5 +1,6 @@
 @using ContentEngine.Core.DataPipeline.Models
 @using ContentEngine.Core.DataPipeline.Services
+@using ContentEngine.WebApp.Components.Shared
 @using Microsoft.AspNetCore.Components.Forms
 @inject IFileConversionService FileConversionService
 @inject ISnackbar Snackbar
@@ -34,52 +35,21 @@
     
     <MudTabPanel Text="文件" Icon="Icons.Material.Filled.UploadFile">
         <div class="pa-4">
-            <div class="@GetDragClass()"
-                 @ondragenter="@SetDragClass"
-                 @ondragleave="@ClearDragClass"
-                 @ondragend="@ClearDragClass">
-                <MudFileUpload T="IReadOnlyList<IBrowserFile>"
-                               @ref="fileUpload"
-                               FilesChanged="OnFilesChanged"
-                               Hidden="false"
-                               Class="mud-width-full mud-height-full"
-                               Accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.html,.htm,.json,.xml,.csv,.rtf"
-                               MaximumFileCount="10"
-                               Disabled="isProcessingFiles">
-                    <ButtonTemplate>
-                        <MudPaper Height="200px"
-                                  Outlined="true"
-                                  Class="mud-width-full cursor-pointer">
-                            @if (isProcessingFiles)
-                            {
-                                <div class="d-flex flex-column align-center justify-center mud-width-full mud-height-full">
-                                    <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true"/>
-                                    <MudText Typo="Typo.h6" Class="mt-3">正在处理文件...</MudText>
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
-                                        当前: @currentProcessingFileName
-                                    </MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
-                                        进度: @processedFileCount / @totalFileCount
-                                    </MudText>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="d-flex flex-column align-center justify-center mud-width-full mud-height-full">
-                                    <MudIcon Icon="Icons.Material.Filled.CloudUpload" Style="font-size: 3rem;"/>
-                                    <MudText Typo="Typo.h6" Class="mt-2">上传文件</MudText>
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                        拖放文件到此处，或点击选择文件
-                                    </MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
-                                        支持 PDF, Word, Excel, PowerPoint, 文本文件等
-                                    </MudText>
-                                </div>
-                            }
-                        </MudPaper>
-                    </ButtonTemplate>
-                </MudFileUpload>
-            </div>
+            <FileUploadArea @ref="fileUploadArea"
+                            AcceptedTypes=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.html,.htm,.json,.xml,.csv,.rtf"
+                            MaxFileCount="10"
+                            IsProcessing="isProcessingFiles"
+                            ProcessingText="正在处理文件..."
+                            CurrentFileName="@currentProcessingFileName"
+                            ShowProgress="true"
+                            ProcessedCount="processedFileCount"
+                            TotalCount="totalFileCount"
+                            Title="上传文件"
+                            Description="拖放文件到此处，或点击选择文件"
+                            SupportedFormats="支持 PDF, Word, Excel, PowerPoint, 文本文件等"
+                            MaxFileSizeMB="50"
+                            AllowedExtensions="@GetAllowedExtensions()"
+                            FilesChanged="OnSingleFileChanged" />
         </div>
     </MudTabPanel>
 
@@ -185,13 +155,11 @@
 @code {
     // 移除 OnComplete 参数，改为通过 GetSelectionResult() 方法获取结果
 
-    private MudFileUpload<IReadOnlyList<IBrowserFile>> fileUpload = null!;
+    private FileUploadArea fileUploadArea = null!;
     private List<DataSource> dataSources = new();
     private ExtractionMode extractionMode = ExtractionMode.OneToOne;
     private string urlInput = string.Empty;
     private string textInput = string.Empty;
-    private string dragClass = string.Empty;
-    private readonly string defaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full z-10";
     
     // 预览对话框相关
     private DialogOptions dialogOptions = new() { MaxWidth = MaxWidth.Large, FullWidth = true };
@@ -203,60 +171,59 @@
     private int processedFileCount = 0;
     private int totalFileCount = 0;
 
-    private async Task OnFilesChanged(IReadOnlyList<IBrowserFile>? files)
+    private async Task OnSingleFileChanged(IBrowserFile file)
     {
-        ClearDragClass();
-        
-        if (files == null || !files.Any())
-            return;
-        
-        // 开始处理文件
         isProcessingFiles = true;
-        totalFileCount = files.Count;
+        currentProcessingFileName = file.Name;
+        totalFileCount = 1;
         processedFileCount = 0;
         StateHasChanged();
         
-        foreach (var file in files)
+        try
         {
-            try
+            if (!FileConversionService.IsFileSupported(file.Name, file.ContentType))
             {
-                currentProcessingFileName = file.Name;
-                StateHasChanged();
-                
-                if (!FileConversionService.IsFileSupported(file.Name, file.ContentType))
-                {
-                    Snackbar.Add($"不支持的文件类型: {file.Name}", Severity.Warning);
-                    processedFileCount++;
-                    continue;
-                }
-
-                var content = await FileConversionService.ConvertFileToTextAsync(file);
-                
-                var dataSource = new DataSource
-                {
-                    Type = DataSourceType.File,
-                    Name = file.Name,
-                    Content = content,
-                    Size = file.Size,
-                    MimeType = file.ContentType
-                };
-
-                dataSources.Add(dataSource);
-                Snackbar.Add($"文件 {file.Name} 添加成功", Severity.Success);
-                processedFileCount++;
+                Snackbar.Add($"不支持的文件类型: {file.Name}", Severity.Warning);
+                return;
             }
-            catch (Exception ex)
+
+            var content = await FileConversionService.ConvertFileToTextAsync(file);
+            
+            var dataSource = new DataSource
             {
-                Snackbar.Add($"处理文件 {file.Name} 失败: {ex.Message}", Severity.Error);
-                processedFileCount++;
-            }
+                Type = DataSourceType.File,
+                Name = file.Name,
+                Content = content,
+                Size = file.Size,
+                MimeType = file.ContentType
+            };
+
+            dataSources.Add(dataSource);
+            Snackbar.Add($"文件 {file.Name} 添加成功", Severity.Success);
+            processedFileCount = 1;
         }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"处理文件 {file.Name} 失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            // 处理完成
+            isProcessingFiles = false;
+            currentProcessingFileName = string.Empty;
+            await fileUploadArea.ClearAsync();
+            StateHasChanged();
+        }
+    }
 
-        // 处理完成
-        isProcessingFiles = false;
-        currentProcessingFileName = string.Empty;
-        await fileUpload.ClearAsync();
-        StateHasChanged();
+    private List<string> GetAllowedExtensions()
+    {
+        var extensions = new List<string>();
+        extensions.AddRange(FileUploadArea.FileTypePresets.DocumentExtensions);
+        extensions.AddRange(FileUploadArea.FileTypePresets.SpreadsheetExtensions);
+        extensions.AddRange(FileUploadArea.FileTypePresets.PresentationExtensions);
+        extensions.AddRange(new[] { ".html", ".htm", ".json", ".xml" });
+        return extensions;
     }
 
     private async Task AddUrl()
@@ -329,16 +296,6 @@
         return (dataSources, extractionMode);
     }
 
-    private void SetDragClass()
-    {
-        dragClass = $"{defaultDragClass} mud-border-primary";
-    }
-
-    private void ClearDragClass()
-    {
-        dragClass = defaultDragClass;
-    }
-
     private RenderFragment GetSourceIcon(DataSourceType type) => type switch
     {
         DataSourceType.File => @<MudIcon Icon="Icons.Material.Filled.InsertDriveFile" Color="Color.Primary" />,
@@ -354,11 +311,6 @@
         DataSourceType.Text => $"{source.Content.Length} 字符",
         _ => "未知类型"
     };
-
-    private string GetDragClass()
-    {
-        return string.IsNullOrEmpty(dragClass) ? $"{defaultDragClass} mud-width-full" : $"{dragClass} mud-width-full";
-    }
 
     private async Task PreviewSource(DataSource source)
     {
