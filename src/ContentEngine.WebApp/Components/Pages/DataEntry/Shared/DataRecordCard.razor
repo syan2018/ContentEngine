@@ -1,0 +1,410 @@
+@using LiteDB
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+
+<MudCard Outlined="true" Class="@GetCardClass()">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                @if (!string.IsNullOrEmpty(Icon))
+                {
+                    <MudIcon Icon="@Icon" Color="@IconColor" Size="Size.Small" />
+                }
+                <MudText Typo="Typo.subtitle1">@Title</MudText>
+                @if (!string.IsNullOrEmpty(Subtitle))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@Subtitle</MudText>
+                }
+            </MudStack>
+        </CardHeaderContent>
+        <CardHeaderActions>
+            @if (ShowActions)
+            {
+                @if (IsEditable)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Save" 
+                                  Size="Size.Small"
+                                  Color="Color.Primary"
+                                  OnClick="SaveRecord"
+                                  Disabled="@IsSaving"
+                                  Title="保存" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Cancel" 
+                                  Size="Size.Small"
+                                  Color="Color.Secondary"
+                                  OnClick="CancelEdit"
+                                  Disabled="@IsSaving"
+                                  Title="取消" />
+                }
+                else
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                  Size="Size.Small"
+                                  OnClick="StartEdit"
+                                  Title="编辑" />
+                }
+                @if (ShowDeleteButton)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                  Size="Size.Small"
+                                  Color="Color.Error"
+                                  OnClick="DeleteRecord"
+                                  Title="删除" />
+                }
+            }
+        </CardHeaderActions>
+    </MudCardHeader>
+    <MudCardContent Class="pa-4">
+        @if (IsSaving)
+        {
+            <div class="d-flex align-center justify-center pa-4">
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <MudText Typo="Typo.body2">保存中...</MudText>
+            </div>
+        }
+        else
+        {
+            <MudGrid Spacing="3">
+                @foreach (var field in Schema.Fields)
+                {
+                    <MudItem xs="12" sm="@GetFieldColumnSpan(field)">
+                        @if (IsEditable)
+                        {
+                            @RenderEditableField(field)
+                        }
+                        else
+                        {
+                            @RenderReadOnlyField(field)
+                        }
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter] public SchemaDefinition Schema { get; set; } = null!;
+    [Parameter] public BsonDocument? Record { get; set; }
+    [Parameter] public Dictionary<string, object?>? FormData { get; set; }
+    [Parameter] public string Title { get; set; } = "数据记录";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public Color IconColor { get; set; } = Color.Primary;
+    [Parameter] public bool IsEditable { get; set; } = false;
+    [Parameter] public bool ShowActions { get; set; } = true;
+    [Parameter] public bool ShowDeleteButton { get; set; } = false;
+    [Parameter] public bool IsSaving { get; set; } = false;
+    [Parameter] public EventCallback<BsonDocument> OnSave { get; set; }
+    [Parameter] public EventCallback OnEdit { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    private Dictionary<string, object?> editFormData = new();
+    private bool isInternalEdit = false;
+
+    protected override void OnParametersSet()
+    {
+        if (IsEditable && FormData != null)
+        {
+            editFormData = new Dictionary<string, object?>(FormData);
+        }
+        else if (Record != null)
+        {
+            InitializeFromRecord();
+        }
+    }
+
+    private string GetCardClass()
+    {
+        return $"data-record-card {(IsEditable ? "editable" : "readonly")}";
+    }
+
+    private void InitializeFromRecord()
+    {
+        editFormData.Clear();
+        if (Record == null) return;
+
+        foreach (var field in Schema.Fields)
+        {
+            if (Record.TryGetValue(field.Name, out var value))
+            {
+                editFormData[field.Name] = ConvertBsonValue(value, field.Type);
+            }
+            else
+            {
+                editFormData[field.Name] = GetDefaultValue(field);
+            }
+        }
+    }
+
+    private object? ConvertBsonValue(BsonValue value, FieldType fieldType)
+    {
+        if (value.IsNull) return null;
+
+        return fieldType switch
+        {
+            FieldType.Text => value.AsString,
+            FieldType.Number => value.AsDouble,
+            FieldType.Boolean => value.AsBoolean,
+            FieldType.Date => value.AsDateTime,
+            FieldType.Reference => value.AsString,
+            _ => value.ToString()
+        };
+    }
+
+    private object? GetDefaultValue(FieldDefinition field)
+    {
+        return field.Type switch
+        {
+            FieldType.Text => string.Empty,
+            FieldType.Number => 0.0,
+            FieldType.Boolean => false,
+            FieldType.Date => DateTime.Today,
+            FieldType.Reference => string.Empty,
+            _ => null
+        };
+    }
+
+    private int GetFieldColumnSpan(FieldDefinition field)
+    {
+        return field.Type switch
+        {
+            FieldType.Text when field.Name.ToLower().Contains("description") || 
+                               field.Name.ToLower().Contains("comment") ||
+                               field.Name.ToLower().Contains("bio") => 12,
+            FieldType.Boolean => 6,
+            FieldType.Date => 6,
+            _ => 6
+        };
+    }
+
+    private RenderFragment RenderReadOnlyField(FieldDefinition field) => __builder =>
+    {
+        var value = GetDisplayValue(field.Name);
+        var isEmpty = string.IsNullOrWhiteSpace(value);
+
+        <MudTextField Value="@(isEmpty ? "" : value)"
+                     Label="@field.Name"
+                     Variant="Variant.Outlined"
+                     ReadOnly="true"
+                     HelperText="@(isEmpty ? "未填写" : field.Comment)"
+                     Class="mb-2" />
+    };
+
+    private RenderFragment RenderEditableField(FieldDefinition field) => __builder =>
+    {
+        switch (field.Type)
+        {
+            case FieldType.Text:
+                if (field.Name.ToLower().Contains("description") || 
+                    field.Name.ToLower().Contains("comment") ||
+                    field.Name.ToLower().Contains("bio"))
+                {
+                    <MudTextField T="string" 
+                                  Label="@field.Name" 
+                                  Value="@GetStringValue(field.Name)"
+                                  ValueChanged="@(value => SetValue(field.Name, value))"
+                                  Required="@field.IsRequired"
+                                  RequiredError="@($"{field.Name} 是必填项")"
+                                  Lines="3"
+                                  Variant="Variant.Outlined"
+                                  HelperText="@field.Comment"
+                                  Class="modern-input" />
+                }
+                else
+                {
+                    <MudTextField T="string" 
+                                  Label="@field.Name" 
+                                  Value="@GetStringValue(field.Name)"
+                                  ValueChanged="@(value => SetValue(field.Name, value))"
+                                  Required="@field.IsRequired"
+                                  RequiredError="@($"{field.Name} 是必填项")"
+                                  Variant="Variant.Outlined"
+                                  HelperText="@field.Comment"
+                                  Class="modern-input" />
+                }
+                break;
+
+            case FieldType.Number:
+                <MudNumericField T="double" 
+                                 Label="@field.Name" 
+                                 Value="@GetDoubleValue(field.Name)"
+                                 ValueChanged="@(value => SetValue(field.Name, value))"
+                                 Required="@field.IsRequired"
+                                 RequiredError="@($"{field.Name} 是必填项")"
+                                 Variant="Variant.Outlined"
+                                 HelperText="@field.Comment"
+                                 Class="modern-input" />
+                break;
+
+            case FieldType.Boolean:
+                <MudCheckBox T="bool" 
+                             Label="@field.Name" 
+                             Checked="@GetBoolValue(field.Name)"
+                             CheckedChanged="@((bool value) => SetValue(field.Name, value))"
+                             Color="Color.Primary" />
+                @if (!string.IsNullOrEmpty(field.Comment))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@field.Comment</MudText>
+                }
+                break;
+
+            case FieldType.Date:
+                <MudDatePicker Label="@field.Name" 
+                               Date="@GetDateValue(field.Name)"
+                               DateChanged="@(value => SetValue(field.Name, value))"
+                               Required="@field.IsRequired"
+                               RequiredError="@($"{field.Name} 是必填项")"
+                               Variant="Variant.Outlined"
+                               HelperText="@field.Comment"
+                               Class="modern-input" />
+                break;
+
+            case FieldType.Reference:
+                <MudTextField T="string" 
+                              Label="@($"{field.Name} (引用ID)")" 
+                              Value="@GetStringValue(field.Name)"
+                              ValueChanged="@(value => SetValue(field.Name, value))"
+                              Required="@field.IsRequired"
+                              RequiredError="@($"{field.Name} 是必填项")"
+                              Variant="Variant.Outlined"
+                              HelperText="@($"引用 {field.ReferenceSchemaName} 的ID。{field.Comment}")"
+                              Class="modern-input" />
+                break;
+        }
+    };
+
+    private string GetDisplayValue(string fieldName)
+    {
+        if (Record?.TryGetValue(fieldName, out var value) == true)
+        {
+            if (value.IsNull) return string.Empty;
+            
+            var field = Schema.Fields.FirstOrDefault(f => f.Name == fieldName);
+            if (field?.Type == FieldType.Date && value.IsDateTime)
+            {
+                return value.AsDateTime.ToString("yyyy-MM-dd");
+            }
+            
+            return value.ToString() ?? string.Empty;
+        }
+        return string.Empty;
+    }
+
+    private string GetStringValue(string fieldName)
+    {
+        return editFormData.TryGetValue(fieldName, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
+    }
+
+    private double GetDoubleValue(string fieldName)
+    {
+        if (editFormData.TryGetValue(fieldName, out var value))
+        {
+            if (value is double d) return d;
+            if (double.TryParse(value?.ToString(), out var parsed)) return parsed;
+        }
+        return 0.0;
+    }
+
+    private bool GetBoolValue(string fieldName)
+    {
+        if (editFormData.TryGetValue(fieldName, out var value))
+        {
+            if (value is bool b) return b;
+            if (bool.TryParse(value?.ToString(), out var parsed)) return parsed;
+        }
+        return false;
+    }
+
+    private DateTime? GetDateValue(string fieldName)
+    {
+        if (editFormData.TryGetValue(fieldName, out var value))
+        {
+            if (value is DateTime dt) return dt;
+            if (DateTime.TryParse(value?.ToString(), out var parsed)) return parsed;
+        }
+        return DateTime.Today;
+    }
+
+    private void SetValue(string fieldName, object? value)
+    {
+        editFormData[fieldName] = value;
+        StateHasChanged();
+    }
+
+    private async Task StartEdit()
+    {
+        isInternalEdit = true;
+        InitializeFromRecord();
+        await OnEdit.InvokeAsync();
+    }
+
+    private async Task SaveRecord()
+    {
+        try
+        {
+            // 转换为 BsonDocument
+            var bsonDoc = new BsonDocument();
+            foreach (var kvp in editFormData)
+            {
+                if (kvp.Value != null)
+                {
+                    bsonDoc[kvp.Key] = new BsonValue(kvp.Value);
+                }
+            }
+
+            await OnSave.InvokeAsync(bsonDoc);
+        }
+        catch (Exception)
+        {
+            // 错误处理由父组件负责
+        }
+    }
+
+    private async Task CancelEdit()
+    {
+        isInternalEdit = false;
+        InitializeFromRecord();
+        await OnCancel.InvokeAsync();
+    }
+
+    private async Task DeleteRecord()
+    {
+        await OnDelete.InvokeAsync();
+    }
+}
+
+<style>
+    .data-record-card {
+        border-radius: 12px;
+        transition: all 0.2s ease-in-out;
+        margin-bottom: 16px;
+    }
+
+    .data-record-card.editable {
+        border-color: #1976D2;
+        box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
+    }
+
+    .data-record-card.readonly:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+
+
+    .modern-input {
+        margin-bottom: 8px;
+    }
+
+    .modern-input .mud-input-root {
+        border-radius: 8px;
+    }
+
+    .modern-input .mud-input-root:hover {
+        border-color: #1976D2;
+    }
+
+    .modern-input .mud-input-root.mud-input-root-focused {
+        border-color: #1976D2;
+        box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+    }
+</style> 

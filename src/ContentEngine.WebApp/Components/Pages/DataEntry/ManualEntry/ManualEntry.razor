@@ -1,0 +1,131 @@
+@page "/data-entry/manual/{SchemaId:int}"
+@inject ISchemaDefinitionService SchemaService
+@inject IDataEntryService DataEntryService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>手动录入 - @(schema?.Name ?? "加载中...") - ContentEngine</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
+    <MudStack Spacing="6">
+        <!-- 面包屑导航 -->
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" 
+                      OnClick="@(() => Navigation.NavigateTo("/data-entry"))" Class="back-button">
+                返回
+            </MudButton>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">信息注入 / 手动录入</MudText>
+        </div>
+
+        @if (isLoading)
+        {
+            <MudPaper Class="pa-8 text-center" Elevation="0">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                <MudText Class="mt-2">正在加载数据结构...</MudText>
+            </MudPaper>
+        }
+        else if (schema == null)
+        {
+            <MudPaper Class="pa-8 text-center" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" Class="mb-4" />
+                <MudText Typo="Typo.h5" GutterBottom="true">未找到数据结构</MudText>
+                <MudText Class="mud-text-secondary">未找到ID为 @SchemaId 的数据结构。</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <!-- 页面标题 -->
+            <div>
+                <MudText Typo="Typo.h4" GutterBottom="true" Class="page-title">@schema.Name</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">@schema.Description</MudText>
+            </div>
+
+            <!-- 录入模式选择 -->
+            <MudTabs Elevation="0" Rounded="false" Class="modern-tabs" @bind-ActivePanelIndex="activeTabIndex">
+                <MudTabPanel Text="单个录入" Icon="@Icons.Material.Filled.Edit">
+                    <div class="mt-4">
+                        <ManualSingleEntryForm Schema="@schema" OnDataSaved="HandleDataSaved" />
+                    </div>
+                </MudTabPanel>
+                <MudTabPanel Text="表格录入" Icon="@Icons.Material.Filled.TableChart">
+                    <div class="mt-4">
+                        <ManualTableEntry Schema="@schema" OnDataSaved="HandleDataSaved" />
+                    </div>
+                </MudTabPanel>
+            </MudTabs>
+        }
+    </MudStack>
+</MudContainer>
+
+@code {
+    [Parameter] public int SchemaId { get; set; }
+
+    private SchemaDefinition? schema;
+    private bool isLoading = true;
+    private int activeTabIndex = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSchema();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (schema?.Id != SchemaId)
+        {
+            await LoadSchema();
+        }
+    }
+
+    private async Task LoadSchema()
+    {
+        isLoading = true;
+        try
+        {
+            schema = await SchemaService.GetSchemaByIdAsync(SchemaId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"加载数据结构失败: {ex.Message}", Severity.Error);
+            schema = null;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void HandleDataSaved()
+    {
+        Snackbar.Add("数据保存成功！", Severity.Success);
+    }
+}
+
+<style>
+    .page-title {
+        font-weight: 600;
+    }
+
+    .back-button {
+        color: #424242;
+        text-transform: none;
+    }
+
+    .back-button:hover {
+        background-color: #F5F5F5;
+    }
+
+    .modern-tabs .mud-tabs-toolbar {
+        border-bottom: 1px solid #E0E0E0;
+    }
+
+    .modern-tabs .mud-tab {
+        text-transform: none;
+        font-weight: 500;
+    }
+
+    .modern-tabs .mud-tab.mud-tab-active {
+        color: #1976D2;
+        border-bottom-color: #1976D2;
+    }
+</style> 

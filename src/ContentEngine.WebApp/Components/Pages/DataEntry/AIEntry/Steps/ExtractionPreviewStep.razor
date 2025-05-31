@@ -1,6 +1,8 @@
 @using ContentEngine.Core.DataPipeline.Models
 @using ContentEngine.Core.AI.Services
 @using LiteDB
+@using ContentEngine.WebApp.Components.Shared
+@using ContentEngine.WebApp.Components.Pages.DataEntry.Shared
 @inject IDataStructuringService DataStructuringService
 @inject ISnackbar Snackbar
 
@@ -117,32 +119,16 @@ else if (extractionResults.Any())
                             
                             @foreach (var (record, index) in result.Records.Select((r, i) => (r, i)))
                             {
-                                <MudCard Outlined="true" Class="mb-3">
-                                    <MudCardHeader>
-                                        <CardHeaderContent>
-                                            <MudText Typo="Typo.subtitle1">记录 @(index + 1)</MudText>
-                                        </CardHeaderContent>
-                                        <CardHeaderActions>
-                                            <MudIconButton Icon="Icons.Material.Filled.Edit" 
-                                                          Size="Size.Small"
-                                                          OnClick="() => EditRecord(result.SourceId, index)" />
-                                        </CardHeaderActions>
-                                    </MudCardHeader>
-                                    <MudCardContent>
-                                        <MudGrid>
-                                            @foreach (var field in Schema.Fields)
-                                            {
-                                                <MudItem xs="12" sm="6" md="4">
-                                                    <MudTextField Value="@GetFieldValue(record, field.Name)"
-                                                                 Label="@field.Name"
-                                                                 Variant="Variant.Outlined"
-                                                                 ReadOnly="true"
-                                                                 Class="mb-2" />
-                                                </MudItem>
-                                            }
-                                        </MudGrid>
-                                    </MudCardContent>
-                                </MudCard>
+                                <DataRecordCard Schema="@Schema"
+                                               Record="@record"
+                                               Title="@($"记录 {index + 1}")"
+                                               Subtitle="@($"来源: {GetSourceName(result.SourceId)}")"
+                                               Icon="@Icons.Material.Filled.DataObject"
+                                               IconColor="Color.Primary"
+                                               IsEditable="false"
+                                               ShowActions="true"
+                                               ShowDeleteButton="false"
+                                               OnEdit="@(() => EditRecord(result.SourceId, index))" />
                             }
                         }
                         else
@@ -324,13 +310,10 @@ else if (extractionResults.Any())
         _ => Icons.Material.Filled.HourglassEmpty
     };
 
-    private string GetFieldValue(BsonDocument record, string fieldName)
+    private string GetSourceName(string sourceId)
     {
-        if (record.TryGetValue(fieldName, out var value))
-        {
-            return value?.ToString() ?? "";
-        }
-        return "";
+        var source = DataSources.FirstOrDefault(s => s.Id == sourceId);
+        return source?.Name ?? "未知数据源";
     }
 
     private async Task CopyToClipboard(string? text)
