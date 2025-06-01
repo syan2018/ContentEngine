@@ -11,34 +11,49 @@
 
 <PageTitle>AI 辅助录入 - ContentEngine</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    <!-- 统一的面包屑导航 -->
-    <PageBreadcrumb Page="PageBreadcrumb.PageType.DataEntryAI" 
-                   SchemaName="@schema?.Name" 
-                   SchemaId="@SchemaId" />
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
+    <MudStack Spacing="6">
+        <!-- 统一的面包屑导航 -->
+        <PageBreadcrumb Page="PageBreadcrumb.PageType.DataEntryAI" 
+                       SchemaName="@schema?.Name" 
+                       SchemaId="@SchemaId" />
 
-    @if (schema != null)
-    {
-        <div class="mb-6">
-            <MudText Typo="Typo.h3" Class="mb-2">@schema.Name</MudText>
-            <MudText Typo="Typo.body1" Color="Color.Secondary">@schema.Description</MudText>
-        </div>
+        @if (isLoading)
+        {
+            <MudPaper Class="pa-8 text-center" Elevation="0">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                <MudText Class="mt-2">正在加载数据结构...</MudText>
+            </MudPaper>
+        }
+        else if (schema == null)
+        {
+            <MudPaper Class="pa-8 text-center" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" Class="mb-4" />
+                <MudText Typo="Typo.h5" GutterBottom="true">未找到数据结构</MudText>
+                <MudText Class="mud-text-secondary">未找到指定的数据结构定义。</MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <!-- 页面标题 -->
+            <div>
+                <MudText Typo="Typo.h4" GutterBottom="true" Class="page-title">@schema.Name</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">@schema.Description</MudText>
+            </div>
 
-        <AIDataEntryWizard Schema="schema" />
-    }
-    else if (isLoading)
-    {
-        <div class="d-flex justify-center align-center" style="height: 200px;">
-            <MudProgressCircular Indeterminate="true" />
-        </div>
-    }
-    else
-    {
-        <MudAlert Severity="Severity.Error">
-            未找到指定的数据结构定义。
-        </MudAlert>
-    }
+            <!-- AI 辅助录入向导 -->
+            <div>
+                <AIDataEntryWizard Schema="schema" />
+            </div>
+        }
+    </MudStack>
 </MudContainer>
+
+<style>
+    .page-title {
+        font-weight: 600;
+    }
+</style>
 
 @code {
     [Parameter] public string SchemaId { get; set; } = string.Empty;
@@ -48,6 +63,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadSchema();
+    }
+
+    private async Task LoadSchema()
+    {
+        isLoading = true;
         try
         {
             if (!string.IsNullOrEmpty(SchemaId) && int.TryParse(SchemaId, out var id))
@@ -58,6 +79,7 @@
         catch (Exception ex)
         {
             Snackbar.Add($"加载数据结构失败: {ex.Message}", Severity.Error);
+            schema = null;
         }
         finally
         {

@@ -7,7 +7,7 @@
 
 <PageTitle>手动录入 - @(schema?.Name ?? "加载中...") - ContentEngine</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
     <MudStack Spacing="6">
         <!-- 统一的面包屑导航 -->
         <PageBreadcrumb Page="PageBreadcrumb.PageType.DataEntryManual" 
@@ -38,23 +38,25 @@
             </div>
 
             <!-- 录入模式选择 -->
-            <MudTabs Elevation="0" Rounded="false" Class="modern-tabs" @bind-ActivePanelIndex="activeTabIndex">
-                <MudTabPanel Text="表格导入" Icon="@Icons.Material.Filled.Upload">
-                    <div class="mt-4">
-                        <TableImportEntry Schema="@schema" OnDataSaved="HandleDataSaved" />
-                    </div>
-                </MudTabPanel>
-                <MudTabPanel Text="单条录入" Icon="@Icons.Material.Filled.Edit">
-                    <div class="mt-4">
-                        <ManualSingleEntryForm Schema="@schema" OnDataSaved="HandleDataSaved"/>
-                    </div>
-                </MudTabPanel>
-                <MudTabPanel Text="批量录入" Icon="@Icons.Material.Filled.TableChart">
-                    <div class="mt-4">
-                        <ManualTableEntry Schema="@schema" OnDataSaved="HandleDataSaved"/>
-                    </div>
-                </MudTabPanel>
-            </MudTabs>
+            <div>
+                <MudTabs Elevation="0" Rounded="false" Class="modern-tabs" @bind-ActivePanelIndex="activeTabIndex">
+                    <MudTabPanel Text="表格导入" Icon="@Icons.Material.Filled.Upload">
+                        <div class="mt-4">
+                            <TableImportEntry Schema="@schema" OnDataSaved="HandleDataSaved" />
+                        </div>
+                    </MudTabPanel>
+                    <MudTabPanel Text="单条录入" Icon="@Icons.Material.Filled.Edit">
+                        <div class="mt-4">
+                            <ManualSingleEntryForm Schema="@schema" OnDataSaved="HandleDataSaved"/>
+                        </div>
+                    </MudTabPanel>
+                    <MudTabPanel Text="批量录入" Icon="@Icons.Material.Filled.TableChart">
+                        <div class="mt-4">
+                            <ManualTableEntry Schema="@schema" OnDataSaved="HandleDataSaved"/>
+                        </div>
+                    </MudTabPanel>
+                </MudTabs>
+            </div>
         }
     </MudStack>
 </MudContainer>

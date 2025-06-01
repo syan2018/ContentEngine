@@ -1,8 +1,11 @@
 @using ContentEngine.Core.DataPipeline.Models
 @using ContentEngine.Core.Utils
 @using LiteDB
+@using ContentEngine.WebApp.Components.Shared
 @using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
 
+
+<!-- 记录详情视图，该组件当前似乎未使用 -->
 <MudTabs Elevation="0" Rounded="false" Class="record-detail-tabs">
     <MudTabPanel Text="基本信息" Icon="@Icons.Material.Filled.Info">
         <MudPaper Class="pa-4 mt-4" Elevation="1">
@@ -13,12 +16,10 @@
                     @foreach (var field in Schema.Fields)
                     {
                         <MudItem xs="12" sm="6" md="4">
-                            <MudStack Spacing="1">
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">@field.Name</MudText>
-                                <div>
-                                    @GetFormattedFieldValue(field)
-                                </div>
-                            </MudStack>
+                            <FieldValueRenderer Field="@field" 
+                                              Record="@Record" 
+                                              ShowLabel="true" 
+                                              IsCompact="false" />
                         </MudItem>
                     }
                 }
@@ -81,70 +82,6 @@
     [Parameter] public BsonDocument? Record { get; set; }
     [Parameter] public SchemaDefinition? Schema { get; set; }
 
-    private RenderFragment GetFormattedFieldValue(FieldDefinition field)
-    {
-        if (Record == null) return builder => { };
-
-        var value = BsonFormUtils.GetDisplayValue(Record, field.Name);
-        
-        return field.Type switch
-        {
-            FieldType.Boolean => builder =>
-            {
-                var boolValue = bool.TryParse(value, out var b) && b;
-                builder.OpenComponent<MudChip<string>>(0);
-                builder.AddAttribute(1, "Text", boolValue ? "是" : "否");
-                builder.AddAttribute(2, "Color", boolValue ? Color.Success : Color.Default);
-                builder.AddAttribute(3, "Size", Size.Small);
-                builder.AddAttribute(4, "Variant", Variant.Filled);
-                builder.CloseComponent();
-            },
-            FieldType.Date => builder =>
-            {
-                if (DateTime.TryParse(value, out var date))
-                {
-                    builder.OpenComponent<MudText>(0);
-                    builder.AddAttribute(1, "Typo", Typo.body1);
-                    builder.AddAttribute(2, "ChildContent", (RenderFragment)(b => b.AddContent(0, date.ToString("yyyy-MM-dd HH:mm"))));
-                    builder.CloseComponent();
-                }
-                else
-                {
-                    builder.OpenComponent<MudText>(0);
-                    builder.AddAttribute(1, "Typo", Typo.body1);
-                    builder.AddAttribute(2, "ChildContent", (RenderFragment)(b => b.AddContent(0, value)));
-                    builder.CloseComponent();
-                }
-            },
-            FieldType.Number => builder =>
-            {
-                builder.OpenComponent<MudText>(0);
-                builder.AddAttribute(1, "Typo", Typo.body1);
-                builder.AddAttribute(2, "Class", "font-weight-medium");
-                builder.AddAttribute(3, "ChildContent", (RenderFragment)(b => b.AddContent(0, value)));
-                builder.CloseComponent();
-            },
-            _ => builder =>
-            {
-                if (string.IsNullOrEmpty(value))
-                {
-                    builder.OpenComponent<MudText>(0);
-                    builder.AddAttribute(1, "Typo", Typo.body2);
-                    builder.AddAttribute(2, "Color", Color.Secondary);
-                    builder.AddAttribute(3, "ChildContent", (RenderFragment)(b => b.AddContent(0, "未设置")));
-                    builder.CloseComponent();
-                }
-                else
-                {
-                    builder.OpenComponent<MudText>(0);
-                    builder.AddAttribute(1, "Typo", Typo.body1);
-                    builder.AddAttribute(2, "ChildContent", (RenderFragment)(b => b.AddContent(0, value)));
-                    builder.CloseComponent();
-                }
-            }
-        };
-    }
-
     private string GetRecordId()
     {
         if (Record == null) return "未知";
@@ -190,9 +127,6 @@
 }
 
 <style>
-    .record-detail-tabs .mud-tabs-toolbar {
-        border-bottom: 1px solid var(--mud-palette-divider);
-    }
 
     .json-display .mud-input-control {
         font-family: 'Consolas', 'Monaco', 'Courier New', monospace;

@@ -9,67 +9,73 @@
 @inject ISchemaDefinitionService SchemaService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
-    <MudStack Spacing="4">
+    <MudStack Spacing="6">
         <!-- 统一的面包屑导航 -->
         <PageBreadcrumb Page="PageBreadcrumb.PageType.SchemaCreate" />
 
+        <!-- 页面标题 -->
         <div>
-            <MudText Typo="Typo.h3" GutterBottom="true" Class="page-main-title">创建数据结构</MudText>
-            <MudText Typo="Typo.subtitle1" Class="mud-text-secondary page-sub-title">定义新的数据结构 (Schema) 以组织和管理您的内容。</MudText>
+            <MudText Typo="Typo.h4" GutterBottom="true" Class="page-title">创建数据结构</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">定义新的数据结构 (Schema) 以组织和管理您的内容。</MudText>
         </div>
 
-        <MudForm @ref="_pageForm" Model="@_schemaMeta" OnValidSubmit="() => {}">
-            <MudGrid Spacing="3" Class="mb-4">
-                <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="_schemaMeta.Name" Label="数据结构名称 (Schema Name)" Required="true" For="@(() => _schemaMeta.Name)" HelperText="为您的数据结构命名，例如：Product, Article, GameCharacter" Variant="Variant.Outlined" />
-                </MudItem>
-                <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="_schemaMeta.Description" Label="描述 (Description)" Lines="1" For="@(() => _schemaMeta.Description)" HelperText="(可选) 简要描述其用途" Variant="Variant.Outlined" />
-                </MudItem>
-            </MudGrid>
-        </MudForm>
+        <!-- 基本信息表单 -->
+        <div>
+            <MudForm @ref="_pageForm" Model="@_schemaMeta" OnValidSubmit="() => {}">
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_schemaMeta.Name" Label="数据结构名称 (Schema Name)" Required="true" For="@(() => _schemaMeta.Name)" HelperText="为您的数据结构命名，例如：Product, Article, GameCharacter" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="_schemaMeta.Description" Label="描述 (Description)" Lines="1" For="@(() => _schemaMeta.Description)" HelperText="(可选) 简要描述其用途" Variant="Variant.Outlined" />
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        </div>
 
-        <MudTabs Elevation="2" Centered="true" Rounded="true" PanelClass="pa-0" Justify="Justify.Center" @bind-ActivePanelIndex="_activeTabIndex">
-            <MudTabPanel Text="AI 辅助" Class="pa-4">
-                <AiAssistedSchemaCreationForm @ref="_aiFormInstance" OnValidSchemaSubmit="HandleFieldsSubmit" OnCancelClicked="NavigateBackToList" />
-            </MudTabPanel>
-            <MudTabPanel Text="手动创建" Class="pa-4">
-                <ManualSchemaCreationForm @ref="_manualFormInstance" OnValidSchemaSubmit="HandleFieldsSubmit" OnCancelClicked="NavigateBackToList" />
-            </MudTabPanel>
-        </MudTabs>
+        <!-- 创建方式选择 -->
+        <div>
+            <MudTabs Elevation="2" Centered="true" Rounded="true" PanelClass="pa-0" Justify="Justify.Center" @bind-ActivePanelIndex="_activeTabIndex">
+                <MudTabPanel Text="AI 辅助" Class="pa-4">
+                    <AiAssistedSchemaCreationForm @ref="_aiFormInstance" OnValidSchemaSubmit="HandleFieldsSubmit" OnCancelClicked="NavigateBackToList" />
+                </MudTabPanel>
+                <MudTabPanel Text="手动创建" Class="pa-4">
+                    <ManualSchemaCreationForm @ref="_manualFormInstance" OnValidSchemaSubmit="HandleFieldsSubmit" OnCancelClicked="NavigateBackToList" />
+                </MudTabPanel>
+            </MudTabs>
+        </div>
 
-        <MudPaper Elevation="0" Class="mt-6 pa-4" Style="border-top: 1px solid;">
-            <MudGrid>
-                <MudItem xs="6" class="d-flex justify-start">
-                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="NavigateBackToList" Disabled="@_isSaving" Size="Size.Large">
-                        取消创建
-                    </MudButton>
-                </MudItem>
-                <MudItem xs="6" class="d-flex justify-end">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="TriggerActiveFormSubmit" Disabled="@_isSaving" Size="Size.Large">
-                        @if (_isSaving)
-                        {
-                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
-                            <span>正在保存...</span>
-                        }
-                        else
-                        {
-                            <span>保存数据结构</span>
-                        }
-                    </MudButton>
-                </MudItem>
-            </MudGrid>
-        </MudPaper>
-
+        <!-- 操作按钮 -->
+        <div>
+            <MudPaper Elevation="0" Class="pa-4" Style="border-top: 1px solid var(--mud-palette-divider);">
+                <MudGrid>
+                    <MudItem xs="6" class="d-flex justify-start">
+                        <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="NavigateBackToList" Disabled="@_isSaving" Size="Size.Large">
+                            取消创建
+                        </MudButton>
+                    </MudItem>
+                    <MudItem xs="6" class="d-flex justify-end">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="TriggerActiveFormSubmit" Disabled="@_isSaving" Size="Size.Large">
+                            @if (_isSaving)
+                            {
+                                <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
+                                <span>正在保存...</span>
+                            }
+                            else
+                            {
+                                <span>保存数据结构</span>
+                            }
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </div>
     </MudStack>
 </MudContainer>
 
 <style>
-    .page-main-title {
+    .page-title {
         font-weight: 600;
-    }
-    .page-sub-title {
-        margin-bottom: 24px;
     }
 </style>
 

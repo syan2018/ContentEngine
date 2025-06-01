@@ -135,7 +135,7 @@ else
                             <MudTd DataLabel="@field.Name">
                                 @if (_effectiveConfig.IsReadOnly)
                                 {
-                                    @GetFormattedValue(item, field)
+                                    <FieldValueRenderer Field="@field" Record="@item" ShowLabel="false" IsCompact="true" />
                                 }
                                 else if (_effectiveConfig.AllowInlineEdit && isEditing)
                                 {
@@ -144,7 +144,7 @@ else
                                 else if (_effectiveConfig.AllowInlineEdit && !isEditing)
                                 {
                                     <div class="inline-edit-cell" @onclick="() => StartInlineEdit(itemId)">
-                                        @GetFormattedValue(item, field)
+                                        <FieldValueRenderer Field="@field" Record="@item" ShowLabel="false" IsCompact="true" />
                                         <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="edit-hint" />
                                     </div>
                                 }
@@ -428,43 +428,7 @@ else
         StateHasChanged();
     }
 
-    private RenderFragment GetFormattedValue(BsonDocument document, FieldDefinition field)
-    {
-        var value = BsonFormUtils.GetDisplayValue(document, field.Name);
-        
-        return field.Type switch
-        {
-            FieldType.Boolean => builder =>
-            {
-                var boolValue = bool.TryParse(value, out var b) && b;
-                builder.OpenComponent<MudChip<string>>(0);
-                builder.AddAttribute(1, "Text", boolValue ? "是" : "否");
-                builder.AddAttribute(2, "Color", boolValue ? Color.Success : Color.Default);
-                builder.AddAttribute(3, "Size", Size.Small);
-                builder.AddAttribute(4, "Variant", Variant.Filled);
-                builder.CloseComponent();
-            },
-            FieldType.Date => builder =>
-            {
-                if (DateTime.TryParse(value, out var date))
-                {
-                    builder.AddContent(0, date.ToString("yyyy-MM-dd"));
-                }
-                else
-                {
-                    builder.AddContent(0, value);
-                }
-            },
-            FieldType.Number => builder =>
-            {
-                builder.OpenElement(0, "span");
-                builder.AddAttribute(1, "class", "font-weight-medium");
-                builder.AddContent(2, value);
-                builder.CloseElement();
-            },
-            _ => builder => builder.AddContent(0, value)
-        };
-    }
+
 
     private RenderFragment RenderInlineEditCell(BsonDocument rowData, FieldDefinition field) => __builder =>
     {

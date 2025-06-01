@@ -1,0 +1,209 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.Utils
+@using LiteDB
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+
+@GetFormattedFieldValue()
+
+@code {
+    [Parameter] public FieldDefinition Field { get; set; } = null!;
+    [Parameter] public BsonDocument? Record { get; set; }
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public bool ShowLabel { get; set; } = false;
+    [Parameter] public bool IsCompact { get; set; } = false;
+
+    private RenderFragment GetFormattedFieldValue()
+    {
+        var displayValue = Value ?? (Record != null ? BsonFormUtils.GetDisplayValue(Record, Field.Name) : string.Empty);
+        
+        return Field.Type switch
+        {
+            FieldType.Boolean => RenderBoolean(displayValue),
+            FieldType.Date => RenderDate(displayValue),
+            FieldType.Number => RenderNumber(displayValue),
+            _ => RenderText(displayValue)
+        };
+    }
+
+    private RenderFragment RenderBoolean(string value) => builder =>
+    {
+        var boolValue = bool.TryParse(value, out var b) && b;
+        
+        if (ShowLabel)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "field-container");
+            
+            builder.OpenComponent<MudText>(2);
+            builder.AddAttribute(3, "Typo", Typo.caption);
+            builder.AddAttribute(4, "Color", Color.Secondary);
+            builder.AddAttribute(5, "ChildContent", (RenderFragment)(b => b.AddContent(0, Field.Name)));
+            builder.CloseComponent();
+            
+            builder.OpenElement(6, "div");
+            builder.AddAttribute(7, "class", "boolean-value-container");
+            
+            builder.OpenComponent<MudIcon>(8);
+            builder.AddAttribute(9, "Icon", boolValue ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel);
+            builder.AddAttribute(10, "Color", boolValue ? Color.Success : Color.Secondary);
+            builder.AddAttribute(11, "Size", IsCompact ? Size.Small : Size.Medium);
+            builder.CloseComponent();
+            
+            builder.OpenComponent<MudText>(12);
+            builder.AddAttribute(13, "Typo", Typo.body2);
+            builder.AddAttribute(14, "Color", boolValue ? Color.Success : Color.Secondary);
+            builder.AddAttribute(15, "Class", "boolean-text");
+            builder.AddAttribute(16, "ChildContent", (RenderFragment)(b => b.AddContent(0, boolValue ? "是" : "否")));
+            builder.CloseComponent();
+            
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "boolean-value-container");
+            
+            builder.OpenComponent<MudIcon>(2);
+            builder.AddAttribute(3, "Icon", boolValue ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel);
+            builder.AddAttribute(4, "Color", boolValue ? Color.Success : Color.Secondary);
+            builder.AddAttribute(5, "Size", IsCompact ? Size.Small : Size.Medium);
+            builder.CloseComponent();
+            
+            builder.OpenComponent<MudText>(6);
+            builder.AddAttribute(7, "Typo", Typo.body2);
+            builder.AddAttribute(8, "Color", boolValue ? Color.Success : Color.Secondary);
+            builder.AddAttribute(9, "Class", "boolean-text");
+            builder.AddAttribute(10, "ChildContent", (RenderFragment)(b => b.AddContent(0, boolValue ? "是" : "否")));
+            builder.CloseComponent();
+            
+            builder.CloseElement();
+        }
+    };
+
+    private RenderFragment RenderDate(string value) => builder =>
+    {
+        var formattedDate = string.Empty;
+        if (DateTime.TryParse(value, out var date))
+        {
+            formattedDate = IsCompact ? date.ToString("yyyy-MM-dd") : date.ToString("yyyy-MM-dd HH:mm");
+        }
+        else
+        {
+            formattedDate = value;
+        }
+
+        if (ShowLabel)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "field-container");
+            
+            builder.OpenComponent<MudText>(2);
+            builder.AddAttribute(3, "Typo", Typo.caption);
+            builder.AddAttribute(4, "Color", Color.Secondary);
+            builder.AddAttribute(5, "ChildContent", (RenderFragment)(b => b.AddContent(0, Field.Name)));
+            builder.CloseComponent();
+            
+            builder.OpenComponent<MudText>(6);
+            builder.AddAttribute(7, "Typo", Typo.body1);
+            builder.AddAttribute(8, "ChildContent", (RenderFragment)(b => b.AddContent(0, formattedDate)));
+            builder.CloseComponent();
+            
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenComponent<MudText>(0);
+            builder.AddAttribute(1, "Typo", Typo.body1);
+            builder.AddAttribute(2, "ChildContent", (RenderFragment)(b => b.AddContent(0, formattedDate)));
+            builder.CloseComponent();
+        }
+    };
+
+    private RenderFragment RenderNumber(string value) => builder =>
+    {
+        if (ShowLabel)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "field-container");
+            
+            builder.OpenComponent<MudText>(2);
+            builder.AddAttribute(3, "Typo", Typo.caption);
+            builder.AddAttribute(4, "Color", Color.Secondary);
+            builder.AddAttribute(5, "ChildContent", (RenderFragment)(b => b.AddContent(0, Field.Name)));
+            builder.CloseComponent();
+            
+            builder.OpenComponent<MudText>(6);
+            builder.AddAttribute(7, "Typo", Typo.body1);
+            builder.AddAttribute(8, "Class", "font-weight-medium");
+            builder.AddAttribute(9, "ChildContent", (RenderFragment)(b => b.AddContent(0, value)));
+            builder.CloseComponent();
+            
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenComponent<MudText>(0);
+            builder.AddAttribute(1, "Typo", Typo.body1);
+            builder.AddAttribute(2, "Class", "font-weight-medium");
+            builder.AddAttribute(3, "ChildContent", (RenderFragment)(b => b.AddContent(0, value)));
+            builder.CloseComponent();
+        }
+    };
+
+    private RenderFragment RenderText(string value) => builder =>
+    {
+        var isEmpty = string.IsNullOrWhiteSpace(value);
+        var displayText = isEmpty ? "未设置" : value;
+        var textColor = isEmpty ? Color.Secondary : Color.Default;
+        var textType = isEmpty ? Typo.body2 : Typo.body1;
+
+        if (ShowLabel)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "field-container");
+            
+            builder.OpenComponent<MudText>(2);
+            builder.AddAttribute(3, "Typo", Typo.caption);
+            builder.AddAttribute(4, "Color", Color.Secondary);
+            builder.AddAttribute(5, "ChildContent", (RenderFragment)(b => b.AddContent(0, Field.Name)));
+            builder.CloseComponent();
+            
+            builder.OpenComponent<MudText>(6);
+            builder.AddAttribute(7, "Typo", textType);
+            builder.AddAttribute(8, "Color", textColor);
+            builder.AddAttribute(9, "ChildContent", (RenderFragment)(b => b.AddContent(0, displayText)));
+            builder.CloseComponent();
+            
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenComponent<MudText>(0);
+            builder.AddAttribute(1, "Typo", textType);
+            builder.AddAttribute(2, "Color", textColor);
+            builder.AddAttribute(3, "ChildContent", (RenderFragment)(b => b.AddContent(0, displayText)));
+            builder.CloseComponent();
+        }
+    };
+}
+
+<style>
+    .field-container {
+        margin-bottom: 8px;
+    }
+    
+    .field-container .mud-typography:first-child {
+        margin-bottom: 4px;
+    }
+    
+    .boolean-value-container {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    .boolean-text {
+        font-weight: 500;
+    }
+</style> 

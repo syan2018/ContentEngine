@@ -1,5 +1,4 @@
 @page "/data-explorer/{SchemaId}"
-@page "/data/{SchemaId}"
 
 @rendermode InteractiveServer
 @inject IDataEntryService DataService
@@ -21,21 +20,6 @@
                        SchemaName="@schemaDefinition?.Name" 
                        SchemaId="@SchemaId" />
 
-        <!-- 页面标题和导航 -->
-        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-            <MudStack Spacing="2">
-                <MudText Typo="Typo.h4" Class="font-weight-bold">
-                    @(schemaDefinition?.Name ?? "数据浏览")
-                </MudText>
-                @if (schemaDefinition != null && !string.IsNullOrEmpty(schemaDefinition.Description))
-                {
-                    <MudText Typo="Typo.body1" Color="Color.Secondary">
-                        @schemaDefinition.Description
-                    </MudText>
-                }
-            </MudStack>
-        </MudStack>
-
         @if (isLoading)
         {
             <MudPaper Class="pa-8 text-center" Elevation="0">
@@ -45,48 +29,67 @@
         }
         else if (!string.IsNullOrEmpty(errorMessage))
         {
-            <MudAlert Severity="Severity.Error" Class="mb-4">
-                @errorMessage
-            </MudAlert>
+            <MudPaper Class="pa-8 text-center" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" Class="mb-4" />
+                <MudText Typo="Typo.h5" GutterBottom="true">加载失败</MudText>
+                <MudText Class="mud-text-secondary">@errorMessage</MudText>
+            </MudPaper>
         }
         else if (schemaDefinition == null)
         {
-            <MudAlert Severity="Severity.Warning" Class="mb-4">
-                未找到数据结构 '@SchemaId'
-            </MudAlert>
+            <MudPaper Class="pa-8 text-center" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" Class="mb-4" />
+                <MudText Typo="Typo.h5" GutterBottom="true">未找到数据结构</MudText>
+                <MudText Class="mud-text-secondary">未找到数据结构 '@SchemaId'</MudText>
+            </MudPaper>
         }
         else
         {
+            <!-- 页面标题 -->
+            <div>
+                <MudText Typo="Typo.h4" GutterBottom="true" Class="page-title">
+                    @schemaDefinition.Name
+                </MudText>
+                @if (!string.IsNullOrEmpty(schemaDefinition.Description))
+                {
+                    <MudText Typo="Typo.body1" Color="Color.Secondary">
+                        @schemaDefinition.Description
+                    </MudText>
+                }
+            </div>
+
             <!-- 数据操作工具栏 -->
-            <MudTabs Elevation="0" Rounded="false">
-                <MudTabPanel Text="表格视图" Icon="@Icons.Material.Filled.TableChart">
-                    <div class="mt-4">
-                        <DataTableView Schema="@schemaDefinition"
-                                       DataEntries="@dataEntries"
-                                       OnViewRecord="ViewRecord"
-                                       OnEditRecord="NavigateToEditRecord"
-                                       OnDeleteRecord="DeleteEntryPrompt"
-                                       OnDataChanged="LoadSchemaAndData" />
-                    </div>
-                </MudTabPanel>
+            <div>
+                <MudTabs Elevation="0" Rounded="false">
+                    <MudTabPanel Text="表格视图" Icon="@Icons.Material.Filled.TableChart">
+                        <div class="mt-4">
+                            <DataTableView Schema="@schemaDefinition"
+                                           DataEntries="@dataEntries"
+                                           OnViewRecord="ViewRecord"
+                                           OnEditRecord="NavigateToEditRecord"
+                                           OnDeleteRecord="DeleteEntryPrompt"
+                                           OnDataChanged="LoadSchemaAndData" />
+                        </div>
+                    </MudTabPanel>
 
-                <MudTabPanel Text="数据可视化" Icon="@Icons.Material.Filled.BarChart">
-                    <div class="mt-4">
-                        <DataVisualizationPanel SchemaDefinition="@schemaDefinition" DataEntries="@dataEntries" />
-                    </div>
-                </MudTabPanel>
+                    <MudTabPanel Text="数据可视化" Icon="@Icons.Material.Filled.BarChart">
+                        <div class="mt-4">
+                            <DataVisualizationPanel SchemaDefinition="@schemaDefinition" DataEntries="@dataEntries" />
+                        </div>
+                    </MudTabPanel>
 
-                <MudTabPanel Text="自然语言查询" Icon="@Icons.Material.Filled.Psychology">
-                    <div class="mt-4">
-                        <NaturalLanguageQueryPanel SchemaDefinition="@schemaDefinition" OnQueryResult="HandleQueryResult" />
-                    </div>
-                </MudTabPanel>
-            </MudTabs>
+                    <MudTabPanel Text="自然语言查询" Icon="@Icons.Material.Filled.Psychology">
+                        <div class="mt-4">
+                            <NaturalLanguageQueryPanel SchemaDefinition="@schemaDefinition" OnQueryResult="HandleQueryResult" />
+                        </div>
+                    </MudTabPanel>
+                </MudTabs>
+            </div>
         }
     </MudStack>
 </MudContainer>
 
-<!-- 记录详情对话框 -->
+<!-- 记录详情对话框，当前似乎未激活 -->
 <MudDialog @bind-IsVisible="showRecordDetail" Options="recordDetailDialogOptions">
     <TitleContent>
         <div class="d-flex align-center">
@@ -110,6 +113,12 @@
         </MudButton>
     </DialogActions>
 </MudDialog>
+
+<style>
+    .page-title {
+        font-weight: 600;
+    }
+</style>
 
 @code {
     [Parameter] public string SchemaId { get; set; } = "";
