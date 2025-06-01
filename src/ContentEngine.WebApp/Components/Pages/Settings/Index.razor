@@ -1,0 +1,365 @@
+@page "/settings"
+@using Microsoft.AspNetCore.Components
+@using MudBlazor
+
+<PageTitle>引擎配置 - ContentEngine</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h3" Class="mb-4">
+        <MudIcon Icon="Icons.Material.Filled.Settings" Class="mr-2" />
+        引擎配置
+    </MudText>
+
+    <!-- 开发说明 -->
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        <MudText Typo="Typo.body1">
+            <strong>开发说明：</strong>
+            狠狠谢罪！暂时没啥精力开发配置系统，所以用户只能手动配置 YAML 文件将就一下了！
+            未来版本会提供更友好的配置界面。现阶段请按照下面的指导手动编辑配置文件以确保AI功能正常运行——
+        </MudText>
+    </MudAlert>
+
+    <!-- 配置状态检查 -->
+    <ConfigurationStatus />
+
+    <MudGrid>
+        <!-- 配置概述卡片 -->
+        <MudItem xs="12" md="6">
+            <MudCard Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="Icons.Material.Filled.Info" Class="mr-2" />
+                            配置概述
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.body1" Class="mb-3">
+                        ContentEngine 使用基于 YAML 配置文件的灵活配置系统，支持多环境部署和安全的敏感信息管理。
+                        如果有类似 C# 环境的开发需求，欢迎复用该 ConfigurableAIProvider 模块。
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        配置文件位于项目根目录的 <code>Profiles/</code> 目录下，运行时会自动复制到 <code>bin/Debug/net9.0/Profiles/</code>。
+                        请在根目录的 Profiles 文件夹中编辑配置文件。
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- 快速开始卡片 -->
+        <MudItem xs="12" md="6">
+            <MudCard Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">
+                            <MudIcon Icon="Icons.Material.Filled.PlayArrow" Class="mr-2" />
+                            快速开始
+                        </MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudList T="string">
+                        <MudListItem T="string" Icon="Icons.Material.Filled.CheckCircle" Text="1. 配置 AI 服务连接" />
+                        <MudListItem T="string" Icon="Icons.Material.Filled.CheckCircle" Text="2. 创建开发环境覆盖文件" />
+                        <MudListItem T="string" Icon="Icons.Material.Filled.CheckCircle" Text="3. 定义模型配置" />
+                        <MudListItem T="string" Icon="Icons.Material.Filled.CheckCircle" Text="4. 创建 Agent 配置" />
+                    </MudList>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <!-- 配置文件结构 -->
+    <MudCard Class="mb-4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="Icons.Material.Filled.FolderOpen" Class="mr-2" />
+                    配置文件结构
+                </MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">核心配置文件</MudText>
+                    <MudList T="string" Dense="true">
+                        <MudListItem T="string">
+                            <MudText><code>connections.yaml</code> - AI 服务连接配置</MudText>
+                        </MudListItem>
+                        <MudListItem T="string">
+                            <MudText><code>models.yaml</code> - AI 模型定义</MudText>
+                        </MudListItem>
+                        <MudListItem T="string">
+                            <MudText><code>Agents/[AgentName]/agent.yaml</code> - Agent 配置</MudText>
+                        </MudListItem>
+                    </MudList>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">环境覆盖文件</MudText>
+                    <MudList T="string" Dense="true">
+                        <MudListItem T="string">
+                            <MudText><code>connections.dev.yaml</code> - 开发环境覆盖</MudText>
+                        </MudListItem>
+                        <MudListItem T="string">
+                            <MudText><code>models.dev.yaml</code> - 开发环境模型覆盖</MudText>
+                        </MudListItem>
+                        <MudListItem T="string">
+                            <MudText><code>agent.dev.yaml</code> - 开发环境 Agent 覆盖</MudText>
+                        </MudListItem>
+                    </MudList>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- 配置步骤 -->
+    <MudCard Class="mb-4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="Icons.Material.Filled.Build" Class="mr-2" />
+                    配置步骤详解
+                </MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+                <!-- 步骤1：连接配置 -->
+                <MudTabPanel Text="1. 连接配置">
+                    <MudText Typo="Typo.h6" Class="mb-3">配置 AI 服务连接</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-3">
+                        在项目根目录的 <code>Profiles/connections.yaml</code> 中定义 AI 服务连接：
+                    </MudText>
+                    <MudPaper Class="pa-4" Elevation="1">
+                        <pre><code>connections:
+  # Azure OpenAI
+  primaryAzure: 
+    serviceType: AzureOpenAI
+    endpoint: "{{AZURE_OPENAI_ENDPOINT}}" 
+    apiKey: "{{AZURE_OPENAI_API_KEY}}"
+
+  # OpenAI
+  personalOpenAI: 
+    serviceType: OpenAI
+    apiKey: "{{OPENAI_API_KEY}}"
+    orgId: "{{OPENAI_ORG_ID}}"
+
+  # 本地 Ollama
+  Ollama:
+    serviceType: Ollama
+    baseUrl: "http://localhost:11434/v1"</code></pre>
+                    </MudPaper>
+                </MudTabPanel>
+
+                <!-- 步骤2：开发环境覆盖 -->
+                <MudTabPanel Text="2. 开发环境覆盖">
+                    <MudText Typo="Typo.h6" Class="mb-3">创建开发环境覆盖文件</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-3">
+                        为了安全地管理 API Keys，推荐创建 <code>connections.dev.yaml</code> 文件来覆盖基础配置：
+                    </MudText>
+                    <MudPaper Class="pa-4" Elevation="1">
+                        <pre><code># connections.dev.yaml - 开发环境覆盖文件
+connections:
+  # 覆盖 Azure OpenAI 配置
+  primaryAzure: 
+    serviceType: AzureOpenAI
+    endpoint: "https://your-resource.openai.azure.com/"
+    apiKey: "your_actual_azure_api_key_here"
+
+  # 覆盖 OpenAI 配置
+  personalOpenAI: 
+    serviceType: OpenAI
+    apiKey: "your_actual_openai_api_key_here"
+    orgId: "your_org_id_here"
+
+  # 覆盖其他服务的 API Keys
+  xai:
+    serviceType: OpenAI 
+    baseUrl: "https://api.x.ai/v1"
+    apiKey: "your_actual_xai_api_key_here"</code></pre>
+                    </MudPaper>
+                    <MudAlert Severity="Severity.Warning" Class="mt-3">
+                        <MudText><strong>重要：</strong>请将 <code>connections.dev.yaml</code> 添加到 <code>.gitignore</code> 文件中，避免将 API Keys 提交到版本控制系统。</MudText>
+                    </MudAlert>
+                </MudTabPanel>
+
+                <!-- 步骤3：模型配置 -->
+                <MudTabPanel Text="3. 模型配置">
+                    <MudText Typo="Typo.h6" Class="mb-3">定义 AI 模型</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-3">
+                        在项目根目录的 <code>Profiles/models.yaml</code> 中定义具体的 AI 模型：
+                    </MudText>
+                    <MudPaper Class="pa-4" Elevation="1">
+                        <pre><code>models:
+  # Azure OpenAI 模型
+  azure-gpt4o-mini:
+    connection: primaryAzure   
+    modelId: "gpt-4o-mini"     
+    endpointType: ChatCompletion
+    parameters: 
+      temperature: 0.7
+      maxTokens: 2000
+
+  # OpenAI 模型
+  openai-gpt4:
+    connection: personalOpenAI
+    modelId: "gpt-4"
+    endpointType: ChatCompletion
+    parameters: 
+      temperature: 0.2
+
+  # 本地 Ollama 模型
+  ollama-qwen3:
+    connection: Ollama
+    modelId: "qwen3:8b"
+    endpointType: ChatCompletion</code></pre>
+                    </MudPaper>
+                </MudTabPanel>
+
+                <!-- 步骤4：Agent配置 -->
+                <MudTabPanel Text="4. Agent 配置">
+                    <MudText Typo="Typo.h6" Class="mb-3">创建 Agent 配置</MudText>
+                    <MudText Typo="Typo.body1" Class="mb-3">
+                        在项目根目录的 <code>Profiles/Agents/[AgentName]/agent.yaml</code> 中配置 Agent：
+                    </MudText>
+                    <MudPaper Class="pa-4" Elevation="1">
+                        <pre><code># Agent 配置示例
+description: "内容引擎助手"
+
+models:
+  # 逻辑模型名称映射到具体模型定义
+  chat: azure-gpt4o-mini
+  embedder: azure-embedding-ada
+
+plugins:
+  # 插件引用（相对于 Agent 目录或全局插件目录）
+  - ContentHelper
+  - DataStructuring
+
+# 可选：覆盖默认日志级别
+logLevel: Information</code></pre>
+                    </MudPaper>
+                </MudTabPanel>
+            </MudTabs>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- 支持的服务类型 -->
+    <MudCard Class="mb-4">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="Icons.Material.Filled.Cloud" Class="mr-2" />
+                    支持的 AI 服务
+                </MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 text-center" Elevation="1">
+                        <MudIcon Icon="Icons.Material.Filled.Psychology" Size="Size.Large" Color="Color.Primary" />
+                        <MudText Typo="Typo.h6" Class="mt-2">OpenAI</MudText>
+                        <MudText Typo="Typo.body2">GPT-4, GPT-3.5, Embeddings</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 text-center" Elevation="1">
+                        <MudIcon Icon="Icons.Material.Filled.CloudQueue" Size="Size.Large" Color="Color.Secondary" />
+                        <MudText Typo="Typo.h6" Class="mt-2">Azure OpenAI</MudText>
+                        <MudText Typo="Typo.body2">企业级 OpenAI 服务</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 text-center" Elevation="1">
+                        <MudIcon Icon="Icons.Material.Filled.Computer" Size="Size.Large" Color="Color.Tertiary" />
+                        <MudText Typo="Typo.h6" Class="mt-2">Ollama</MudText>
+                        <MudText Typo="Typo.body2">本地部署模型</MudText>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudPaper Class="pa-4 text-center" Elevation="1">
+                        <MudIcon Icon="Icons.Material.Filled.Hub" Size="Size.Large" Color="Color.Success" />
+                        <MudText Typo="Typo.h6" Class="mt-2">兼容服务</MudText>
+                        <MudText Typo="Typo.body2">OpenRouter, Grok 等</MudText>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+
+    <!-- 注意事项 -->
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        <MudText Typo="Typo.body1">
+            <strong>重要提示：</strong>
+        </MudText>
+        <MudList T="string" Dense="true">
+            <MudListItem T="string">
+                <MudText>• 敏感信息（如 API Keys）应写在 .dev.yaml 覆盖文件中，并添加到 .gitignore</MudText>
+            </MudListItem>
+            <MudListItem T="string">
+                <MudText>• 配置文件支持环境特定覆盖（如 .dev.yaml, .prod.yaml）</MudText>
+            </MudListItem>
+            <MudListItem T="string">
+                <MudText>• 修改配置后需要重启应用程序才能生效</MudText>
+            </MudListItem>
+            <MudListItem T="string">
+                <MudText>• 确保项目根目录 Profiles/ 下的配置文件格式正确</MudText>
+            </MudListItem>
+            <MudListItem T="string">
+                <MudText>• 配置文件会在构建时自动复制到运行目录</MudText>
+            </MudListItem>
+        </MudList>
+    </MudAlert>
+
+    <!-- 相关链接 -->
+    <MudCard>
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="Icons.Material.Filled.Link" Class="mr-2" />
+                    相关资源
+                </MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudButton Variant="Variant.Outlined" 
+                              StartIcon="Icons.Material.Filled.Description"
+                              FullWidth="true"
+                              Class="mb-2">
+                        ConfigurableAIProvider 文档
+                    </MudButton>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudButton Variant="Variant.Outlined" 
+                              StartIcon="Icons.Material.Filled.Code"
+                              FullWidth="true"
+                              Class="mb-2">
+                        YAML 配置示例
+                    </MudButton>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudButton Variant="Variant.Outlined" 
+                              StartIcon="Icons.Material.Filled.Help"
+                              FullWidth="true"
+                              Class="mb-2">
+                        故障排除指南
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    // 页面初始化逻辑
+    protected override async Task OnInitializedAsync()
+    {
+        // 可以在这里添加配置状态检查逻辑
+        await base.OnInitializedAsync();
+    }
+} 

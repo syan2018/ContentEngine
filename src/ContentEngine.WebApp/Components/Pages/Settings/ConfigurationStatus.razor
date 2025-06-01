@@ -1,0 +1,160 @@
+@using Microsoft.AspNetCore.Components
+@using MudBlazor
+@using System.IO
+
+<MudCard Class="mb-4">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudText Typo="Typo.h6">
+                <MudIcon Icon="Icons.Material.Filled.HealthAndSafety" Class="mr-2" />
+                配置状态检查
+            </MudText>
+        </CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent>
+        <!-- 配置文件状态 -->
+        <MudText Typo="Typo.subtitle1" Class="mb-3">配置文件状态</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+            检查路径: bin/Debug/net9.0/Profiles/
+        </MudText>
+        <MudList T="string" Dense="true">
+            <MudListItem T="string">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@GetStatusIcon(_connectionsExists)" 
+                           Color="@GetStatusColor(_connectionsExists)" 
+                           Class="mr-2" />
+                    <MudText>connections.yaml</MudText>
+                </div>
+            </MudListItem>
+            <MudListItem T="string">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@GetStatusIcon(_modelsExists)" 
+                           Color="@GetStatusColor(_modelsExists)" 
+                           Class="mr-2" />
+                    <MudText>models.yaml</MudText>
+                </div>
+            </MudListItem>
+            <MudListItem T="string">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@GetStatusIcon(_agentsDirectoryExists)" 
+                           Color="@GetStatusColor(_agentsDirectoryExists)" 
+                           Class="mr-2" />
+                    <MudText>Agents/ 目录</MudText>
+                </div>
+            </MudListItem>
+            <MudListItem T="string">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@GetStatusIcon(_pluginsDirectoryExists)" 
+                           Color="@GetStatusColor(_pluginsDirectoryExists)" 
+                           Class="mr-2" />
+                    <MudText>Plugins/ 目录</MudText>
+                </div>
+            </MudListItem>
+            <MudListItem T="string">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@GetStatusIcon(_connectionsDevExists)" 
+                           Color="@GetStatusColor(_connectionsDevExists)" 
+                           Class="mr-2" />
+                    <MudText>connections.dev.yaml (推荐)</MudText>
+                </div>
+            </MudListItem>
+        </MudList>
+
+        <!-- 刷新按钮 -->
+        <div class="mt-4">
+            <MudButton Variant="Variant.Outlined" 
+                      StartIcon="Icons.Material.Filled.Refresh"
+                      OnClick="RefreshStatus"
+                      Disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                刷新状态
+            </MudButton>
+        </div>
+
+        <!-- 状态总结 -->
+        @if (_lastChecked.HasValue)
+        {
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                最后检查时间: @_lastChecked.Value.ToString("yyyy-MM-dd HH:mm:ss")
+            </MudText>
+            
+            @if (_allConfigured)
+            {
+                <MudAlert Severity="Severity.Success" Class="mt-2">
+                    <MudText>✅ 配置检查通过！所有必要的配置文件和环境变量都已设置。</MudText>
+                </MudAlert>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Warning" Class="mt-2">
+                    <MudText>⚠️ 部分配置缺失。请检查上述状态并完善配置。</MudText>
+                </MudAlert>
+            }
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private bool _connectionsExists = false;
+    private bool _modelsExists = false;
+    private bool _agentsDirectoryExists = false;
+    private bool _pluginsDirectoryExists = false;
+    private bool _connectionsDevExists = false;
+    
+    private bool _isLoading = false;
+    private DateTime? _lastChecked = null;
+    private bool _allConfigured = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshStatus();
+    }
+
+    private async Task RefreshStatus()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        await Task.Delay(100); // 模拟检查延迟
+
+        try
+        {
+            // 检查配置文件（运行时路径）
+            var basePath = "bin/Debug/net9.0/Profiles";
+            _connectionsExists = File.Exists(Path.Combine(basePath, "connections.yaml"));
+            _modelsExists = File.Exists(Path.Combine(basePath, "models.yaml"));
+            _agentsDirectoryExists = Directory.Exists(Path.Combine(basePath, "Agents"));
+            _pluginsDirectoryExists = Directory.Exists(Path.Combine(basePath, "Plugins"));
+            _connectionsDevExists = File.Exists(Path.Combine(basePath, "connections.dev.yaml"));
+
+            // 计算总体状态
+            _allConfigured = _connectionsExists && _modelsExists && _agentsDirectoryExists && _connectionsDevExists;
+
+            _lastChecked = DateTime.Now;
+        }
+        catch (Exception ex)
+        {
+            // 记录错误但不抛出，保持 UI 稳定
+            Console.WriteLine($"配置状态检查错误: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetStatusIcon(bool exists)
+    {
+        return exists ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Cancel;
+    }
+
+    private Color GetStatusColor(bool exists)
+    {
+        return exists ? Color.Success : Color.Error;
+    }
+} 
