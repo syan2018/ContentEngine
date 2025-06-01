@@ -2,8 +2,9 @@
 @using ContentEngine.Core.DataPipeline.Models
 @using LiteDB
 @using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@inject IDialogService DialogService
 
-@if (!Data.Any())
+@if (!Data.Any() && !IsAddingNewRecord)
 {
     <MudPaper Class="pa-8 text-center" Elevation="0">
         <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
@@ -14,7 +15,7 @@
 else
 {
     <MudPaper Elevation="1" Class="@($"rounded-lg {Class}")">
-        <MudTable Items="@GetDisplayData()" T="BsonDocument"
+        <MudTable Items="@GetDisplayDataWithNewRecord()" T="BsonDocument"
                   Hover="true"
                   Striped="true"
                   FixedHeader="true"
@@ -71,112 +72,162 @@ else
                 @{
                     var itemId = GetDocumentId(item);
                     var isEditing = editingRowId == itemId;
+                    var isNewRecord = IsNewRecordDocument(item);
                 }
-                @if (_effectiveConfig.ShowIdColumn)
+                
+                @if (isNewRecord)
                 {
-                    <MudTd DataLabel="ID" Class="font-weight-medium">
-                        @GetRecordId(item)
-                    </MudTd>
-                }
-                @if (Schema?.Fields != null)
-                {
-                    @foreach (var field in Schema.Fields)
+                    <!-- 新记录行 -->
+                    @if (_effectiveConfig.ShowIdColumn)
                     {
-                        <MudTd DataLabel="@field.Name">
-                            @if (_effectiveConfig.IsReadOnly)
-                            {
-                                @GetFormattedValue(item, field)
-                            }
-                            else if (_effectiveConfig.AllowInlineEdit && isEditing)
-                            {
-                                @RenderInlineEditCell(item, field)
-                            }
-                            else if (_effectiveConfig.AllowInlineEdit && !isEditing)
-                            {
-                                <div class="inline-edit-cell" @onclick="() => StartInlineEdit(itemId)">
-                                    @GetFormattedValue(item, field)
-                                    <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="edit-hint" />
-                                </div>
-                            }
-                            else
-                            {
-                                @RenderEditableCell(item, field)
-                            }
+                        <MudTd DataLabel="ID" Class="font-weight-medium new-record-cell">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">新记录</MudText>
                         </MudTd>
                     }
-                }
-                @if (_effectiveConfig.HasActions)
-                {
-                    <MudTd>
-                        <div class="action-buttons">
-                            @if (_effectiveConfig.IsReadOnly)
-                            {
-                                @foreach (var action in _effectiveConfig.Actions)
-                                {
-                                    <MudTooltip Text="@action.Tooltip">
-                                        <MudIconButton Icon="@action.Icon"
-                                                      Color="@action.Color"
-                                                      Size="Size.Small"
-                                                      OnClick="() => action.Action.Invoke(item)" />
-                                    </MudTooltip>
-                                }
-                            }
-                            else if (isEditing)
-                            {
+                    @if (Schema?.Fields != null)
+                    {
+                        @foreach (var field in Schema.Fields)
+                        {
+                            <MudTd DataLabel="@field.Name" Class="new-record-cell">
+                                @RenderNewRecordCell(field)
+                            </MudTd>
+                        }
+                    }
+                    @if (_effectiveConfig.HasActions)
+                    {
+                        <MudTd Class="new-record-cell">
+                            <div class="action-buttons">
                                 <MudTooltip Text="保存">
                                     <MudIconButton Icon="@Icons.Material.Filled.Save"
                                                   Color="Color.Success"
                                                   Size="Size.Small"
-                                                  OnClick="() => SaveInlineEdit()" />
+                                                  OnClick="SaveNewRecord"
+                                                  Disabled="@IsSavingNewRecord" />
                                 </MudTooltip>
                                 <MudTooltip Text="取消">
                                     <MudIconButton Icon="@Icons.Material.Filled.Cancel"
                                                   Color="Color.Secondary"
                                                   Size="Size.Small"
-                                                  OnClick="() => CancelInlineEdit()" />
+                                                  OnClick="CancelNewRecord"
+                                                  Disabled="@IsSavingNewRecord" />
                                 </MudTooltip>
-                                @foreach (var action in _effectiveConfig.Actions.Where(a => a.ShowInEditMode))
+                                @if (IsSavingNewRecord)
                                 {
-                                    <MudTooltip Text="@action.Tooltip">
-                                        <MudIconButton Icon="@action.Icon"
-                                                      Color="@action.Color"
-                                                      Size="Size.Small"
-                                                      OnClick="() => action.Action.Invoke(item)" />
-                                    </MudTooltip>
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
                                 }
-                            }
-                            else if (_effectiveConfig.AllowInlineEdit)
-                            {
-                                <MudTooltip Text="编辑">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                                  Color="Color.Primary"
-                                                  Size="Size.Small"
-                                                  OnClick="() => StartInlineEdit(itemId)" />
-                                </MudTooltip>
-                                @foreach (var action in _effectiveConfig.Actions.Where(a => a.ShowInNormalMode))
+                            </div>
+                        </MudTd>
+                    }
+                }
+                else
+                {
+                    <!-- 普通数据行 -->
+                    @if (_effectiveConfig.ShowIdColumn)
+                    {
+                        <MudTd DataLabel="ID" Class="font-weight-medium">
+                            @GetRecordId(item)
+                        </MudTd>
+                    }
+                    @if (Schema?.Fields != null)
+                    {
+                        @foreach (var field in Schema.Fields)
+                        {
+                            <MudTd DataLabel="@field.Name">
+                                @if (_effectiveConfig.IsReadOnly)
                                 {
-                                    <MudTooltip Text="@action.Tooltip">
-                                        <MudIconButton Icon="@action.Icon"
-                                                      Color="@action.Color"
-                                                      Size="Size.Small"
-                                                      OnClick="() => action.Action.Invoke(item)" />
-                                    </MudTooltip>
+                                    @GetFormattedValue(item, field)
                                 }
-                            }
-                            else
-                            {
-                                @foreach (var action in _effectiveConfig.Actions)
+                                else if (_effectiveConfig.AllowInlineEdit && isEditing)
                                 {
-                                    <MudTooltip Text="@action.Tooltip">
-                                        <MudIconButton Icon="@action.Icon"
-                                                      Color="@action.Color"
-                                                      Size="Size.Small"
-                                                      OnClick="() => action.Action.Invoke(item)" />
-                                    </MudTooltip>
+                                    @RenderInlineEditCell(item, field)
                                 }
-                            }
-                        </div>
-                    </MudTd>
+                                else if (_effectiveConfig.AllowInlineEdit && !isEditing)
+                                {
+                                    <div class="inline-edit-cell" @onclick="() => StartInlineEdit(itemId)">
+                                        @GetFormattedValue(item, field)
+                                        <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="edit-hint" />
+                                    </div>
+                                }
+                                else
+                                {
+                                    @RenderEditableCell(item, field)
+                                }
+                            </MudTd>
+                        }
+                    }
+                    @if (_effectiveConfig.HasActions)
+                    {
+                        <MudTd>
+                            <div class="action-buttons">
+                                @if (_effectiveConfig.IsReadOnly)
+                                {
+                                    @foreach (var action in _effectiveConfig.Actions)
+                                    {
+                                        <MudTooltip Text="@action.Tooltip">
+                                            <MudIconButton Icon="@action.Icon"
+                                                          Color="@action.Color"
+                                                          Size="Size.Small"
+                                                          OnClick="() => action.Action.Invoke(item)" />
+                                        </MudTooltip>
+                                    }
+                                }
+                                else if (isEditing)
+                                {
+                                    <MudTooltip Text="保存">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Save"
+                                                      Color="Color.Success"
+                                                      Size="Size.Small"
+                                                      OnClick="() => SaveInlineEdit()" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="取消">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Cancel"
+                                                      Color="Color.Secondary"
+                                                      Size="Size.Small"
+                                                      OnClick="() => CancelInlineEdit()" />
+                                    </MudTooltip>
+                                    @foreach (var action in _effectiveConfig.Actions.Where(a => a.ShowInEditMode))
+                                    {
+                                        <MudTooltip Text="@action.Tooltip">
+                                            <MudIconButton Icon="@action.Icon"
+                                                          Color="@action.Color"
+                                                          Size="Size.Small"
+                                                          OnClick="() => action.Action.Invoke(item)" />
+                                        </MudTooltip>
+                                    }
+                                }
+                                else if (_effectiveConfig.AllowInlineEdit)
+                                {
+                                    <MudTooltip Text="编辑">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                      Color="Color.Primary"
+                                                      Size="Size.Small"
+                                                      OnClick="() => StartInlineEdit(itemId)" />
+                                    </MudTooltip>
+                                    @foreach (var action in _effectiveConfig.Actions.Where(a => a.ShowInNormalMode))
+                                    {
+                                        <MudTooltip Text="@action.Tooltip">
+                                            <MudIconButton Icon="@action.Icon"
+                                                          Color="@action.Color"
+                                                          Size="Size.Small"
+                                                          OnClick="() => action.Action.Invoke(item)" />
+                                        </MudTooltip>
+                                    }
+                                }
+                                else
+                                {
+                                    @foreach (var action in _effectiveConfig.Actions)
+                                    {
+                                        <MudTooltip Text="@action.Tooltip">
+                                            <MudIconButton Icon="@action.Icon"
+                                                          Color="@action.Color"
+                                                          Size="Size.Small"
+                                                          OnClick="() => action.Action.Invoke(item)" />
+                                        </MudTooltip>
+                                    }
+                                }
+                            </div>
+                        </MudTd>
+                    }
                 }
             </RowTemplate>
             <PagerContent>
@@ -190,6 +241,14 @@ else
             </PagerContent>
         </MudTable>
     </MudPaper>
+}
+
+<!-- 新记录错误消息 -->
+@if (IsAddingNewRecord && !string.IsNullOrEmpty(NewRecordErrorMessage))
+{
+    <MudAlert Severity="Severity.Error" Class="mt-2">
+        @NewRecordErrorMessage
+    </MudAlert>
 }
 
 @if (_effectiveConfig.ShowRowCount && Data.Any())
@@ -220,6 +279,13 @@ else
     // 样式控制
     [Parameter] public string Class { get; set; } = "";
     
+    // 新记录添加相关参数
+    [Parameter] public Dictionary<string, object?>? NewRecordData { get; set; }
+    [Parameter] public EventCallback OnNewRecordSave { get; set; }
+    [Parameter] public EventCallback OnNewRecordCancel { get; set; }
+    [Parameter] public bool IsSavingNewRecord { get; set; } = false;
+    [Parameter] public string? NewRecordErrorMessage { get; set; }
+    
     // 事件回调
     [Parameter] public EventCallback<BsonDocument> OnRowChanged { get; set; }
     [Parameter] public EventCallback<BsonDocument> OnRowRemoved { get; set; }
@@ -232,6 +298,10 @@ else
     private BsonDocument? originalEditingData = null;
     private BsonDocument? editingData = null;
     private DataTableConfiguration _effectiveConfig = null!;
+    private BsonDocument? newRecordDocument = null;
+    
+    // 计算属性
+    private bool IsAddingNewRecord => NewRecordData != null;
 
     protected override void OnParametersSet()
     {
@@ -250,7 +320,6 @@ else
             {
                 DataTableMode.ReadOnly => DataTableConfiguration.ForReadOnlyMode(this),
                 DataTableMode.BatchEdit => DataTableConfiguration.ForBatchEditMode(this),
-                DataTableMode.InlineEdit => DataTableConfiguration.ForInlineEditMode(this),
                 DataTableMode.DataExplorer => DataTableConfiguration.ForDataExplorerMode(this),
                 DataTableMode.ManualEntry => DataTableConfiguration.ForManualEntryMode(this),
                 _ => DataTableConfiguration.ForReadOnlyMode(this)
@@ -265,6 +334,30 @@ else
             return Data.Take(_effectiveConfig.MaxDisplayRows.Value);
         }
         return Data;
+    }
+
+    private IEnumerable<BsonDocument> GetDisplayDataWithNewRecord()
+    {
+        var displayData = GetDisplayData().ToList();
+        
+        if (IsAddingNewRecord)
+        {
+            // 创建新记录文档标识符
+            if (newRecordDocument == null)
+            {
+                newRecordDocument = new BsonDocument();
+                newRecordDocument["_isNewRecord"] = true;
+                newRecordDocument["_id"] = "NEW_RECORD";
+            }
+            displayData.Add(newRecordDocument);
+        }
+        
+        return displayData;
+    }
+
+    private bool IsNewRecordDocument(BsonDocument document)
+    {
+        return document.TryGetValue("_isNewRecord", out var value) && value.AsBoolean;
     }
 
     private string GetDocumentId(BsonDocument document)
@@ -433,58 +526,7 @@ else
         }
     };
 
-    private RenderFragment RenderEditableCell(BsonDocument rowData, FieldDefinition field) => __builder =>
-    {
-        switch (field.Type)
-        {
-            case FieldType.Text:
-                <MudTextField T="string"
-                              Value="@GetCellStringValue(rowData, field.Name)"
-                              ValueChanged="@(value => SetCellValue(rowData, field.Name, new BsonValue(value)))"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense" />
-                break;
-
-            case FieldType.Number:
-                <MudNumericField T="double?"
-                                 Value="@GetCellDoubleValue(rowData, field.Name)"
-                                 ValueChanged="@(value => SetCellValue(rowData, field.Name, value.HasValue ? new BsonValue(value.Value) : BsonValue.Null))"
-                                 Variant="Variant.Outlined"
-                                 Margin="Margin.Dense" />
-                break;
-
-            case FieldType.Boolean:
-                <MudCheckBox T="bool"
-                             Checked="@GetCellBoolValue(rowData, field.Name)"
-                             CheckedChanged="@((bool value) => SetCellValue(rowData, field.Name, new BsonValue(value)))"
-                             Color="Color.Primary"
-                             Size="Size.Small" />
-                break;
-
-            case FieldType.Date:
-                <MudDatePicker Date="@GetCellDateValue(rowData, field.Name)"
-                               DateChanged="@(value => SetCellValue(rowData, field.Name, value.HasValue ? new BsonValue(value.Value) : BsonValue.Null))"
-                               Variant="Variant.Outlined"
-                               Margin="Margin.Dense" />
-                break;
-
-            case FieldType.Reference:
-                <MudTextField T="string"
-                              Value="@GetCellStringValue(rowData, field.Name)"
-                              ValueChanged="@(value => SetCellValue(rowData, field.Name, new BsonValue(value)))"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense" />
-                break;
-
-            default:
-                <MudTextField T="string"
-                              Value="@GetCellStringValue(rowData, field.Name)"
-                              ValueChanged="@(value => SetCellValue(rowData, field.Name, new BsonValue(value)))"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense" />
-                break;
-        }
-    };
+    private RenderFragment RenderEditableCell(BsonDocument rowData, FieldDefinition field) => RenderEditableField(field, rowData, false);
 
     private async Task SetCellValue(BsonDocument rowData, string fieldName, BsonValue value)
     {
@@ -533,11 +575,260 @@ else
         return null;
     }
 
+    // 通用编辑字段渲染方法
+    private RenderFragment RenderEditableField(FieldDefinition field, BsonDocument? rowData = null, bool isNewRecord = false) => __builder =>
+    {
+        var containerClass = isNewRecord ? "new-record-field-container" : "editable-field-container";
+        
+        switch (field.Type)
+        {
+            case FieldType.Text:
+                var textValue = isNewRecord ? GetNewRecordValue<string>(field.Name) : GetCellStringValue(rowData!, field.Name);
+                <div class="@containerClass">
+                    <MudTextField T="string"
+                                  Value="@textValue"
+                                  ValueChanged="@((string value) => HandleFieldValueChanged(field.Name, value, rowData, isNewRecord))"
+                                  Variant="Variant.Text"
+                                  Margin="Margin.None"
+                                  Required="@field.IsRequired"
+                                  Class="inline-edit-field" />
+                    @RenderFieldDescription(field)
+                </div>
+                break;
+
+            case FieldType.Number:
+                var numberValue = isNewRecord ? GetNewRecordValue<double?>(field.Name) : GetCellDoubleValue(rowData!, field.Name);
+                <div class="@containerClass">
+                    <MudNumericField T="double?"
+                                     Value="@numberValue"
+                                     ValueChanged="@((double? value) => HandleFieldValueChanged(field.Name, value, rowData, isNewRecord))"
+                                     Variant="Variant.Text"
+                                     Margin="Margin.None"
+                                     Required="@field.IsRequired"
+                                     Class="inline-edit-field" />
+                    @RenderFieldDescription(field)
+                </div>
+                break;
+
+            case FieldType.Boolean:
+                var boolValue = isNewRecord ? GetNewRecordValue<bool>(field.Name) : GetCellBoolValue(rowData!, field.Name);
+                <div class="@containerClass">
+                    <MudCheckBox T="bool"
+                                 Checked="@boolValue"
+                                 CheckedChanged="@((bool value) => HandleFieldValueChanged(field.Name, value, rowData, isNewRecord))"
+                                 Color="Color.Primary"
+                                 Size="Size.Small" />
+                    @RenderFieldDescription(field)
+                </div>
+                break;
+
+            case FieldType.Date:
+                var dateValue = isNewRecord ? GetNewRecordValue<DateTime?>(field.Name) : GetCellDateValue(rowData!, field.Name);
+                <div class="@containerClass">
+                    <MudDatePicker Date="@dateValue"
+                                   DateChanged="@((DateTime? value) => HandleFieldValueChanged(field.Name, value, rowData, isNewRecord))"
+                                   Variant="Variant.Text"
+                                   Margin="Margin.None"
+                                   Required="@field.IsRequired"
+                                   Class="inline-edit-field" />
+                    @RenderFieldDescription(field)
+                </div>
+                break;
+
+            case FieldType.Reference:
+                var refValue = isNewRecord ? GetNewRecordValue<string>(field.Name) : GetCellStringValue(rowData!, field.Name);
+                <div class="@containerClass">
+                    <MudTextField T="string"
+                                  Value="@refValue"
+                                  ValueChanged="@((string value) => HandleFieldValueChanged(field.Name, value, rowData, isNewRecord))"
+                                  Variant="Variant.Text"
+                                  Margin="Margin.None"
+                                  Required="@field.IsRequired"
+                                  Class="inline-edit-field" />
+                    @RenderFieldDescription(field)
+                </div>
+                break;
+
+            default:
+                var defaultValue = isNewRecord ? GetNewRecordValue<string>(field.Name) : GetCellStringValue(rowData!, field.Name);
+                <div class="@containerClass">
+                    <MudTextField T="string"
+                                  Value="@defaultValue"
+                                  ValueChanged="@((string value) => HandleFieldValueChanged(field.Name, value, rowData, isNewRecord))"
+                                  Variant="Variant.Text"
+                                  Margin="Margin.None"
+                                  Required="@field.IsRequired"
+                                  Class="inline-edit-field" />
+                    @RenderFieldDescription(field)
+                </div>
+                break;
+        }
+    };
+
+    // 渲染字段描述
+    private RenderFragment RenderFieldDescription(FieldDefinition field) => __builder =>
+    {
+        @if (!string.IsNullOrEmpty(field.Comment) || !string.IsNullOrEmpty(field.ReferenceSchemaName))
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="field-description">
+                @if (field.Type == FieldType.Reference && !string.IsNullOrEmpty(field.ReferenceSchemaName))
+                {
+                    @($"引用 {field.ReferenceSchemaName}")
+                    @if (!string.IsNullOrEmpty(field.Comment))
+                    {
+                        @($" - {field.Comment}")
+                    }
+                }
+                else if (!string.IsNullOrEmpty(field.Comment))
+                {
+                    @field.Comment
+                }
+            </MudText>
+        }
+    };
+
+    // 统一的字段值变更处理
+    private async Task HandleFieldValueChanged(string fieldName, object? value, BsonDocument? rowData, bool isNewRecord)
+    {
+        if (isNewRecord)
+        {
+            SetNewRecordValue(fieldName, value);
+        }
+        else if (rowData != null)
+        {
+            var bsonValue = value switch
+            {
+                null => BsonValue.Null,
+                string s => new BsonValue(s),
+                double d => new BsonValue(d),
+                bool b => new BsonValue(b),
+                DateTime dt => new BsonValue(dt),
+                _ => new BsonValue(value.ToString())
+            };
+            await SetCellValue(rowData, fieldName, bsonValue);
+        }
+    }
+
+    // 新记录相关方法
+    private RenderFragment RenderNewRecordCell(FieldDefinition field) => RenderEditableField(field, null, true);
+
+    private T GetNewRecordValue<T>(string fieldName)
+    {
+        if (NewRecordData?.TryGetValue(fieldName, out var value) == true)
+        {
+            if (value is T typedValue)
+                return typedValue;
+            
+            try
+            {
+                if (typeof(T) == typeof(DateTime?) && value is DateTime dt)
+                    return (T)(object)dt;
+                    
+                if (value != null)
+                    return (T)Convert.ChangeType(value, typeof(T));
+            }
+            catch
+            {
+                // 转换失败，返回默认值
+            }
+        }
+        return default(T)!;
+    }
+
+    private void SetNewRecordValue(string fieldName, object? value)
+    {
+        if (NewRecordData != null)
+        {
+            NewRecordData[fieldName] = value;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveNewRecord()
+    {
+        await OnNewRecordSave.InvokeAsync();
+    }
+
+    private async Task CancelNewRecord()
+    {
+        newRecordDocument = null;
+        await OnNewRecordCancel.InvokeAsync();
+    }
+
     // 内部方法供配置类使用
     internal async Task HandleViewRecord(BsonDocument record) => await OnViewRecord.InvokeAsync(record);
     internal async Task HandleEditRecord(BsonDocument record) => await OnEditRecord.InvokeAsync(record);
-    internal async Task HandleDeleteRecord(BsonDocument record) => await OnDeleteRecord.InvokeAsync(record);
-    internal async Task HandleRemoveRow(BsonDocument record) => await OnRowRemoved.InvokeAsync(record);
+    internal async Task HandleDeleteRecord(BsonDocument record) 
+    {
+        bool shouldDelete = true;
+        
+        // 如果需要确认删除
+        if (_effectiveConfig.RequireDeleteConfirmation)
+        {
+            var parameters = new DialogParameters
+            {
+                ["ContentText"] = _effectiveConfig.DeleteConfirmationMessage,
+                ["OkButtonText"] = "删除",
+                ["CancelButtonText"] = "取消",
+                ["OkButtonColor"] = Color.Error
+            };
+
+            var options = new DialogOptions 
+            { 
+                CloseButton = true, 
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true
+            };
+
+            var dialog = await DialogService.ShowAsync<ConfirmationDialog>(_effectiveConfig.DeleteConfirmationTitle, parameters, options);
+            var result = await dialog.Result;
+            
+            shouldDelete = !result.Canceled && (bool)(result.Data ?? false);
+        }
+        
+        if (shouldDelete)
+        {
+            await OnDeleteRecord.InvokeAsync(record);
+        }
+    }
+    internal async Task HandleRemoveRow(BsonDocument record) 
+    {
+        bool shouldDelete = true;
+        
+        // 如果需要确认删除
+        if (_effectiveConfig.RequireDeleteConfirmation)
+        {
+            var parameters = new DialogParameters
+            {
+                ["ContentText"] = _effectiveConfig.DeleteConfirmationMessage,
+                ["OkButtonText"] = "删除",
+                ["CancelButtonText"] = "取消",
+                ["OkButtonColor"] = Color.Error
+            };
+
+            var options = new DialogOptions 
+            { 
+                CloseButton = true, 
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true
+            };
+
+            var dialog = await DialogService.ShowAsync<ConfirmationDialog>(_effectiveConfig.DeleteConfirmationTitle, parameters, options);
+            var result = await dialog.Result;
+            
+            shouldDelete = !result.Canceled && (bool)(result.Data ?? false);
+        }
+        
+        if (shouldDelete)
+        {
+            // 先从数据列表中移除记录
+            Data.Remove(record);
+            // 然后通知父组件
+            await OnRowRemoved.InvokeAsync(record);
+            // 触发UI更新
+            StateHasChanged();
+        }
+    }
 }
 
 <style>
@@ -610,6 +901,34 @@ else
         border: 2px solid #1976d2 !important;
         box-shadow: none !important;
     }
+
+    .new-record-row {
+        background-color: rgba(76, 175, 80, 0.08) !important;
+        border-left: 4px solid #4caf50;
+    }
+
+    .new-record-cell {
+        background-color: rgba(76, 175, 80, 0.04) !important;
+    }
+
+    .new-record-field-container,
+    .editable-field-container {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        width: 100%;
+    }
+
+    .field-description {
+        font-size: 0.6875rem !important;
+        line-height: 1.2 !important;
+        margin-top: 2px !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+        opacity: 0.8;
+    }
 </style>
 
 @code {
@@ -620,7 +939,6 @@ else
     {
         ReadOnly,      // 只读模式：查看、编辑、删除按钮
         BatchEdit,     // 批量编辑模式：直接编辑单元格 + 删除行
-        InlineEdit,    // 单行编辑模式：点击编辑 + 保存/取消 + 删除
         DataExplorer,  // 数据浏览模式：查看、编辑、删除 + ID列
         ManualEntry    // 手动录入模式：批量编辑 + 删除行
     }
@@ -652,6 +970,11 @@ else
         public string Height { get; set; } = "600px";
         public string EmptyTitle { get; set; } = "暂无数据";
         public string EmptyMessage { get; set; } = "没有可显示的内容";
+        
+        // 删除确认配置
+        public bool RequireDeleteConfirmation { get; set; } = true;
+        public string DeleteConfirmationTitle { get; set; } = "确认删除";
+        public string DeleteConfirmationMessage { get; set; } = "您确定要删除这条记录吗？此操作无法撤销。";
         
         public List<DataTableAction> Actions { get; set; } = new();
 
@@ -718,7 +1041,8 @@ else
                 ShowRowCount = true,
                 Height = "calc(100vh - 380px)",
                 EmptyTitle = "暂无数据行",
-                EmptyMessage = "点击添加行开始批量录入数据"
+                EmptyMessage = "点击添加行开始批量录入数据",
+                RequireDeleteConfirmation = false,
             };
 
             if (component.OnRowRemoved.HasDelegate)
@@ -735,35 +1059,6 @@ else
             return config;
         }
 
-        public static DataTableConfiguration ForInlineEditMode(DataTable component)
-        {
-            var config = new DataTableConfiguration
-            {
-                IsReadOnly = false,
-                AllowInlineEdit = true,
-                ShowIdColumn = true,
-                ShowPagination = true,
-                ShowRowCount = true,
-                Height = "600px",
-                EmptyTitle = "暂无数据",
-                EmptyMessage = "没有可显示的内容"
-            };
-
-            if (component.OnDeleteRecord.HasDelegate)
-            {
-                config.Actions.Add(new DataTableAction
-                {
-                    Icon = Icons.Material.Filled.Delete,
-                    Tooltip = "删除",
-                    Color = Color.Error,
-                    Action = component.HandleDeleteRecord,
-                    ShowInNormalMode = true,
-                    ShowInEditMode = true
-                });
-            }
-
-            return config;
-        }
 
         public static DataTableConfiguration ForDataExplorerMode(DataTable component)
         {
@@ -776,7 +1071,11 @@ else
                 ShowRowCount = true,
                 Height = "600px",
                 EmptyTitle = "暂无数据",
-                EmptyMessage = "没有可显示的内容"
+                EmptyMessage = "没有可显示的内容",
+                // 数据浏览模式下删除需要更严格的确认
+                RequireDeleteConfirmation = true,
+                DeleteConfirmationTitle = "确认删除记录",
+                DeleteConfirmationMessage = "您确定要永久删除这条记录吗？此操作无法撤销。"
             };
 
             if (component.OnViewRecord.HasDelegate)
@@ -814,7 +1113,7 @@ else
                     Color = Color.Error,
                     Action = component.HandleDeleteRecord,
                     ShowInNormalMode = true,
-                    ShowInEditMode = true
+                    ShowInEditMode = false
                 });
             }
 

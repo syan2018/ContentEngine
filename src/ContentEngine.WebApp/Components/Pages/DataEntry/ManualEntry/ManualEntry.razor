@@ -54,7 +54,7 @@
                 </MudTabPanel>
                 <MudTabPanel Text="批量录入" Icon="@Icons.Material.Filled.TableChart">
                     <div class="mt-4">
-                        <ManualTableEntry SchemaName="@schema.Name" OnDataSaved="HandleDataSaved"/>
+                        <ManualTableEntry Schema="@schema" OnDataSaved="HandleDataSaved"/>
                     </div>
                 </MudTabPanel>
             </MudTabs>

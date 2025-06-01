@@ -29,10 +29,6 @@
                     </MudText>
                 }
             </MudStack>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                       OnClick="ShowAddEntryForm">
-                添加记录
-            </MudButton>
         </MudStack>
 
 @if (isLoading)
@@ -58,12 +54,12 @@ else
 {
             <!-- 数据操作工具栏 -->
             <MudTabs Elevation="0" Rounded="false">
-                                <MudTabPanel Text="表格视图" Icon="@Icons.Material.Filled.TableChart">
+                <MudTabPanel Text="表格视图" Icon="@Icons.Material.Filled.TableChart">
                     <div class="mt-4">
                         <DataTableView Schema="@schemaDefinition"
                                        DataEntries="@dataEntries"
                                        OnViewRecord="ViewRecord"
-                                       OnEditRecord="ShowEditEntryForm"
+                                       OnEditRecord="NavigateToEditRecord"
                                        OnDeleteRecord="DeleteEntryPrompt"
                                        OnDataChanged="LoadSchemaAndData" />
                     </div>
@@ -85,79 +81,6 @@ else
     </MudStack>
 </MudContainer>
 
-<!-- 简化的添加/编辑记录对话框 -->
-<MudDialog @bind-IsVisible="showEditForm" Options="dialogOptions">
-    <TitleContent>
-        <div class="d-flex align-center">
-            <MudIcon Icon="@(isEditing ? Icons.Material.Filled.Edit : Icons.Material.Filled.Add)" Class="mr-2" />
-            <MudText Typo="Typo.h6">@(isEditing ? "编辑记录" : "添加新记录")</MudText>
-        </div>
-    </TitleContent>
-    <DialogContent>
-        @if (schemaDefinition != null)
-        {
-            <MudStack Spacing="3">
-                    @foreach (var field in schemaDefinition.Fields)
-                    {
-                    <div>
-                        @if (field.Type == FieldType.Boolean)
-                        {
-                            <MudCheckBox T="bool" 
-                                         Checked="@GetBoolValue(field.Name)"
-                                         CheckedChanged="@((bool value) => SetFieldValue(field.Name, value))"
-                                         Label="@field.Name" />
-                        }
-                        else if (field.Type == FieldType.Number)
-                        {
-                            <MudNumericField T="double" 
-                                             Value="@GetNumericValue(field.Name)"
-                                             ValueChanged="@(value => SetFieldValue(field.Name, value))"
-                                             Label="@field.Name" 
-                                             Variant="Variant.Outlined"
-                                             Required="@field.IsRequired" />
-                        }
-                        else if (field.Type == FieldType.Date)
-                        {
-                            <MudDatePicker T="DateTime?" 
-                                           Date="@GetDateValue(field.Name)"
-                                           DateChanged="@(value => SetFieldValue(field.Name, value))"
-                                           Label="@field.Name" 
-                                           Variant="Variant.Outlined"
-                                           Required="@field.IsRequired" />
-                        }
-                        else
-                        {
-                            <MudTextField T="string" 
-                                          Value="@GetStringValue(field.Name)"
-                                          ValueChanged="@(value => SetFieldValue(field.Name, value))"
-                                          Label="@field.Name" 
-                                          Variant="Variant.Outlined"
-                                          Required="@field.IsRequired"
-                                          Lines="@(field.Type == FieldType.Text ? 3 : 1)" />
-                        }
-                    </div>
-                }
-                
-                @if (!string.IsNullOrEmpty(formErrorMessage))
-                {
-                    <MudAlert Severity="Severity.Error">
-                        @formErrorMessage
-                    </MudAlert>
-                }
-            </MudStack>
-        }
-    </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="CancelEdit" Variant="Variant.Text">取消</MudButton>
-        <MudButton OnClick="HandleDataSubmit" 
-                   Variant="Variant.Filled" 
-                   Color="Color.Primary" 
-                   StartIcon="@Icons.Material.Filled.Save">
-            @(isEditing ? "更新" : "保存")
-        </MudButton>
-    </DialogActions>
-</MudDialog>
-
 <!-- 记录详情对话框 -->
 <MudDialog @bind-IsVisible="showRecordDetail" Options="recordDetailDialogOptions">
     <TitleContent>
@@ -174,7 +97,7 @@ else
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="CloseRecordDetail" Variant="Variant.Text">关闭</MudButton>
-        <MudButton OnClick="@(() => ShowEditEntryForm(selectedRecord))" 
+        <MudButton OnClick="@(() => NavigateToEditRecord(selectedRecord))" 
                    Variant="Variant.Filled" 
                    Color="Color.Primary"
                    StartIcon="@Icons.Material.Filled.Edit">
@@ -191,32 +114,13 @@ else
     private List<BsonDocument> dataEntries = new();
     private BsonDocument? selectedRecord;
 
-    // 表单相关
-    private Dictionary<string, object?> formData = new();
-    private BsonValue? currentEditId = null;
-    private bool isEditing = false;
-    private bool showEditForm = false;
-    private bool showRecordDetail = false;
-    private string? formErrorMessage;
-
     // UI状态
     private bool isLoading = true;
     private string? errorMessage;
     private List<BreadcrumbItem> _breadcrumbItems = new();
-
-    // 分页
-    private int currentPage = 1;
-    private int pageSize = 10;
-    private long totalEntries = 0;
+    private bool showRecordDetail = false;
 
     // 对话框选项
-    private DialogOptions dialogOptions = new() 
-    { 
-        MaxWidth = MaxWidth.Medium, 
-        FullWidth = true,
-        CloseButton = true
-    };
-
     private DialogOptions recordDetailDialogOptions = new() 
     { 
         MaxWidth = MaxWidth.Large, 
@@ -244,7 +148,6 @@ else
     {
         isLoading = true;
         errorMessage = null;
-        ClearFormData();
         
         try
         {
@@ -258,14 +161,12 @@ else
             if (schemaDefinition != null)
             {   
                 SetupBreadcrumbs();
-                totalEntries = await DataService.CountDataAsync(schemaDefinition.Name);
-                dataEntries = await DataService.GetDataAsync(schemaDefinition.Name, (currentPage - 1) * pageSize, pageSize);
+                dataEntries = await DataService.GetDataAsync(schemaDefinition.Name, 0, 100); // 简化版本，加载前100条记录
             }
             else
             {
                 errorMessage = $"未找到ID为 '{SchemaId}' 的数据结构";
                 dataEntries.Clear();
-                totalEntries = 0;
             }
         }
         catch (Exception ex)
@@ -273,7 +174,6 @@ else
             errorMessage = $"加载数据时出错: {ex.Message}";
             schemaDefinition = null;
             dataEntries.Clear();
-            totalEntries = 0;
         }
         finally
         {   
@@ -281,8 +181,6 @@ else
         }
         StateHasChanged();
     }
-
-
 
     // 记录操作方法
     private void ViewRecord(BsonDocument record)
@@ -297,88 +195,20 @@ else
         selectedRecord = null;
     }
 
-    // 表单相关方法
-    private void ShowAddEntryForm()
+    private void NavigateToEditRecord(BsonDocument? record)
     {
-        isEditing = false;
-        currentEditId = null;
-        ClearFormData();
-        InitializeFormData();
-        showEditForm = true;
-    }
-
-    private void ShowEditEntryForm(BsonDocument? entry)
-    {
-        if (entry == null) return;
-        
-        isEditing = true;
-        currentEditId = entry.TryGetValue("_id", out var id) ? id : null;
-        ClearFormData();
-        PopulateFormDataFromBson(entry);
-        showRecordDetail = false;
-        showEditForm = true;
-    }
-
-    private void CancelEdit()
-    {
-        showEditForm = false;
-        ClearFormData();
-    }
-
-    private void ClearFormData()
-    {
-        formData.Clear();
-        formErrorMessage = null;
-    }
-
-    private void InitializeFormData()
-    {
-        if (schemaDefinition?.Fields == null) return;
-        
-        foreach (var field in schemaDefinition.Fields)
+        if (record != null && schemaDefinition != null)
         {
-            formData[field.Name] = field.Type switch
+            var recordId = record.TryGetValue("_id", out var id) ? id.ToString() : "";
+            if (!string.IsNullOrEmpty(recordId))
             {
-                FieldType.Boolean => false,
-                FieldType.Number => 0.0,
-                FieldType.Date => DateTime.Today,
-                _ => string.Empty
-            };
-        }
-    }
-
-    private void PopulateFormDataFromBson(BsonDocument doc)
-    {
-        if (schemaDefinition == null) return;
-        formData = BsonFormUtils.ConvertBsonToFormData(doc, schemaDefinition);
-    }
-
-    private async Task HandleDataSubmit()
-    {
-        if (schemaDefinition == null) return;
-
-        try
-        {
-            formErrorMessage = null;
-            var bsonDoc = BsonFormUtils.ConvertFormDataToBson(formData, schemaDefinition);
-
-            if (isEditing && currentEditId != null)
-            {
-                bsonDoc["_id"] = currentEditId;
-                await DataService.UpdateDataAsync(schemaDefinition.Name, currentEditId, bsonDoc);
+                // 导航到编辑页面，这里可以根据实际需要调整路由
+                NavigationManager.NavigateTo($"/data-entry/manual/{schemaDefinition.Name}/edit/{recordId}");
             }
-            else
-            {
-                await DataService.CreateDataAsync(schemaDefinition.Name, bsonDoc);
-            }
-            
-            showEditForm = false;
-            await LoadSchemaAndData();
         }
-        catch (Exception ex)
-        {
-            formErrorMessage = $"保存数据时出错: {ex.Message}";
-        }
+        
+        // 关闭详情对话框
+        CloseRecordDetail();
     }
 
     private async Task DeleteEntryPrompt(BsonDocument entry)
@@ -402,7 +232,7 @@ else
             if (entryId != null)
             {
                 await DataService.DeleteDataAsync(schemaDefinition.Name, entryId);
-            await LoadSchemaAndData();
+                await LoadSchemaAndData();
             }
         }
         catch (Exception ex)
@@ -416,44 +246,4 @@ else
         dataEntries = results;
         StateHasChanged();
     }
-
-    // 表单字段访问器
-    private bool GetBoolValue(string fieldName)
-    {
-        if (formData.TryGetValue(fieldName, out var value) && value is bool boolValue)
-            return boolValue;
-        return false;
-    }
-
-    private double GetNumericValue(string fieldName)
-    {
-        if (formData.TryGetValue(fieldName, out var value))
-        {
-            if (value is double doubleValue) return doubleValue;
-            if (value is int intValue) return intValue;
-            if (double.TryParse(value?.ToString(), out var parsed)) return parsed;
-        }
-        return 0.0;
-    }
-
-    private DateTime? GetDateValue(string fieldName)
-    {
-        if (formData.TryGetValue(fieldName, out var value) && value is DateTime dateValue)
-            return dateValue;
-        return null;
-    }
-
-    private string GetStringValue(string fieldName)
-    {
-        if (formData.TryGetValue(fieldName, out var value))
-            return value?.ToString() ?? string.Empty;
-        return string.Empty;
-    }
-
-    private void SetFieldValue(string fieldName, object? value)
-    {
-        formData[fieldName] = value;
-        StateHasChanged();
-    }
-
 } 

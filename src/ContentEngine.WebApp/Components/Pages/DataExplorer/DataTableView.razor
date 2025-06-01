@@ -6,6 +6,7 @@
 
 @inject IDataEntryService DataService
 @inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
 
 <!-- 搜索和筛选工具栏 -->
 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
@@ -19,6 +20,19 @@
                   DebounceInterval="300"
                   OnDebounceIntervalElapsed="OnSearchChanged"
                   Class="flex-grow-1" />
+    
+    <!-- 添加记录按钮 -->
+    <MudButton Variant="Variant.Filled" 
+               Color="Color.Primary" 
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="AddNewRecord"
+               Disabled="@(isAddingNewRecord || isSavingNewRecord)">
+        @if (isSavingNewRecord)
+        {
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+        }
+        添加记录
+    </MudButton>
     
     <!-- 筛选按钮和菜单 -->
     <MudMenu Icon="@Icons.Material.Filled.FilterList" 
@@ -101,13 +115,18 @@
 }
 
 <!-- 数据表格 -->
-<DataTable Data="@filteredDataEntries"
+<DataTable Data="@GetDisplayData()"
            Schema="@Schema"
            Mode="DataTable.DataTableMode.DataExplorer"
            OnViewRecord="OnViewRecord"
            OnEditRecord="OnEditRecord"
            OnDeleteRecord="OnDeleteRecordInternal"
-           OnRowChanged="OnRowChanged" />
+           OnRowChanged="OnRowChanged"
+           NewRecordData="@(isAddingNewRecord ? newRecordFormData : null)"
+           OnNewRecordSave="SaveNewRecord"
+           OnNewRecordCancel="CancelNewRecord"
+           IsSavingNewRecord="@isSavingNewRecord"
+           NewRecordErrorMessage="@newRecordErrorMessage" />
 
 <!-- 分页 -->
 @if (totalEntries > pageSize)
@@ -146,6 +165,13 @@
 
     // 过滤后的数据
     private List<BsonDocument> filteredDataEntries = new();
+
+    // 新记录添加相关
+    private bool isAddingNewRecord = false;
+    private bool isSavingNewRecord = false;
+    private BsonDocument? newRecord = null;
+    private Dictionary<string, object?> newRecordFormData = new();
+    private string? newRecordErrorMessage = null;
 
     private bool CanAddFilter => !string.IsNullOrEmpty(newFilterField) && 
                                 !string.IsNullOrEmpty(newFilterOperator) && 
@@ -273,7 +299,7 @@
         catch (Exception ex)
         {
             Console.WriteLine($"保存数据时出错: {ex.Message}");
-            // 可以在这里添加错误提示
+            Snackbar.Add($"保存数据失败: {ex.Message}", Severity.Error);
         }
     }
 
@@ -291,7 +317,138 @@
         catch (Exception ex)
         {
             Console.WriteLine($"删除数据时出错: {ex.Message}");
-            // 可以在这里添加错误提示
+            Snackbar.Add($"删除数据失败: {ex.Message}", Severity.Error);
         }
+    }
+
+    // 新记录添加相关方法
+    private void AddNewRecord()
+    {
+        if (Schema == null) return;
+
+        isAddingNewRecord = true;
+        newRecord = new BsonDocument();
+        newRecordFormData.Clear();
+        newRecordErrorMessage = null;
+
+        // 初始化表单数据
+        foreach (var field in Schema.Fields)
+        {
+            newRecordFormData[field.Name] = GetDefaultValue(field);
+        }
+
+        StateHasChanged();
+    }
+
+    private void CancelNewRecord()
+    {
+        isAddingNewRecord = false;
+        isSavingNewRecord = false;
+        newRecord = null;
+        newRecordFormData.Clear();
+        newRecordErrorMessage = null;
+        StateHasChanged();
+    }
+
+    private async Task SaveNewRecord()
+    {
+        if (Schema == null || newRecord == null) return;
+
+        isSavingNewRecord = true;
+        newRecordErrorMessage = null;
+
+        try
+        {
+            // 验证必填字段
+            foreach (var field in Schema.Fields.Where(f => f.IsRequired))
+            {
+                if (!newRecordFormData.TryGetValue(field.Name, out var value) || 
+                    value == null || 
+                    (field.Type == FieldType.Text && string.IsNullOrWhiteSpace(value.ToString())))
+                {
+                    newRecordErrorMessage = $"字段 '{field.Name}' 是必填项";
+                    return;
+                }
+            }
+
+            // 转换表单数据为 BsonDocument
+            var bsonDoc = BsonFormUtils.ConvertFormDataToBson(newRecordFormData, Schema);
+
+            // 保存到数据库
+            await DataService.CreateDataAsync(Schema.Name, bsonDoc);
+
+            // 通知父组件数据已更改
+            await OnDataChanged.InvokeAsync();
+
+            // 重新加载数据
+            await ApplyFiltersAndSearch();
+
+            // 显示成功消息
+            Snackbar.Add("记录添加成功！", Severity.Success);
+
+            // 重置状态
+            CancelNewRecord();
+        }
+        catch (Exception ex)
+        {
+            newRecordErrorMessage = $"保存记录失败: {ex.Message}";
+            Snackbar.Add($"保存记录失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSavingNewRecord = false;
+            StateHasChanged();
+        }
+    }
+
+    private object? GetDefaultValue(FieldDefinition field)
+    {
+        return field.Type switch
+        {
+            FieldType.Text => string.Empty,
+            FieldType.Number => 0.0,
+            FieldType.Boolean => false,
+            FieldType.Date => DateTime.Today,
+            FieldType.Reference => string.Empty,
+            _ => null
+        };
+    }
+
+    // 表单值访问方法 - 供DataTable组件使用
+    public T GetFormValue<T>(string fieldName)
+    {
+        if (newRecordFormData.TryGetValue(fieldName, out var value))
+        {
+            if (value is T typedValue)
+                return typedValue;
+            
+            // 尝试类型转换
+            try
+            {
+                if (typeof(T) == typeof(DateTime?) && value is DateTime dt)
+                    return (T)(object)dt;
+                    
+                if (value != null)
+                    return (T)Convert.ChangeType(value, typeof(T));
+            }
+            catch
+            {
+                // 转换失败，返回默认值
+            }
+        }
+        return default(T)!;
+    }
+
+    public void SetFormValue(string fieldName, object? value)
+    {
+        newRecordFormData[fieldName] = value;
+        StateHasChanged();
+    }
+
+
+
+    private List<BsonDocument> GetDisplayData()
+    {
+        return filteredDataEntries;
     }
 } 
