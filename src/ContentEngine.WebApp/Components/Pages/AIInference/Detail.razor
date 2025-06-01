@@ -4,6 +4,7 @@
 @using ContentEngine.Core.Utils
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
+@using ContentEngine.WebApp.Components.Shared
 @inject IReasoningDefinitionService ReasoningDefinitionService
 @inject IReasoningInstanceService ReasoningInstanceService
 @inject IReasoningExecutionService ReasoningExecutionService
@@ -18,7 +19,10 @@
 <PageTitle>@(definition?.Name ?? "推理实例详情") - ContentEngine</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
-    <MudBreadcrumbs Items="breadcrumbItems" Class="mb-4" />
+    <!-- 统一的面包屑导航 -->
+    <PageBreadcrumb Page="PageBreadcrumb.PageType.AIInferenceDetail" 
+                   TaskName="@(definition?.Name ?? $"实例 {instance?.InstanceId?[..8]}...")" 
+                   TaskId="@TaskId" />
 
     @if (isLoading)
     {
@@ -100,13 +104,6 @@
     private List<ReasoningInputCombination> realTimeCombinations = new();
     private bool isCompactView = false;
 
-    private List<BreadcrumbItem> breadcrumbItems = new()
-    {
-        new("首页", href: "/"),
-        new("AI推理", href: "/ai-inference"),
-        new("实例详情", href: null, disabled: true)
-    };
-
     protected override async Task OnInitializedAsync()
     {
         await LoadInstanceDetail();
@@ -131,9 +128,6 @@
                 {
                     realTimeCombinations.Clear();
                 }
-                
-                var displayName = definition?.Name ?? $"实例 {instance.InstanceId[..8]}...";
-                breadcrumbItems[2] = new BreadcrumbItem(displayName, href: null, disabled: true);
             }
         }
         catch (Exception ex)

@@ -5,10 +5,14 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 @using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.WebApp.Components.Shared
 @inject ISchemaDefinitionService SchemaService
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
     <MudStack Spacing="4">
+        <!-- 统一的面包屑导航 -->
+        <PageBreadcrumb Page="PageBreadcrumb.PageType.SchemaCreate" />
+
         <div>
             <MudText Typo="Typo.h3" GutterBottom="true" Class="page-main-title">创建数据结构</MudText>
             <MudText Typo="Typo.subtitle1" Class="mud-text-secondary page-sub-title">定义新的数据结构 (Schema) 以组织和管理您的内容。</MudText>

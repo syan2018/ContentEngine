@@ -1,0 +1,209 @@
+@using ContentEngine.Core.DataPipeline.Models
+
+<MudBreadcrumbs Items="@breadcrumbItems" Class="@($"page-breadcrumb {Class}")" />
+
+@code {
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public List<BreadcrumbItem>? CustomItems { get; set; }
+    [Parameter] public PageType Page { get; set; } = PageType.Custom;
+    [Parameter] public string? SchemaName { get; set; }
+    [Parameter] public string? SchemaId { get; set; }
+    [Parameter] public string? TaskName { get; set; }
+    [Parameter] public string? TaskId { get; set; }
+    [Parameter] public string? CurrentPageTitle { get; set; }
+
+    private List<BreadcrumbItem> breadcrumbItems = new();
+
+    public enum PageType
+    {
+        Custom,
+        Dashboard,
+        SchemaManagement,
+        SchemaCreate,
+        SchemaEdit,
+        SchemaDetails,
+        DataEntry,
+        DataEntryManual,
+        DataEntryAI,
+        DataExplorer,
+        AIInference,
+        AIInferenceCreate,
+        AIInferenceDetail
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (CustomItems != null)
+        {
+            breadcrumbItems = CustomItems;
+        }
+        else
+        {
+            breadcrumbItems = GenerateBreadcrumbs();
+        }
+    }
+
+    private List<BreadcrumbItem> GenerateBreadcrumbs()
+    {
+        var items = new List<BreadcrumbItem>();
+
+        // 首页
+        items.Add(new BreadcrumbItem("首页", href: "/", icon: Icons.Material.Filled.Home));
+
+        switch (Page)
+        {
+            case PageType.Dashboard:
+                items.Add(new BreadcrumbItem("仪表板", href: null, disabled: true, icon: Icons.Material.Filled.Dashboard));
+                break;
+
+            case PageType.SchemaManagement:
+                items.Add(new BreadcrumbItem("数据结构管理", href: null, disabled: true, icon: Icons.Material.Filled.Schema));
+                break;
+
+            case PageType.SchemaCreate:
+                items.Add(new BreadcrumbItem("数据结构管理", href: "/schema-management", icon: Icons.Material.Filled.Schema));
+                items.Add(new BreadcrumbItem("创建数据结构", href: null, disabled: true, icon: Icons.Material.Filled.Add));
+                break;
+
+            case PageType.SchemaEdit:
+                items.Add(new BreadcrumbItem("数据结构管理", href: "/schema-management", icon: Icons.Material.Filled.Schema));
+                if (!string.IsNullOrEmpty(SchemaName))
+                {
+                    items.Add(new BreadcrumbItem(SchemaName, href: $"/schema-management/details/{SchemaId}", icon: Icons.Material.Filled.Description));
+                }
+                items.Add(new BreadcrumbItem("编辑", href: null, disabled: true, icon: Icons.Material.Filled.Edit));
+                break;
+
+            case PageType.SchemaDetails:
+                items.Add(new BreadcrumbItem("数据结构管理", href: "/schema-management", icon: Icons.Material.Filled.Schema));
+                items.Add(new BreadcrumbItem(SchemaName ?? "详情", href: null, disabled: true, icon: Icons.Material.Filled.Description));
+                break;
+
+            case PageType.DataEntry:
+                items.Add(new BreadcrumbItem("信息注入", href: null, disabled: true, icon: Icons.Material.Filled.Input));
+                break;
+
+            case PageType.DataEntryManual:
+                items.Add(new BreadcrumbItem("信息注入", href: "/data-entry", icon: Icons.Material.Filled.Input));
+                items.Add(new BreadcrumbItem("手动录入", href: null, disabled: true, icon: Icons.Material.Filled.Edit));
+                if (!string.IsNullOrEmpty(SchemaName))
+                {
+                    items.Add(new BreadcrumbItem(SchemaName, href: null, disabled: true));
+                }
+                break;
+
+            case PageType.DataEntryAI:
+                items.Add(new BreadcrumbItem("信息注入", href: "/data-entry", icon: Icons.Material.Filled.Input));
+                items.Add(new BreadcrumbItem("AI 辅助录入", href: null, disabled: true, icon: Icons.Material.Filled.Psychology));
+                if (!string.IsNullOrEmpty(SchemaName))
+                {
+                    items.Add(new BreadcrumbItem(SchemaName, href: null, disabled: true));
+                }
+                break;
+
+            case PageType.DataExplorer:
+                items.Add(new BreadcrumbItem("数据洞察", href: "/data-explorer", icon: Icons.Material.Filled.Analytics));
+                if (!string.IsNullOrEmpty(SchemaName))
+                {
+                    items.Add(new BreadcrumbItem(SchemaName, href: null, disabled: true, icon: Icons.Material.Filled.TableChart));
+                }
+                break;
+
+            case PageType.AIInference:
+                items.Add(new BreadcrumbItem("AI推理", href: null, disabled: true, icon: Icons.Material.Filled.Psychology));
+                break;
+
+            case PageType.AIInferenceCreate:
+                items.Add(new BreadcrumbItem("AI推理", href: "/ai-inference", icon: Icons.Material.Filled.Psychology));
+                items.Add(new BreadcrumbItem("创建推理事务", href: null, disabled: true, icon: Icons.Material.Filled.Add));
+                break;
+
+            case PageType.AIInferenceDetail:
+                items.Add(new BreadcrumbItem("AI推理", href: "/ai-inference", icon: Icons.Material.Filled.Psychology));
+                items.Add(new BreadcrumbItem(TaskName ?? "实例详情", href: null, disabled: true, icon: Icons.Material.Filled.Visibility));
+                break;
+
+            case PageType.Custom:
+            default:
+                if (!string.IsNullOrEmpty(CurrentPageTitle))
+                {
+                    items.Add(new BreadcrumbItem(CurrentPageTitle, href: null, disabled: true));
+                }
+                break;
+        }
+
+        return items;
+    }
+
+    /// <summary>
+    /// 创建自定义面包屑项
+    /// </summary>
+    public static BreadcrumbItem CreateItem(string text, string? href = null, string? icon = null, bool disabled = false)
+    {
+        return new BreadcrumbItem(text, href: href, disabled: disabled, icon: icon);
+    }
+
+    /// <summary>
+    /// 快速创建常用的面包屑路径
+    /// </summary>
+    public static class QuickPaths
+    {
+        public static List<BreadcrumbItem> Home() => new()
+        {
+            CreateItem("首页", "/", Icons.Material.Filled.Home)
+        };
+
+        public static List<BreadcrumbItem> SchemaManagement() => new()
+        {
+            CreateItem("首页", "/", Icons.Material.Filled.Home),
+            CreateItem("定义管理", "/schema-management", Icons.Material.Filled.Schema)
+        };
+
+        public static List<BreadcrumbItem> DataEntry() => new()
+        {
+            CreateItem("首页", "/", Icons.Material.Filled.Home),
+            CreateItem("信息注入", "/data-entry", Icons.Material.Filled.Input)
+        };
+
+        public static List<BreadcrumbItem> DataExplorer() => new()
+        {
+            CreateItem("首页", "/", Icons.Material.Filled.Home),
+            CreateItem("数据洞察", "/data-explorer", Icons.Material.Filled.Analytics)
+        };
+
+        public static List<BreadcrumbItem> AIInference() => new()
+        {
+            CreateItem("首页", "/", Icons.Material.Filled.Home),
+            CreateItem("AI推理", "/ai-inference", Icons.Material.Filled.Psychology)
+        };
+    }
+}
+
+<style>
+    .page-breadcrumb {
+        margin-bottom: 1rem;
+    }
+
+    .page-breadcrumb .mud-breadcrumb-item {
+        font-size: 0.875rem;
+    }
+
+    .page-breadcrumb .mud-breadcrumb-separator {
+        color: var(--mud-palette-text-secondary);
+        margin: 0 8px;
+    }
+
+    .page-breadcrumb .mud-breadcrumb-item:last-child {
+        color: var(--mud-palette-text-primary);
+        font-weight: 500;
+    }
+
+    .page-breadcrumb .mud-breadcrumb-item:not(:last-child) {
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .page-breadcrumb .mud-breadcrumb-item:not(:last-child):hover {
+        color: var(--mud-palette-primary);
+        text-decoration: none;
+    }
+</style> 

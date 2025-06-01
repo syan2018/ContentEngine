@@ -10,15 +10,20 @@
 @using ContentEngine.Core.Utils
 @using LiteDB
 @using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@using ContentEngine.WebApp.Components.Shared
 
 <PageTitle>@(schemaDefinition?.Name ?? "数据浏览") - ContentEngine</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
     <MudStack Spacing="6">
+        <!-- 统一的面包屑导航 -->
+        <PageBreadcrumb Page="PageBreadcrumb.PageType.DataExplorer" 
+                       SchemaName="@schemaDefinition?.Name" 
+                       SchemaId="@SchemaId" />
+
         <!-- 页面标题和导航 -->
         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
             <MudStack Spacing="2">
-                <MudBreadcrumbs Items="_breadcrumbItems" />
                 <MudText Typo="Typo.h4" Class="font-weight-bold">
                     @(schemaDefinition?.Name ?? "数据浏览")
                 </MudText>
@@ -31,27 +36,27 @@
             </MudStack>
         </MudStack>
 
-@if (isLoading)
-{
+        @if (isLoading)
+        {
             <MudPaper Class="pa-8 text-center" Elevation="0">
                 <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
                 <MudText Class="mt-2">正在加载数据...</MudText>
             </MudPaper>
-}
-else if (!string.IsNullOrEmpty(errorMessage))
-{
+        }
+        else if (!string.IsNullOrEmpty(errorMessage))
+        {
             <MudAlert Severity="Severity.Error" Class="mb-4">
                 @errorMessage
             </MudAlert>
-}
-else if (schemaDefinition == null)
-{
+        }
+        else if (schemaDefinition == null)
+        {
             <MudAlert Severity="Severity.Warning" Class="mb-4">
                 未找到数据结构 '@SchemaId'
             </MudAlert>
-}
-else
-{
+        }
+        else
+        {
             <!-- 数据操作工具栏 -->
             <MudTabs Elevation="0" Rounded="false">
                 <MudTabPanel Text="表格视图" Icon="@Icons.Material.Filled.TableChart">
@@ -117,7 +122,6 @@ else
     // UI状态
     private bool isLoading = true;
     private string? errorMessage;
-    private List<BreadcrumbItem> _breadcrumbItems = new();
     private bool showRecordDetail = false;
 
     // 对话框选项
@@ -130,18 +134,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        SetupBreadcrumbs();
         await LoadSchemaAndData();
-    }
-
-    private void SetupBreadcrumbs()
-    {
-        _breadcrumbItems = new List<BreadcrumbItem>
-        {
-            new BreadcrumbItem("首页", href: "/"),
-            new BreadcrumbItem("数据洞察", href: "/data-explorer"),
-            new BreadcrumbItem(schemaDefinition?.Name ?? "数据浏览", href: null, disabled: true)
-        };
     }
 
     private async Task LoadSchemaAndData()
@@ -160,7 +153,6 @@ else
             schemaDefinition = await SchemaService.GetSchemaByIdAsync(schemaIdInt);
             if (schemaDefinition != null)
             {   
-                SetupBreadcrumbs();
                 dataEntries = await DataService.GetDataAsync(schemaDefinition.Name, 0, 100); // 简化版本，加载前100条记录
             }
             else

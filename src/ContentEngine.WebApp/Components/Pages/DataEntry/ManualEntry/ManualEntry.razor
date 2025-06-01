@@ -3,19 +3,16 @@
 @inject IDataEntryService DataEntryService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@using ContentEngine.WebApp.Components.Shared
 
 <PageTitle>手动录入 - @(schema?.Name ?? "加载中...") - ContentEngine</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
     <MudStack Spacing="6">
-        <!-- 面包屑导航 -->
-        <div class="d-flex align-center gap-2">
-            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" 
-                      OnClick="@(() => Navigation.NavigateTo("/data-entry"))" Class="back-button">
-                返回
-            </MudButton>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">信息注入 / 手动录入</MudText>
-        </div>
+        <!-- 统一的面包屑导航 -->
+        <PageBreadcrumb Page="PageBreadcrumb.PageType.DataEntryManual" 
+                       SchemaName="@schema?.Name" 
+                       SchemaId="@SchemaId.ToString()" />
 
         @if (isLoading)
         {
@@ -109,15 +106,6 @@
 <style>
     .page-title {
         font-weight: 600;
-    }
-
-    .back-button {
-        color: #424242;
-        text-transform: none;
-    }
-
-    .back-button:hover {
-        background-color: #F5F5F5;
     }
 
     .modern-tabs .mud-tabs-toolbar {

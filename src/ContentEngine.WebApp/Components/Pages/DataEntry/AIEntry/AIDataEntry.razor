@@ -2,6 +2,7 @@
 @using ContentEngine.Core.DataPipeline.Services
 @using ContentEngine.Core.DataPipeline.Models
 @using ContentEngine.Core.AI.Services
+@using ContentEngine.WebApp.Components.Shared
 @inject ISchemaDefinitionService SchemaService
 @inject IFileConversionService FileConversionService
 @inject IDataStructuringService DataStructuringService
@@ -11,7 +12,10 @@
 <PageTitle>AI 辅助录入 - ContentEngine</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-    <MudBreadcrumbs Items="breadcrumbItems" Class="mb-4" />
+    <!-- 统一的面包屑导航 -->
+    <PageBreadcrumb Page="PageBreadcrumb.PageType.DataEntryAI" 
+                   SchemaName="@schema?.Name" 
+                   SchemaId="@SchemaId" />
 
     @if (schema != null)
     {
@@ -41,12 +45,6 @@
 
     private SchemaDefinition? schema;
     private bool isLoading = true;
-
-    private List<BreadcrumbItem> breadcrumbItems = new()
-    {
-        new BreadcrumbItem("信息注入", href: "/data-entry", icon: Icons.Material.Filled.Input),
-        new BreadcrumbItem("AI 辅助录入", href: null, disabled: true)
-    };
 
     protected override async Task OnInitializedAsync()
     {
