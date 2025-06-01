@@ -1,6 +1,8 @@
 @using Microsoft.Extensions.Logging
-@using ContentEngine.WebApp.Components.Shared 
+@using ContentEngine.WebApp.Components.Shared
+@using ContentEngine.Core.DataPipeline.Models
 @inject ILogger<ManualSchemaCreationForm> _logger
+@inject ISnackbar Snackbar
 
 <MudForm @ref="_form" Model="_schema" OnValidSubmit="SubmitInternalForm">
     
@@ -30,6 +32,7 @@
 @code {
     [Parameter] public EventCallback<List<FieldDefinition>> OnValidSchemaSubmit { get; set; }
     [Parameter] public EventCallback OnCancelClicked { get; set; }
+    [Parameter] public Func<Task<bool>>? ValidateParentForm { get; set; } // 新增：用于验证父组件表单的回调
 
     private MudForm? _form;
     private SchemaDefinition _schema = new() { Fields = new List<FieldDefinition>() }; 
@@ -61,6 +64,15 @@
     {
         _logger.LogInformation("[ManualForm] ProcessSchemaSubmission started.");
         if (_form == null) { /* ... logging ... */ return; }
+
+        // 首先验证父组件的表单（数据结构名称等）
+        var validationResult = await FormValidationHelper.ValidateParentFormAsync(ValidateParentForm, Snackbar);
+        if (!validationResult.IsValid)
+        {
+            _errorMessage = validationResult.ErrorMessage;
+            StateHasChanged();
+            return;
+        }
 
         await _form.Validate(); 
         _logger.LogInformation("[ManualForm] Form validation (MudForm level for potential top-level form items - though none exist now): IsValid = {IsValid}", _form.IsValid);
@@ -103,7 +115,7 @@
 
         _logger.LogInformation("[ManualForm] All checks passed. Invoking OnValidSchemaSubmit with {FieldCount} fields.", validFields.Count);
         await OnValidSchemaSubmit.InvokeAsync(validFields);
-        _logger.LogInformation("[ManualForm] OnValidSchemaSubmit invoked.");
+        _logger.LogInformation("[ManualForm] Schema submission completed successfully.");
     }
 
     private async Task SubmitInternalForm()

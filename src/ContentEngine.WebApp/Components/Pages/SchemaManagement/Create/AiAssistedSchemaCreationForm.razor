@@ -112,7 +112,8 @@
 
 @code {
     [Parameter] public EventCallback<List<FieldDefinition>> OnValidSchemaSubmit { get; set; }
-    [Parameter] public EventCallback OnCancelClicked { get; set; } 
+    [Parameter] public EventCallback OnCancelClicked { get; set; }
+    [Parameter] public Func<Task<bool>>? ValidateParentForm { get; set; } // 新增：用于验证父组件表单的回调 
 
     private class AiPromptViewModel
     {
@@ -254,6 +255,16 @@
 
                 case 2: // Trying to complete Step 3 (Final Confirm) - This is the final submission
                     _logger.LogInformation("Attempting to submit from Step 3 completion.");
+                    
+                    // 首先验证父组件的表单（数据结构名称等）
+                    var validationResult = await FormValidationHelper.ValidateParentFormAsync(ValidateParentForm, Snackbar);
+                    if (!validationResult.IsValid)
+                    {
+                        _errorMessage = validationResult.ErrorMessage;
+                        arg.Cancel = true; // 阻止步骤完成
+                        break;
+                    }
+                    
                     await SubmitFinalSchemaAsync(); 
                     // If SubmitFinalSchemaAsync is successful, it will invoke OnValidSchemaSubmit.
                     // If it fails, _errorMessage will be set. We might need to prevent stepper completion if submit fails.
@@ -368,19 +379,13 @@
         try
         {
             await OnValidSchemaSubmit.InvokeAsync(new List<FieldDefinition>(_editableFields));
-            Snackbar.Add($"AI辅助生成的字段列表已提交。", Severity.Info);
-            // ResetFormState(false); // Parent page (CreatePage) will handle navigation/reset of this component via its own state or by re-rendering.
-                                   // Let this component reset its core state upon successful callback.
-            _isStep1CompletedLogically = false;
-            _isStep2CompletedLogically = false;
-            // _currentLogicalStepIndex remains on the last step or an invalid one if stepper completes/hides.
-            // If we want to go back to step 0: ResetFormState(false) would do it.
+            _logger.LogInformation("[AI Form] Schema submission completed successfully.");
         }
         catch (Exception ex)
         {
             _errorMessage = $"提交数据结构时出错: {ex.Message}";
             Snackbar.Add($"提交失败: {ex.Message}", Severity.Error);
-    }
+        }
         finally
         {
             _isSubmittingFinalSchema = false;
@@ -395,6 +400,15 @@
         _logger.LogInformation("[AI Form] TriggerSubmitAsync called by parent. Current logical step: {_currentLogicalStepIndex}");
         if (_currentLogicalStepIndex == 2 && _isStep1CompletedLogically && _isStep2CompletedLogically) 
         {
+            // 首先验证父组件的表单（数据结构名称等）
+            var validationResult = await FormValidationHelper.ValidateParentFormAsync(ValidateParentForm, Snackbar);
+            if (!validationResult.IsValid)
+            {
+                _errorMessage = validationResult.ErrorMessage;
+                StateHasChanged();
+                return;
+            }
+            
              _logger.LogInformation("TriggerSubmitAsync: Conditions met, calling SubmitFinalSchemaAsync.");
             await SubmitFinalSchemaAsync();
         }

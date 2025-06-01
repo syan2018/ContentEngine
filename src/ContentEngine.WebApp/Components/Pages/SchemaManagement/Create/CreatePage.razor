@@ -37,17 +37,17 @@
         <div>
             <MudTabs Elevation="2" Centered="true" Rounded="true" PanelClass="pa-0" Justify="Justify.Center" @bind-ActivePanelIndex="_activeTabIndex">
                 <MudTabPanel Text="AI 辅助" Class="pa-4">
-                    <AiAssistedSchemaCreationForm @ref="_aiFormInstance" OnValidSchemaSubmit="HandleFieldsSubmit" OnCancelClicked="NavigateBackToList" />
+                    <AiAssistedSchemaCreationForm @ref="_aiFormInstance" OnValidSchemaSubmit="HandleFieldsSubmit" OnCancelClicked="NavigateBackToList" ValidateParentForm="ValidatePageForm" />
                 </MudTabPanel>
                 <MudTabPanel Text="手动创建" Class="pa-4">
-                    <ManualSchemaCreationForm @ref="_manualFormInstance" OnValidSchemaSubmit="HandleFieldsSubmit" OnCancelClicked="NavigateBackToList" />
+                    <ManualSchemaCreationForm @ref="_manualFormInstance" OnValidSchemaSubmit="HandleFieldsSubmit" OnCancelClicked="NavigateBackToList" ValidateParentForm="ValidatePageForm" />
                 </MudTabPanel>
             </MudTabs>
         </div>
 
         <!-- 操作按钮 -->
         <div>
-            <MudPaper Elevation="0" Class="pa-4" Style="border-top: 1px solid var(--mud-palette-divider);">
+            <MudPaper Elevation="0" Class="pa-4" Style="border-top: 1px solid">
                 <MudGrid>
                     <MudItem xs="6" class="d-flex justify-start">
                         <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="NavigateBackToList" Disabled="@_isSaving" Size="Size.Large">
@@ -137,27 +137,22 @@
             await SchemaService.CreateSchemaAsync(schemaToSave);
             Snackbar.Add($"数据结构 '{schemaToSave.Name}' 保存成功!", Severity.Success);
             
-            _schemaMeta = new SchemaMetadata(); // Reset page form model
-            _pageForm?.ResetValidation();
-
-
-            if (_activeTabIndex == 0 && _aiFormInstance != null)
-            {
-                // _aiFormInstance.ResetFormState(); // AI form will reset itself internally upon successful submission
-            }
-            else if (_activeTabIndex == 1 && _manualFormInstance != null)
-            {
-                _manualFormInstance.ResetForm();
-            }
+            _logger.LogInformation("[CreatePage] Schema saved successfully. Navigating back to schema management.");
             
-            _logger.LogInformation("[CreatePage] Navigating back to list after 1 second delay.");
-            await Task.Delay(1000);
-            NavigateBackToList();
+            // 在导航前重置状态
+            _isSaving = false;
+            StateHasChanged();
+            
+            // 直接使用 NavigationManager 导航，不依赖 _isSaving 状态
+            NavigationManager.NavigateTo("/schema-management");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[CreatePage] Error saving schema {SchemaName} from {SourceForm} submission.", schemaToSave.Name, sourceForm);
             Snackbar.Add($"保存失败: {ex.Message}", Severity.Error, config => { config.RequireInteraction = true; });
+            
+            // 重新抛出异常，让子表单知道提交失败了
+            throw;
         }
         finally
         {
@@ -193,5 +188,17 @@
     {
         if (_isSaving) return;
         NavigationManager.NavigateTo("/schema-management");
+    }
+
+    /// <summary>
+    /// 验证页面表单（数据结构名称和描述）
+    /// </summary>
+    /// <returns>如果表单有效返回 true，否则返回 false</returns>
+    private async Task<bool> ValidatePageForm()
+    {
+        if (_pageForm == null) return false;
+        
+        await _pageForm.Validate();
+        return _pageForm.IsValid;
     }
 } 
