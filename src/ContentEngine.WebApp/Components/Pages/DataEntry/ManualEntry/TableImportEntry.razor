@@ -7,27 +7,42 @@
 @inject IDataEntryService DataEntryService
 @inject ISnackbar Snackbar
 
-<MudCard Elevation="1" Class="table-import-card">
+<MudCard Elevation="1" Class="rounded-lg">
     <MudCardHeader>
         <CardHeaderContent>
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.Upload" Color="Color.Primary" Size="Size.Small" />
                 <MudText Typo="Typo.h6">表格文件导入</MudText>
                 @if (currentStep > 0)
                 {
-                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Refresh" 
-                              OnClick="ResetImport" Size="Size.Small">
-                        重新导入
-                    </MudButton>
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                        步骤 @(currentStep + 1) / 4
+                    </MudChip>
                 }
             </MudStack>
         </CardHeaderContent>
+        <CardHeaderActions>
+            @if (currentStep > 0)
+            {
+                <MudButton Variant="Variant.Text" 
+                          StartIcon="@Icons.Material.Filled.Refresh" 
+                          OnClick="ResetImport" 
+                          Size="Size.Small">
+                    重新导入
+                </MudButton>
+            }
+            <MudIconButton Icon="@Icons.Material.Filled.Info" 
+                          Color="Color.Default" 
+                          Size="Size.Small"
+                          Title="帮助信息" />
+        </CardHeaderActions>
     </MudCardHeader>
-    <MudCardContent>
+    <MudCardContent Class="pa-4">
         @if (currentStep == 0)
         {
             <!-- 步骤1: 文件上传 -->
             <div class="upload-section">
-                <MudText Typo="Typo.h6" Class="mb-3">选择Excel或CSV文件</MudText>
+                <MudText Typo="Typo.subtitle1" Class="mb-3">选择Excel或CSV文件</MudText>
                 
                 <FileUploadArea @ref="fileUploadArea"
                                 AcceptedTypes=".xlsx,.xls,.csv"
@@ -56,19 +71,18 @@
             <!-- 步骤2: 工作表选择（仅Excel） -->
             @if (sheetNames.Count > 1)
             {
-                <div class="sheet-selection mb-4">
-                    <MudText Typo="Typo.h6" Class="mb-3">选择工作表</MudText>
-                    <MudSelect @bind-Value="selectedSheetIndex" Label="工作表" Variant="Variant.Outlined">
+                <div class="sheet-selection">
+                    <MudText Typo="Typo.subtitle1" Class="mb-3">选择工作表</MudText>
+                    <MudSelect @bind-Value="selectedSheetIndex" 
+                              Label="工作表" 
+                              Variant="Variant.Outlined"
+                              Class="mb-3">
                         @for (int i = 0; i < sheetNames.Count; i++)
                         {
                             var index = i;
                             <MudSelectItem Value="index">@sheetNames[i]</MudSelectItem>
                         }
                     </MudSelect>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" 
-                              OnClick="LoadTableData" Class="mt-3" Disabled="isProcessing">
-                        读取数据
-                    </MudButton>
                 </div>
             }
         }
@@ -76,7 +90,7 @@
         {
             <!-- 步骤3: 字段映射 -->
             <div class="mapping-section">
-                <MudText Typo="Typo.h6" Class="mb-3">字段映射配置</MudText>
+                <MudText Typo="Typo.subtitle1" Class="mb-3">字段映射配置</MudText>
                 
                 @if (tableData != null)
                 {
@@ -89,7 +103,7 @@
 
                     <MudGrid>
                         <MudItem xs="12" md="6">
-                            <MudText Typo="Typo.subtitle1" Class="mb-2">Schema字段</MudText>
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">Schema字段</MudText>
                             <MudPaper Outlined="true" Class="pa-3 mapping-panel">
                                 @foreach (var mapping in fieldMappings)
                                 {
@@ -122,7 +136,7 @@
                             </MudPaper>
                         </MudItem>
                         <MudItem xs="12" md="6">
-                            <MudText Typo="Typo.subtitle1" Class="mb-2">数据预览</MudText>
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">数据预览</MudText>
                             <MudPaper Outlined="true" Class="pa-3 preview-panel">
                                 <MudTable Items="@tableData.Rows.Take(5)" Dense="true" Hover="true">
                                     <HeaderContent>
@@ -147,17 +161,6 @@
                             </MudPaper>
                         </MudItem>
                     </MudGrid>
-
-                    <div class="mt-4 d-flex justify-space-between">
-                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.AutoAwesome" 
-                                  OnClick="AutoMapFields">
-                            自动映射
-                        </MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" 
-                                  OnClick="PreviewImport" Disabled="@(!HasValidMappings())">
-                            预览导入
-                        </MudButton>
-                    </div>
                 }
             </div>
         }
@@ -165,7 +168,7 @@
         {
             <!-- 步骤4: 导入预览和确认 -->
             <div class="import-preview">
-                <MudText Typo="Typo.h6" Class="mb-3">导入预览</MudText>
+                <MudText Typo="Typo.subtitle1" Class="mb-3">导入预览</MudText>
                 
                 @if (previewRecords.Any())
                 {
@@ -186,24 +189,6 @@
                                    EmptyMessage = "没有可预览的内容"
                                })"
                                Class="preview-table" />
-
-                    <div class="mt-4 d-flex justify-space-between">
-                        <MudButton Variant="Variant.Text" OnClick="BackToMapping">
-                            返回映射
-                        </MudButton>
-                        <MudButton Variant="Variant.Filled" Color="Color.Success" 
-                                  OnClick="ExecuteImport" Disabled="isImporting">
-                            @if (isImporting)
-                            {
-                                <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
-                                <span>导入中...</span>
-                            }
-                            else
-                            {
-                                <span>确认导入</span>
-                            }
-                        </MudButton>
-                    </div>
                 }
                 else
                 {
@@ -214,6 +199,53 @@
             </div>
         }
     </MudCardContent>
+    <MudCardActions Class="d-flex justify-space-between pa-4">
+        @if (currentStep == 1 && sheetNames.Count > 1)
+        {
+            <div></div>
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      OnClick="LoadTableData" 
+                      Disabled="isProcessing">
+                读取数据
+            </MudButton>
+        }
+        else if (currentStep == 2)
+        {
+            <MudButton Variant="Variant.Text" 
+                      StartIcon="@Icons.Material.Filled.AutoAwesome" 
+                      OnClick="AutoMapFields">
+                自动映射
+            </MudButton>
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Primary" 
+                      OnClick="PreviewImport" 
+                      Disabled="@(!HasValidMappings())">
+                预览导入
+            </MudButton>
+        }
+        else if (currentStep == 3)
+        {
+            <MudButton Variant="Variant.Text" 
+                      OnClick="BackToMapping">
+                返回映射
+            </MudButton>
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Success" 
+                      OnClick="ExecuteImport" 
+                      Disabled="isImporting">
+                @if (isImporting)
+                {
+                    <MudProgressCircular Class="mr-2" Size="Size.Small" Indeterminate="true" />
+                    <span>导入中...</span>
+                }
+                else
+                {
+                    <span>确认导入</span>
+                }
+            </MudButton>
+        }
+    </MudCardActions>
 </MudCard>
 
 @code {
@@ -426,7 +458,6 @@
     {
         return FileUploadArea.FileTypePresets.SpreadsheetMimeTypes;
     }
-
 }
 
 <style>

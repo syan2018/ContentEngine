@@ -10,7 +10,7 @@
 @inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
 
-<PageTitle>批量表格录入 - @Schema?.Name</PageTitle>
+<PageTitle>批量录入 - @Schema?.Name</PageTitle>
 
 @if (Schema == null)
 {
@@ -18,76 +18,97 @@
 }
 else
 {
-    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-        <MudPaper Elevation="1" Class="pa-4 rounded-lg">
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-                <MudText Typo="Typo.h5">批量表格录入: @Schema.Name</MudText>
-                <MudIconButton Icon="@Icons.Material.Filled.Info" Color="Color.Default" Link="/docs/data-entry/manual-table" Target="_blank" />
-            </MudStack>
-
-            <MudToolBar Dense="true" Class="mb-2">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddNewRow" Class="mr-2">添加行</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.DeleteSweep" OnClick="ClearAllRows" Disabled="!tableData.Any()">清空所有</MudButton>
+    <MudCard Elevation="1" Class="rounded-lg">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.TableChart" Color="Color.Primary" Size="Size.Small" />
+                    <MudText Typo="Typo.h6">批量录入</MudText>
+                </MudStack>
+            </CardHeaderContent>
+            <CardHeaderActions>
+                <MudIconButton Icon="@Icons.Material.Filled.Info" 
+                              Color="Color.Default" 
+                              Size="Size.Small"
+                              Title="帮助信息" />
+            </CardHeaderActions>
+        </MudCardHeader>
+        <MudCardContent Class="pa-0">
+            <MudToolBar Dense="true" Class="px-4 py-2">
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Primary" 
+                          StartIcon="@Icons.Material.Filled.Add" 
+                          OnClick="AddNewRow" 
+                          Size="Size.Small">
+                    添加行
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" 
+                          Color="Color.Error" 
+                          StartIcon="@Icons.Material.Filled.DeleteSweep" 
+                          OnClick="ClearAllRows" 
+                          Disabled="!tableData.Any()"
+                          Size="Size.Small"
+                          Class="ml-2">
+                    清空所有
+                </MudButton>
                 <MudSpacer />
-                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAllData" Disabled="!tableData.Any() || isSaving">
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                    共 @tableData.Count 行
+                </MudChip>
+            </MudToolBar>
+
+            @if (tableData.Any())
+            {
+                <div class="table-wrapper">
+                    <DataTable @ref="dataTableRef"
+                               Schema="@Schema"
+                               Data="@tableData" 
+                               Mode="DataTable.DataTableMode.ManualEntry"
+                               CustomConfiguration="@GetCustomConfiguration()"
+                               OnRowRemoved="OnRowRemoved"
+                               OnRowChanged="OnRowChanged" />
+                </div>
+            }
+            else
+            {
+                <div class="empty-state pa-8 text-center">
+                    <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                    <MudText Typo="Typo.h6" GutterBottom="true">暂无数据行</MudText>
+                    <MudText Color="Color.Secondary" Class="mb-4">点击"添加行"开始批量录入数据</MudText>
+                    <MudButton Variant="Variant.Filled" 
+                              Color="Color.Primary" 
+                              StartIcon="@Icons.Material.Filled.Add"
+                              OnClick="AddNewRow">
+                        添加第一行
+                    </MudButton>
+                </div>
+            }
+        </MudCardContent>
+        @if (tableData.Any())
+        {
+            <MudCardActions Class="d-flex justify-end gap-2 pa-4">
+                <MudButton Variant="Variant.Filled" 
+                          Color="Color.Success" 
+                          StartIcon="@Icons.Material.Filled.Save" 
+                          OnClick="SaveAllData" 
+                          Disabled="isSaving">
                     @if (isSaving)
                     {
                         <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
                     }
                     保存全部 (@tableData.Count)
                 </MudButton>
-            </MudToolBar>
-
-            <MudCardContent Class="pa-0">
-                @if (tableData.Any())
-                {
-                    <div class="table-container">
-                        <DataTable @ref="dataTableRef"
-                                   Schema="@Schema"
-                                   Data="@tableData" 
-                                   Mode="DataTable.DataTableMode.ManualEntry"
-                                   CustomConfiguration="@GetCustomConfiguration()"
-                                   OnRowRemoved="OnRowRemoved"
-                                   OnRowChanged="OnRowChanged"
-                                   Class="data-entry-table" />
-                    </div>
-                }
-                else
-                {
-                    <div class="empty-state pa-8 text-center">
-                        <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
-                        <MudText Typo="Typo.h6" GutterBottom="true">暂无数据行</MudText>
-                        <MudText Color="Color.Secondary" Class="mb-4">点击"添加行"开始批量录入数据</MudText>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                                   OnClick="AddNewRow">
-                            添加第一行
-                        </MudButton>
-                    </div>
-                }
-            </MudCardContent>
-            @if (tableData.Any())
-            {
-                <MudCardActions Class="d-flex justify-end pt-4">
-                    <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAllData" Disabled="isSaving">
-                        @if (isSaving)
-                        {
-                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" />
-                        }
-                        保存全部 (@tableData.Count)
-                    </MudButton>
-                </MudCardActions>
-            }
-        </MudPaper>
-    </MudContainer>
+            </MudCardActions>
+        }
+    </MudCard>
 }
-
 
 @code {
     [Parameter] public SchemaDefinition Schema { get; set; } = null!;
     [Parameter] public EventCallback OnDataSaved { get; set; }
     [Parameter] public bool RequireDeleteConfirmation { get; set; } = false; // 手动录入模式默认不需要确认
 
-    private List<BsonDocument> tableData = new(); // Changed type
+    private List<BsonDocument> tableData = new();
     private bool isSaving = false;
     private DataTable? dataTableRef;
 
@@ -111,8 +132,8 @@ else
             AllowInlineEdit = false,
             ShowIdColumn = false,
             ShowPagination = false,
-            ShowRowCount = true,
-            Height = "calc(100vh - 380px)",
+            ShowRowCount = false, // 在工具栏中显示了
+            Height = "400px", // 固定高度，避免嵌套滚动
             EmptyTitle = "暂无数据行",
             EmptyMessage = "点击添加行开始批量录入数据",
             RequireDeleteConfirmation = RequireDeleteConfirmation,
@@ -140,27 +161,22 @@ else
             newRow[field.Name] = GetDefaultBsonValue(field);
         }
         tableData.Add(newRow);
-        //StateHasChanged(); // DataTable will trigger its own state changes
     }
 
-    private void RemoveRow(BsonDocument row) // Changed type
+    private void RemoveRow(BsonDocument row)
     {
         tableData.Remove(row);
-        //StateHasChanged();
     }
 
-    private Task OnRowRemoved(BsonDocument row) // Changed type
+    private Task OnRowRemoved(BsonDocument row)
     {
         // 行已经在DataTable组件中被移除了，这里只需要更新状态 (如果需要)
-        // tableData is already modified by DataTable's RemoveRow -> Data.Remove(row)
-        // If this component needs to react, do it here.
         return Task.CompletedTask;
     }
 
-    private Task OnRowChanged(BsonDocument row) // Changed type
+    private Task OnRowChanged(BsonDocument row)
     {
         // 数据已经在DataTable组件中被更新了
-        // BsonDocument instance in tableData is directly modified by DataTable
         return Task.CompletedTask;
     }
 
@@ -178,7 +194,7 @@ else
             FieldType.Number => new BsonValue(0.0),
             FieldType.Boolean => new BsonValue(false),
             FieldType.Date => new BsonValue(DateTime.Today),
-            FieldType.Reference => new BsonValue(string.Empty), // Assuming reference is stored as string ID or similar
+            FieldType.Reference => new BsonValue(string.Empty),
             _ => BsonValue.Null
         };
     }
@@ -206,7 +222,6 @@ else
                         return;
                     }
                 }
-                // Add other field-specific validations if needed
             }
         }
 
@@ -243,11 +258,16 @@ else
 }
 
 <style>
-    .table-container {
-        height: calc(100vh - 380px); /* Adjust based on your layout */
-        overflow-y: auto;
+    .table-wrapper {
+        /* 移除额外的容器样式，让DataTable自己管理滚动 */
+        padding: 0 16px 16px 16px;
     }
-    .data-entry-table .mud-table-container {
-        max-height: 100% !important; /* Ensure DataTable's internal container takes full height */
+    
+    .empty-state {
+        min-height: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
     }
 </style> 

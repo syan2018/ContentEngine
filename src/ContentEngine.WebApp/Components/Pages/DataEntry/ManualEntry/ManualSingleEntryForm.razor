@@ -8,22 +8,42 @@
 @inject IDataEntryService DataEntryService
 @inject ISnackbar Snackbar
 
-<DataRecordCard Schema="@Schema"
-                FormData="@formData"
-                Title="录入新数据"
-                Icon="@Icons.Material.Filled.Add"
-                IconColor="Color.Primary"
-                IsEditable="true"
-                ShowActions="true"
-                ShowDeleteButton="false"
-                IsSaving="@isSaving"
-                OnSave="HandleSave" />
-
-<div class="mt-4 d-flex justify-end gap-2">
-    <MudButton Variant="Variant.Text" OnClick="ClearForm" Disabled="@isSaving">
-        清空表单
-    </MudButton>
-</div>
+<MudCard Elevation="1" Class="rounded-lg">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" />
+                <MudText Typo="Typo.h6">单条录入</MudText>
+            </MudStack>
+        </CardHeaderContent>
+        <CardHeaderActions>
+            <MudIconButton Icon="@Icons.Material.Filled.Info" 
+                          Color="Color.Default" 
+                          Size="Size.Small"
+                          Title="帮助信息" />
+        </CardHeaderActions>
+    </MudCardHeader>
+    <MudCardContent Class="pa-4">
+        <DataRecordCard Schema="@Schema"
+                        FormData="@formData"
+                        Title="录入新数据"
+                        Icon="@Icons.Material.Filled.Add"
+                        IconColor="Color.Primary"
+                        IsEditable="true"
+                        ShowActions="true"
+                        ShowDeleteButton="false"
+                        IsSaving="@isSaving"
+                        OnSave="HandleSave" />
+    </MudCardContent>
+    <MudCardActions Class="d-flex justify-end gap-2 pa-4">
+        <MudButton Variant="Variant.Text" 
+                   OnClick="ClearForm" 
+                   Disabled="@isSaving"
+                   StartIcon="@Icons.Material.Filled.Clear">
+            清空表单
+        </MudButton>
+    </MudCardActions>
+</MudCard>
 
 @code {
     [Parameter] public SchemaDefinition Schema { get; set; } = null!;
