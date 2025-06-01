@@ -1,217 +1,46 @@
 @page "/schema-management"
 @using ContentEngine.WebApp.Components.Shared
+@using ContentEngine.Core.DataPipeline.Services
 @inject NavigationManager NavigationManager
-@inject ISchemaDefinitionService SchemaService
-
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject ISchemaDefinitionService SchemaService
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
-    <MudStack Spacing="6">
-        <MudGrid Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-            <MudItem xs="12" sm="8">
-                <MudText Typo="Typo.h4" GutterBottom="true" Class="page-title">数据管理</MudText>
-                <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">创建和管理您的数据结构定义 (Schema)</MudText>
-            </MudItem>
-            <MudItem xs="12" sm="4" Class="d-flex justify-sm-end align-self-center">
-                <MudButton Variant="Variant.Filled" Size="Size.Large" Class="create-schema-button"
-                           OnClick="NavigateToCreateSchema" StartIcon="@Material.Filled.Add">
-                    创建新数据结构
-                </MudButton>
-            </MudItem>
-        </MudGrid>
+<PageTitle>数据管理 - ContentEngine</PageTitle>
 
-        <MudGrid AlignItems="AlignItems.Center" Spacing="2">
-            <MudItem xs="12" sm="9">
-                <MudTextField T="string" @bind-Value="SearchTerm" Placeholder="搜索数据结构..." Variant="Variant.Outlined" 
-                              Adornment="Adornment.Start" AdornmentIcon="@Material.Filled.Search" Clearable="true" 
-                              Immediate="true" DebounceInterval="300" Class="search-textfield" />
-            </MudItem>
-            <MudItem xs="12" sm="3" Class="d-flex justify-sm-start justify-xs-stretch">
-                <MudButton Variant="Variant.Outlined" StartIcon="@Material.Filled.FilterList" FullWidth="true" Class="filter-button" Disabled="true"> 
-                    筛选 (待实现) 
-                </MudButton> 
-            </MudItem>
-        </MudGrid>
-
-        @if (_isLoading)
-        {
-            <MudPaper Class="pa-4 d-flex flex-column align-center justify-center loading-empty-paper" Elevation="0">
-                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-                <MudText Class="mt-2">正在加载数据结构列表...</MudText>
-            </MudPaper>
-        }
-        else if (!_pagedSchemas?.Any() ?? true)
-        {
-            <MudPaper Class="pa-8 text-center loading-empty-paper" Elevation="0">
-                <MudIcon Icon="@Material.Filled.LibraryBooks" Size="Size.Large" Color="Color.Default" Class="mb-4 empty-state-icon" />
-                <MudText Typo="Typo.h5" GutterBottom="true">@(string.IsNullOrWhiteSpace(_searchTerm) ? "暂无数据结构" : "未找到匹配的数据结构")</MudText>
-                <MudText Class="mud-text-secondary">@(string.IsNullOrWhiteSpace(_searchTerm) ? "点击右上角 \"创建新数据结构\" 开始吧！" : "尝试修改您的搜索词或清除筛选条件。")</MudText>
-            </MudPaper>
-        }
-        else
-        {
-            <MudGrid Spacing="3">
-                            @foreach (var schema in _pagedSchemas)
-            {
-                <MudItem xs="12" sm="6" md="4" lg="3">
-                    <SchemaCard Schema="@schema"
-                               Mode="SchemaCard.SchemaCardMode.Management"
-                               OnDeleteRequested="@DeleteSchemaAsync" />
-                </MudItem>
-            }
-            </MudGrid>
-        }
-
-        <MudPagination Count="_totalPages" @bind-SelectedPage="CurrentPage" Color="Color.Primary" Class="mt-8 d-flex justify-center" Disabled="_totalPages <= 1 || _isLoading" />
-    </MudStack>
-</MudContainer>
-
-<style>
-    .page-title {
-        font-weight: 600;
-    }
-
-    .create-schema-button {
-        background-color: #6A0DAD !important; /* Important to override MudBlazor default */
-        color: white !important;
-        text-transform: none;
-        border-radius: 8px;
-    }
-
-    .search-textfield .mud-input-slot {
-        border-radius: 8px;
-    }
-
-    .filter-button {
-        height: 56px;
-        border-color: #E0E0E0;
-        color: #424242;
-        text-transform: none;
-        border-radius: 8px;
-    }
-
-    .loading-empty-paper {
-        min-height: 300px;
-    }
-
-    .empty-state-icon {
-        font-size: 4rem;
-    }
-
-    .action-button:hover {
-        background-color: #F5F5F5 !important;
-    }
-
-    .schema-action-button {
-        color: #424242 !important;
-        text-transform: none;
-    }
-</style>
+<SchemaListPage @ref="_schemaListPageRef" Configuration="@_pageConfiguration" />
 
 @code {
-    private List<SchemaDefinition>? _allSchemas;
-    private List<SchemaDefinition>? _pagedSchemas;
-    private string _searchTerm = string.Empty;
-    private int _currentPage = 1;
-    private const int PageSize = 8; 
-    private int _totalPages = 1;
-    private bool _isLoading = true;
+    private SchemaListPageConfiguration _pageConfiguration = new();
+    private SchemaListPage? _schemaListPageRef;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        await LoadSchemasAsync();
-    }
-
-    private async Task LoadSchemasAsync()
-    {
-        _isLoading = true;
-        _allSchemas = null;
-        _pagedSchemas = null;
-        StateHasChanged();
-
-        try
+        _pageConfiguration = new SchemaListPageConfiguration
         {
-            var schemasFromService = await SchemaService.GetAllSchemasAsync();
-            _allSchemas = schemasFromService?.OrderByDescending(s => s.UpdatedAt).ToList() ?? new List<SchemaDefinition>();
-            ApplyFilterAndPagination();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"加载数据结构失败: {ex.Message}", Severity.Error);
-            _allSchemas = new List<SchemaDefinition>();
-            ApplyFilterAndPagination();
-        }
-        finally
-        {
-            _isLoading = false;
-            StateHasChanged();
-        }
-    }
-
-    private void ApplyFilterAndPagination()
-    {
-        if (_allSchemas == null) 
-        {
-            _pagedSchemas = null;
-            _totalPages = 1;
-            _currentPage = 1;
-            return;
-        }
-
-        var tempFiltered = _allSchemas.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(_searchTerm))
-        {
-            tempFiltered = tempFiltered.Where(s =>
-                (s.Name?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (s.Description?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
-        }
-        
-        _totalPages = (int)Math.Ceiling(tempFiltered.Count() / (double)PageSize);
-        _totalPages = Math.Max(1, _totalPages); 
-
-        if (_currentPage > _totalPages) _currentPage = _totalPages;
-        if (_currentPage < 1) _currentPage = 1;
-
-        _pagedSchemas = tempFiltered
-            .Skip((_currentPage - 1) * PageSize)
-            .Take(PageSize)
-            .ToList();
-        
-        StateHasChanged();
-    }
-
-    private string SearchTerm
-    {
-        get => _searchTerm;
-        set
-        {
-            if (_searchTerm == value) return;
-            _searchTerm = value;
-            _currentPage = 1;
-            ApplyFilterAndPagination();
-            StateHasChanged();
-        }
-    }
-    
-    private int CurrentPage 
-    {
-        get => _currentPage;
-        set
-        {
-            if (_currentPage == value) return;
-            _currentPage = value;
-            ApplyFilterAndPagination();
-            StateHasChanged();
-        }
+            PageTitle = "数据管理",
+            PageDescription = "创建和管理您的数据结构定义 (Schema)",
+            SearchPlaceholder = "搜索数据结构...",
+            LoadingText = "正在加载数据结构列表...",
+            EmptyStateIcon = Icons.Material.Filled.LibraryBooks,
+            EmptyStateTitle = "暂无数据结构",
+            EmptyStateDescription = "点击右上角 \"创建新数据结构\" 开始吧！",
+            NoSearchResultsTitle = "未找到匹配的数据结构",
+            NoSearchResultsDescription = "尝试修改您的搜索词或清除筛选条件。",
+            ShowCreateButton = true,
+            CreateButtonText = "创建新数据结构",
+            OnCreateClick = NavigateToCreateSchema,
+            SchemaCardMode = SchemaCard.SchemaCardMode.Management,
+            OnDeleteRequested = DeleteSchemaAsync,
+            EnablePagination = true,
+            PageSize = 8
+        };
     }
 
     private void NavigateToCreateSchema()
     {
         NavigationManager.NavigateTo("/schema-management/create");
     }
-
 
     private async Task DeleteSchemaAsync(SchemaDefinition schemaToDelete)
     {
@@ -234,7 +63,7 @@
                 Snackbar.Add($"正在删除 '{schemaToDelete.Name}'...", Severity.Info);
                 await SchemaService.DeleteSchemaAsync(schemaToDelete.Id);
                 Snackbar.Add($"数据结构 '{schemaToDelete.Name}' 已删除。", Severity.Success);
-                await LoadSchemasAsync();
+                await _schemaListPageRef?.RefreshAsync()!;
             }
             catch (Exception ex)
             {

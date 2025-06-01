@@ -4,66 +4,44 @@
 @inject IDataEntryService DataEntryService
 
 <MudCard Class="@GetCardClass()" Style="@GetCardStyle()" @onclick="HandleCardClickInternal">
-    @if (_effectiveConfiguration.ShowHeader)
-    {
-        <MudCardHeader>
-            <CardHeaderContent>
-                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                    <div @onclick="HandleTitleClickInternal" @onclick:stopPropagation="true" style="cursor: pointer;">
-                        <MudText Typo="Typo.h6" Class="schema-card-title">
-                            @Schema.Name
-                        </MudText>
-                    </div>
+    <!-- 统一的标题区域 -->
+    <MudCardContent Class="pt-4 pb-2">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <div @onclick="HandleTitleClickInternal" @onclick:stopPropagation="true" style="cursor: pointer;">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudText Typo="Typo.h6" Class="schema-card-title">
+                        @Schema.Name
+                    </MudText>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" Class="schema-card-chip">
                         @($"{Schema.Fields?.Count ?? 0} 字段")
                     </MudChip>
                 </MudStack>
-            </CardHeaderContent>
-            <CardHeaderActions>
-                @{
-                    var menuItems = _effectiveConfiguration.MenuItems ?? new List<SchemaCardMenuItem>();
-                }
-                @if (menuItems.Any())
-                {
-                    <MudMenu Icon="@Material.Filled.MoreVert" Size="Size.Small" 
-                            AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                        @foreach (var item in menuItems)
-                        {
-                            <MudMenuItem OnClick="@(() => item.Action?.Invoke(Schema))">
-                                @item.Text
-                            </MudMenuItem>
-                        }
-                    </MudMenu>
-                }
-            </CardHeaderActions>
-        </MudCardHeader>
-    }
-    else
-    {
-        <!-- 简化标题模式 -->
-        <MudCardContent Class="pt-4">
-            <div class="d-flex justify-space-between align-center mb-2">
-                <div @onclick="HandleTitleClickInternal" @onclick:stopPropagation="true" style="cursor: pointer;">
-                    <MudText Typo="Typo.h6" Class="schema-card-title">
-                        @Schema.Name
-                    </MudText>
-                </div>
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default" Class="schema-card-chip">
-                    @($"{Schema.Fields?.Count ?? 0} 字段")
-                </MudChip>
             </div>
-        </MudCardContent>
-    }
-
-    <MudCardContent Class="@("pt-0")">
+            @{
+                var menuItems = _effectiveConfiguration.MenuItems ?? new List<SchemaCardMenuItem>();
+            }
+            @if (menuItems.Any())
+            {
+                <MudMenu Icon="@Material.Filled.MoreVert" Size="Size.Small" 
+                        AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    @foreach (var item in menuItems)
+                    {
+                        <MudMenuItem OnClick="@(() => item.Action?.Invoke(Schema))">
+                            @item.Text
+                        </MudMenuItem>
+                    }
+                </MudMenu>
+            }
+        </MudStack>
         @if (_effectiveConfiguration.ShowDescription && !string.IsNullOrEmpty(Schema.Description))
         {
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3 schema-card-description" 
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="schema-card-description" 
                     Lines="@_effectiveConfiguration.DescriptionLines" Title="@Schema.Description">
                 @Schema.Description
             </MudText>
         }
-
+    </MudCardContent>
+    <MudCardContent Class="pt-0">
         @if (_effectiveConfiguration.ShowMetadata)
         {
             <MudStack Spacing="1" Class="schema-card-meta">
@@ -80,19 +58,17 @@
                         </MudItem>
                     </MudGrid>
                 }
-                @if (_effectiveConfiguration.ShowUpdateTime)
-                {
-                    <MudGrid Spacing="1" Justify="Justify.SpaceBetween">
-                        <MudItem>
-                            <MudText Typo="Typo.caption">更新于:</MudText>
-                        </MudItem>
-                        <MudItem Class="text-right">
-                            <MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">
-                                @Schema.UpdatedAt.ToString("yyyy-MM-dd")
-                            </MudText>
-                        </MudItem>
-                    </MudGrid>
-                }
+                <!-- 始终保留更新时间的空间，确保布局一致性 -->
+                <MudGrid Spacing="1" Justify="Justify.SpaceBetween">
+                    <MudItem>
+                        <MudText Typo="Typo.caption">更新于:</MudText>
+                    </MudItem>
+                    <MudItem Class="text-right">
+                        <MudText Typo="Typo.caption" Class="font-weight-medium mud-text-primary">
+                            @(_effectiveConfiguration.ShowUpdateTime ? Schema.UpdatedAt.ToString("yyyy-MM-dd") : "-")
+                        </MudText>
+                    </MudItem>
+                </MudGrid>
             </MudStack>
         }
 
@@ -105,9 +81,10 @@
     @{
         var actionButtons = _effectiveConfiguration.ActionButtons ?? new List<SchemaCardActionButton>();
     }
-    @if (actionButtons.Any())
-    {
-        <MudCardActions Class="@GetActionsClass(actionButtons.Count)">
+    <!-- 始终显示ActionButtons区域以保持一致的高度 -->
+    <MudCardActions Class="@GetActionsClass(actionButtons.Count)">
+        @if (actionButtons.Any())
+        {
             @if (actionButtons.Count == 1)
             {
                 var button = actionButtons.First();
@@ -134,8 +111,13 @@
                     }
                 </MudGrid>
             }
-        </MudCardActions>
-    }
+        }
+        else
+        {
+            <!-- 占位符，保持高度一致 -->
+            <div style="height: 40px;"></div>
+        }
+    </MudCardActions>
 </MudCard>
 
 @code {
@@ -293,7 +275,7 @@
 
     private string GetCardClass()
     {
-        var classes = new List<string> { "d-flex", "flex-column", "schema-card" };
+        var classes = new List<string> { "schema-card" };
         
         bool isEffectivelyClickable = OnCardClick.HasDelegate || 
                                      (_effectiveConfiguration.CardClickAction != null);
@@ -308,14 +290,21 @@
 
     private string GetCardStyle()
     {
-        var styles = new List<string> { !string.IsNullOrEmpty(Height) ? $"height: {Height}" : "height: 100%" };
+        var styles = new List<string>();
+        
+        if (!string.IsNullOrEmpty(Height))
+        {
+            styles.Add($"height: {Height}");
+        }
 
         return string.Join("; ", styles);
     }
 
+
+
     private string GetActionsClass(int buttonCount)
     {
-        return buttonCount == 1 ? "" : "mt-auto pa-2";
+        return "mt-auto pa-2";
     }
 
     private async Task HandleCardClickInternal()
@@ -360,14 +349,15 @@
     .schema-card {
         border: 1px solid #E0E0E0;
         border-radius: 12px;
-    }
-
-    .schema-card .mud-card-header {
-        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
 
     .schema-card-title {
         font-weight: 600;
+        /* 确保标题行高一致 */
+        line-height: 1.5;
     }
     
     .schema-card-chip {
@@ -379,16 +369,35 @@
         height: 24px;
         padding: 0 8px;
         line-height: normal;
+        /* 确保chip位置固定 */
+        flex-shrink: 0;
     }
 
     .schema-card .mud-card-content {
         padding-left: 16px;
         padding-right: 16px;
         padding-bottom: 12px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
     }
 
     .schema-card-meta {
         font-size: 0.875rem;
+        /* 确保元数据区域高度一致 */
+        min-height: 48px;
+        margin-top: auto;
+    }
+
+    .schema-card-description {
+        /* 确保描述区域高度一致 */
+        min-height: 2.5em;
+        flex-shrink: 0;
+    }
+
+    .schema-card .mud-card-actions {
+        flex-shrink: 0;
+        padding: 8px 16px 16px 16px;
     }
 
     .cursor-pointer {
@@ -408,6 +417,17 @@
     .schema-card .mud-button {
         color: #424242 !important;
         text-transform: none;
+        /* 确保按钮高度一致 */
+        min-height: 40px;
+    }
+
+    /* 统一标题区域样式 */
+    .schema-card .mud-card-content:first-child {
+        flex-shrink: 0;
+    }
+    
+    .schema-card .mud-card-content:first-child .d-flex {
+        min-height: 40px;
     }
 </style>
 
@@ -417,7 +437,6 @@
     /// </summary>
     public class SchemaCardConfiguration
     {
-        public bool ShowHeader { get; set; } = true;
         public Func<SchemaDefinition, Task>? CardClickAction { get; set; }
         public Func<SchemaDefinition, Task>? TitleClickAction { get; set; }
         public bool ShowDescription { get; set; } = true;
@@ -432,7 +451,6 @@
         {
             return new SchemaCardConfiguration
             {
-                ShowHeader = true,
                 ShowDescription = true,
                 DescriptionLines = 2,
                 ShowMetadata = true,
@@ -448,8 +466,7 @@
                 [
                     new SchemaCardActionButton { Text = "查看", Icon = Material.Filled.Visibility, Action = async _ => component.NavigateToDataView(), Class = "action-button schema-action-button" },
                     new SchemaCardActionButton { Text = "注入", Icon = Material.Filled.Input, Action = async _ => component.NavigateToAIEntry(), Class = "action-button schema-action-button" }
-                ],
-                
+                ]
             };
         }
 
@@ -457,7 +474,6 @@
         {
             return new SchemaCardConfiguration
             {
-                ShowHeader = false,
                 ShowDescription = true,
                 DescriptionLines = 2,
                 ShowMetadata = true,
@@ -468,9 +484,7 @@
                 [
                     new SchemaCardActionButton { Text = "手动录入", Icon = Material.Filled.Edit, Action = async _ => component.NavigateToManualEntry(), Class = "action-button schema-action-button" },
                     new SchemaCardActionButton { Text = "AI 辅助", Icon = Material.Filled.AutoAwesome, Action = async _ => component.NavigateToAIEntry(), Class = "action-button schema-action-button" }
-                ],
-                // Default title click for data entry might be AI entry or manual entry
-
+                ]
             };
         }
 
@@ -478,7 +492,6 @@
         {
             return new SchemaCardConfiguration
             {
-                ShowHeader = false,
                 ShowDescription = true,
                 DescriptionLines = 2,
                 ShowMetadata = true,

@@ -1,0 +1,241 @@
+@using ContentEngine.Core.DataPipeline.Services
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.WebApp.Components.Shared
+@inject ISchemaDefinitionService SchemaService
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
+    <MudStack Spacing="6">
+        <!-- 页面标题区域 -->
+        <MudGrid Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudItem xs="12" sm="8">
+                <MudText Typo="Typo.h4" GutterBottom="true" Class="page-title">@Configuration.PageTitle</MudText>
+                <MudText Typo="Typo.subtitle1" Class="mud-text-secondary">@Configuration.PageDescription</MudText>
+            </MudItem>
+            @if (Configuration.ShowCreateButton)
+            {
+                <MudItem xs="12" sm="4" Class="d-flex justify-sm-end align-self-center">
+                    <MudButton Variant="Variant.Filled" Size="Size.Large" Class="create-schema-button"
+                               OnClick="@(() => Configuration.OnCreateClick?.Invoke())" StartIcon="@Material.Filled.Add">
+                        @Configuration.CreateButtonText
+                    </MudButton>
+                </MudItem>
+            }
+        </MudGrid>
+
+        <!-- 搜索和筛选区域 -->
+        <MudGrid AlignItems="AlignItems.Center" Spacing="2">
+            <MudItem xs="12" sm="9">
+                <MudTextField T="string" @bind-Value="SearchTerm" Placeholder="@Configuration.SearchPlaceholder" Variant="Variant.Outlined" 
+                              Adornment="Adornment.Start" AdornmentIcon="@Material.Filled.Search" Clearable="true" 
+                              Immediate="true" DebounceInterval="300" Class="search-textfield" />
+            </MudItem>
+            <MudItem xs="12" sm="3" Class="d-flex justify-sm-start justify-xs-stretch">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Material.Filled.FilterList" FullWidth="true" Class="filter-button" Disabled="true"> 
+                    筛选 (待实现) 
+                </MudButton> 
+            </MudItem>
+        </MudGrid>
+
+        <!-- 内容区域 -->
+        @if (_isLoading)
+        {
+            <MudPaper Class="pa-4 d-flex flex-column align-center justify-center loading-empty-paper" Elevation="0">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                <MudText Class="mt-2">@Configuration.LoadingText</MudText>
+            </MudPaper>
+        }
+        else if (!_displaySchemas?.Any() ?? true)
+        {
+            <MudPaper Class="pa-8 text-center loading-empty-paper" Elevation="0">
+                <MudIcon Icon="@Configuration.EmptyStateIcon" Size="Size.Large" Color="Color.Default" Class="mb-4 empty-state-icon" />
+                <MudText Typo="Typo.h5" GutterBottom="true">
+                    @(string.IsNullOrWhiteSpace(_searchTerm) ? Configuration.EmptyStateTitle : Configuration.NoSearchResultsTitle)
+                </MudText>
+                <MudText Class="mud-text-secondary">
+                    @(string.IsNullOrWhiteSpace(_searchTerm) ? Configuration.EmptyStateDescription : Configuration.NoSearchResultsDescription)
+                </MudText>
+            </MudPaper>
+        }
+        else
+        {
+            <MudGrid Spacing="3">
+                @foreach (var schema in _displaySchemas)
+                {
+                    <MudItem xs="12" sm="6" md="4" lg="3">
+                        <SchemaCard Schema="@schema"
+                                   Mode="@Configuration.SchemaCardMode"
+                                   OnDeleteRequested="@(Configuration.OnDeleteRequested)" />
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+
+        <!-- 分页区域 -->
+        @if (Configuration.EnablePagination && _totalPages > 1)
+        {
+            <MudPagination Count="_totalPages" @bind-SelectedPage="CurrentPage" Color="Color.Primary" 
+                          Class="mt-8 d-flex justify-center" Disabled="_totalPages <= 1 || _isLoading" />
+        }
+    </MudStack>
+</MudContainer>
+
+<style>
+    .page-title {
+        font-weight: 600;
+    }
+
+    .create-schema-button {
+        background-color: #6A0DAD !important;
+        color: white !important;
+        text-transform: none;
+        border-radius: 8px;
+    }
+
+    .search-textfield .mud-input-slot {
+        border-radius: 8px;
+    }
+
+    .filter-button {
+        height: 56px;
+        border-color: #E0E0E0;
+        color: #424242;
+        text-transform: none;
+        border-radius: 8px;
+    }
+
+    .loading-empty-paper {
+        min-height: 300px;
+    }
+
+    .empty-state-icon {
+        font-size: 4rem;
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// 页面配置参数
+    /// </summary>
+    [Parameter] public SchemaListPageConfiguration Configuration { get; set; } = new();
+
+    /// <summary>
+    /// 额外的内容渲染片段
+    /// </summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    // 内部状态
+    private List<SchemaDefinition>? _allSchemas;
+    private List<SchemaDefinition>? _displaySchemas;
+    private string _searchTerm = string.Empty;
+    private int _currentPage = 1;
+    private int _totalPages = 1;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSchemasAsync();
+    }
+
+    private async Task LoadSchemasAsync()
+    {
+        _isLoading = true;
+        _allSchemas = null;
+        _displaySchemas = null;
+        StateHasChanged();
+
+        try
+        {
+            var schemasFromService = await SchemaService.GetAllSchemasAsync();
+            _allSchemas = schemasFromService?.OrderByDescending(s => s.UpdatedAt).ToList() ?? new List<SchemaDefinition>();
+            ApplyFilterAndPagination();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"加载数据结构失败: {ex.Message}", Severity.Error);
+            _allSchemas = new List<SchemaDefinition>();
+            ApplyFilterAndPagination();
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ApplyFilterAndPagination()
+    {
+        if (_allSchemas == null) 
+        {
+            _displaySchemas = null;
+            _totalPages = 1;
+            _currentPage = 1;
+            return;
+        }
+
+        var filtered = _allSchemas.AsEnumerable();
+
+        // 应用搜索过滤
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            filtered = filtered.Where(s =>
+                (s.Name?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (s.Description?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        // 应用分页
+        if (Configuration.EnablePagination)
+        {
+            _totalPages = (int)Math.Ceiling(filtered.Count() / (double)Configuration.PageSize);
+            _totalPages = Math.Max(1, _totalPages);
+
+            if (_currentPage > _totalPages) _currentPage = _totalPages;
+            if (_currentPage < 1) _currentPage = 1;
+
+            _displaySchemas = filtered
+                .Skip((_currentPage - 1) * Configuration.PageSize)
+                .Take(Configuration.PageSize)
+                .ToList();
+        }
+        else
+        {
+            _displaySchemas = filtered.ToList();
+            _totalPages = 1;
+        }
+        
+        StateHasChanged();
+    }
+
+    private string SearchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            if (_searchTerm == value) return;
+            _searchTerm = value;
+            _currentPage = 1;
+            ApplyFilterAndPagination();
+            StateHasChanged();
+        }
+    }
+    
+    private int CurrentPage 
+    {
+        get => _currentPage;
+        set
+        {
+            if (_currentPage == value) return;
+            _currentPage = value;
+            ApplyFilterAndPagination();
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// 刷新数据
+    /// </summary>
+    public async Task RefreshAsync()
+    {
+        await LoadSchemasAsync();
+    }
+} 
