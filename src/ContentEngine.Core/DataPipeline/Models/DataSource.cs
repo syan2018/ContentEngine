@@ -21,9 +21,24 @@ public class DataSource
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// 数据源内容
+    /// 数据源内容（可能包含图片的 Data URI）
     /// </summary>
     public string Content { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 纯文本内容（不包含图片，用于 AI 处理）
+    /// </summary>
+    public string TextOnlyContent { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 是否包含图片
+    /// </summary>
+    public bool HasImages { get; set; } = false;
+
+    /// <summary>
+    /// 图片数量
+    /// </summary>
+    public int ImageCount { get; set; } = 0;
 
     /// <summary>
     /// 文件大小（字节）

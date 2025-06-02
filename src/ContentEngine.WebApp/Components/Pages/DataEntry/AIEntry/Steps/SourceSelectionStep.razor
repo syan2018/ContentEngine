@@ -108,6 +108,12 @@
                                         <MudText Typo="Typo.caption" Color="Color.Secondary">
                                             @GetSourceDescription(source)
                                         </MudText>
+                                        @if (source.HasImages)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="Icons.Material.Filled.Image" Class="mt-1">
+                                                包含 @source.ImageCount 张图片
+                                            </MudChip>
+                                        }
                                     </div>
                                 </div>
                                 <div class="d-flex align-center">
@@ -147,6 +153,23 @@
         </MudRadioGroup>
     </div>
 
+    <div class="mb-6">
+        <MudText Typo="Typo.h6" Class="mb-3">图片处理选项</MudText>
+        <MudCheckBox @bind-Value="includeImagesInAI" Color="Color.Primary" Class="mb-2">
+            <MudText>在 AI 处理时包含图片内容</MudText>
+        </MudCheckBox>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-6">
+            @if (includeImagesInAI)
+            {
+                <span>图片将以 Data URI 格式发送给 AI，可能会增加处理时间和成本</span>
+            }
+            else
+            {
+                <span>图片将被替换为文本占位符，仅在预览中显示</span>
+            }
+        </MudText>
+    </div>
+
     @* 移除独立的继续按钮，改为使用 Stepper 内置按钮 *@
 }
 
@@ -158,6 +181,7 @@
     private FileUploadArea fileUploadArea = null!;
     private List<DataSource> dataSources = new();
     private ExtractionMode extractionMode = ExtractionMode.OneToOne;
+    private bool includeImagesInAI = false; // 默认不包含图片
     private string urlInput = string.Empty;
     private string textInput = string.Empty;
     
@@ -187,19 +211,31 @@
                 return;
             }
 
-            var content = await FileConversionService.ConvertFileToTextAsync(file);
+            // 使用新的转换方法，始终获取图片信息
+            var options = new FileConversionOptions
+            {
+                IncludeImages = true, // 始终包含图片以便预览
+                KeepDataUris = true   // 保留 Data URI 格式
+            };
+
+            var result = await FileConversionService.ConvertFileToTextWithOptionsAsync(file, options);
             
             var dataSource = new DataSource
             {
                 Type = DataSourceType.File,
                 Name = file.Name,
-                Content = content,
+                Content = result.Content, // 包含图片的完整内容
+                TextOnlyContent = result.TextOnlyContent, // 纯文本内容
                 Size = file.Size,
-                MimeType = file.ContentType
+                MimeType = file.ContentType,
+                HasImages = result.HasImages,
+                ImageCount = result.ImageCount
             };
 
             dataSources.Add(dataSource);
-            Snackbar.Add($"文件 {file.Name} 添加成功", Severity.Success);
+            
+            var imageInfo = result.HasImages ? $"，包含 {result.ImageCount} 张图片" : "";
+            Snackbar.Add($"文件 {file.Name} 添加成功{imageInfo}", Severity.Success);
             processedFileCount = 1;
         }
         catch (Exception ex)
@@ -244,7 +280,10 @@
                 Type = DataSourceType.Url,
                 Name = urlInput,
                 Content = content,
-                Url = urlInput
+                TextOnlyContent = content, // URL 内容通常不包含图片
+                Url = urlInput,
+                HasImages = false,
+                ImageCount = 0
             };
 
             dataSources.Add(dataSource);
@@ -274,7 +313,10 @@
         {
             Type = DataSourceType.Text,
             Name = $"文本 {textCount}",
-            Content = textInput
+            Content = textInput,
+            TextOnlyContent = textInput, // 文本输入不包含图片
+            HasImages = false,
+            ImageCount = 0
         };
 
         dataSources.Add(dataSource);
@@ -291,9 +333,24 @@
     /// <summary>
     /// 获取当前选择的数据源和提取模式
     /// </summary>
-    public async Task<(List<DataSource> sources, ExtractionMode mode)> GetSelectionResult()
+    public async Task<(List<DataSource> sources, ExtractionMode mode, bool includeImages)> GetSelectionResult()
     {
-        return (dataSources, extractionMode);
+        // 根据用户选择决定是否包含图片
+        var processedSources = dataSources.Select(source => new DataSource
+        {
+            Id = source.Id,
+            Type = source.Type,
+            Name = source.Name,
+            Content = includeImagesInAI ? source.Content : source.TextOnlyContent,
+            TextOnlyContent = source.TextOnlyContent,
+            Size = source.Size,
+            MimeType = source.MimeType,
+            Url = source.Url,
+            HasImages = source.HasImages,
+            ImageCount = source.ImageCount
+        }).ToList();
+
+        return (processedSources, extractionMode, includeImagesInAI);
     }
 
     private RenderFragment GetSourceIcon(DataSourceType type) => type switch

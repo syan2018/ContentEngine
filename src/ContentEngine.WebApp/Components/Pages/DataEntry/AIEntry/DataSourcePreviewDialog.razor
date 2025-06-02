@@ -1,4 +1,5 @@
- @using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.Utils
 @using Microsoft.JSInterop
 @inject IJSRuntime JSRuntime
 @inject ISnackbar Snackbar
@@ -32,24 +33,89 @@
                         <MudText Typo="Typo.body2"><strong>URL:</strong> @DataSource.Url</MudText>
                     </MudItem>
                 }
+                @if (DataSource.HasImages)
+                {
+                    <MudItem xs="6">
+                        <MudText Typo="Typo.body2"><strong>图片数量:</strong> @DataSource.ImageCount</MudText>
+                    </MudItem>
+                }
             </MudGrid>
         </div>
         
         <MudDivider Class="mb-4" />
         
+        @if (DataSource.HasImages)
+        {
+            <div class="mb-4">
+                <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                    <MudButton Color="@(showImages ? Color.Primary : Color.Default)"
+                              OnClick="() => showImages = true"
+                              StartIcon="Icons.Material.Filled.Image">
+                        包含图片
+                    </MudButton>
+                    <MudButton Color="@(!showImages ? Color.Primary : Color.Default)"
+                              OnClick="() => showImages = false"
+                              StartIcon="Icons.Material.Filled.TextFields">
+                        纯文本
+                    </MudButton>
+                </MudButtonGroup>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                    @if (showImages)
+                    {
+                        <span>显示包含图片的完整内容（AI 处理时可选择是否包含）</span>
+                    }
+                    else
+                    {
+                        <span>显示纯文本内容（图片已替换为占位符）</span>
+                    }
+                </MudText>
+            </div>
+        }
+        
         <div>
             <div class="d-flex align-center justify-space-between mb-3">
-                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">提取的文本内容</MudText>
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">
+                    @(showImages && DataSource.HasImages ? "完整内容" : "文本内容")
+                </MudText>
                 <MudChip T="string" Size="Size.Small" Color="Color.Info">
-                    @DataSource.Content.Length 字符
+                    @currentContent.Length 字符
                 </MudChip>
             </div>
             
+            @if (showImages && DataSource.HasImages)
+            {
+                <div class="mb-4">
+                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-2">图片预览</MudText>
+                    <MudGrid>
+                        @foreach (var image in extractedImages)
+                        {
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudCard Outlined="true">
+                                    <MudCardContent Class="pa-2">
+                                        <div style="text-align: center;">
+                                            <img src="@image.DataUri" 
+                                                 alt="@image.AltText" 
+                                                 style="max-width: 100%; max-height: 200px; object-fit: contain;" />
+                                        </div>
+                                        <MudText Typo="Typo.caption" Class="mt-2">
+                                            <strong>@image.AltText</strong>
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @($"{image.MimeType} • {(image.EstimatedSize / 1024.0):F1} KB")
+                                        </MudText>
+                                    </MudCardContent>
+                                </MudCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </div>
+            }
+            
             <MudPaper Outlined="true" Class="pa-4" Style="max-height: 400px; overflow-y: auto;">
-                <MudText Typo="Typo.body2" Style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', monospace;">@DataSource.Content</MudText>
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap; font-family: 'Consolas', 'Monaco', monospace;">@currentContent</MudText>
             </MudPaper>
             
-            @if (DataSource.Content.Length > 1000)
+            @if (currentContent.Length > 1000)
             {
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
                     💡 提示：内容较长，建议滚动查看完整内容
@@ -59,7 +125,7 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel" Color="Color.Primary">关闭</MudButton>
-        <MudButton OnClick="() => CopyToClipboard(DataSource.Content)" 
+        <MudButton OnClick="() => CopyToClipboard(currentContent)" 
                   Color="Color.Secondary" 
                   StartIcon="Icons.Material.Filled.ContentCopy">
             复制内容
@@ -70,6 +136,19 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public DataSource DataSource { get; set; } = null!;
+
+    private bool showImages = true;
+    private List<ImageInfo> extractedImages = new();
+    
+    private string currentContent => showImages && DataSource.HasImages ? DataSource.Content : DataSource.TextOnlyContent;
+
+    protected override void OnInitialized()
+    {
+        if (DataSource.HasImages)
+        {
+            extractedImages = DataUriImageExtractor.ExtractImages(DataSource.Content);
+        }
+    }
 
     private void Cancel() => MudDialog.Cancel();
 

@@ -5,8 +5,51 @@ using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace ContentEngine.Core.DataPipeline.Services;
+
+/// <summary>
+/// 文件转换选项
+/// </summary>
+public class FileConversionOptions
+{
+    /// <summary>
+    /// 是否包含图片内容（Data URI）
+    /// </summary>
+    public bool IncludeImages { get; set; } = true;
+    
+    /// <summary>
+    /// 是否保留 Data URI 格式的图片
+    /// </summary>
+    public bool KeepDataUris { get; set; } = true;
+}
+
+/// <summary>
+/// 文件转换结果
+/// </summary>
+public class FileConversionResult
+{
+    /// <summary>
+    /// 转换后的文本内容
+    /// </summary>
+    public string Content { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// 是否包含图片
+    /// </summary>
+    public bool HasImages { get; set; }
+    
+    /// <summary>
+    /// 图片数量
+    /// </summary>
+    public int ImageCount { get; set; }
+    
+    /// <summary>
+    /// 不包含图片的纯文本内容（用于 AI 处理）
+    /// </summary>
+    public string TextOnlyContent { get; set; } = string.Empty;
+}
 
 /// <summary>
 /// 文件转换服务实现
@@ -16,6 +59,12 @@ public class FileConversionService : IFileConversionService
     private readonly HttpClient _httpClient;
     private readonly ILogger<FileConversionService> _logger;
     private readonly string _markItDownApiUrl;
+
+    // Data URI 图片的正则表达式
+    private static readonly Regex DataUriImageRegex = new(
+        @"!\[([^\]]*)\]\(data:image/[^;]+;base64,[A-Za-z0-9+/=]+\)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase
+    );
 
     // 支持的文件类型
     private readonly HashSet<string> _supportedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -52,10 +101,27 @@ public class FileConversionService : IFileConversionService
 
     public async Task<string> ConvertFileToTextAsync(IFormFile file, CancellationToken cancellationToken = default)
     {
+        var result = await ConvertFileToTextWithOptionsAsync(file, new FileConversionOptions(), cancellationToken);
+        return result.Content;
+    }
+
+    public async Task<string> ConvertFileToTextAsync(IBrowserFile file, CancellationToken cancellationToken = default)
+    {
+        var result = await ConvertFileToTextWithOptionsAsync(file, new FileConversionOptions(), cancellationToken);
+        return result.Content;
+    }
+
+    /// <summary>
+    /// 使用选项转换文件到文本
+    /// </summary>
+    public async Task<FileConversionResult> ConvertFileToTextWithOptionsAsync(IFormFile file, FileConversionOptions? options = null, CancellationToken cancellationToken = default)
+    {
         if (file == null || file.Length == 0)
         {
             throw new ArgumentException("文件不能为空", nameof(file));
         }
+
+        options ??= new FileConversionOptions();
 
         // 检查文件是否支持
         if (!IsFileSupported(file.FileName, file.ContentType))
@@ -69,18 +135,26 @@ public class FileConversionService : IFileConversionService
             if (file.ContentType?.StartsWith("text/") == true)
             {
                 using var reader = new StreamReader(file.OpenReadStream(), Encoding.UTF8);
-                return await reader.ReadToEndAsync(cancellationToken);
+                var textContent = await reader.ReadToEndAsync(cancellationToken);
+                return new FileConversionResult
+                {
+                    Content = textContent,
+                    TextOnlyContent = textContent,
+                    HasImages = false,
+                    ImageCount = 0
+                };
             }
 
             // 调用 MarkItDown API
-            using var content = new MultipartFormDataContent();
+            using var formContent = new MultipartFormDataContent();
             using var fileStream = file.OpenReadStream();
             using var streamContent = new StreamContent(fileStream);
             
             streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType ?? "application/octet-stream");
-            content.Add(streamContent, "file", file.FileName);
+            formContent.Add(streamContent, "file", file.FileName);
+            formContent.Add(new StringContent(options.KeepDataUris.ToString().ToLower()), "keep_data_uris");
 
-            var response = await _httpClient.PostAsync($"{_markItDownApiUrl}/convert/", content, cancellationToken);
+            var response = await _httpClient.PostAsync($"{_markItDownApiUrl}/convert/", formContent, cancellationToken);
             
             if (!response.IsSuccessStatusCode)
             {
@@ -91,8 +165,9 @@ public class FileConversionService : IFileConversionService
 
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
             var result = JsonSerializer.Deserialize<MarkItDownResponse>(responseContent);
-            
-            return result?.MarkdownContent ?? string.Empty;
+            var markdownContent = result?.MarkdownContent ?? string.Empty;
+
+            return ProcessMarkdownContent(markdownContent, options);
         }
         catch (Exception ex)
         {
@@ -101,12 +176,17 @@ public class FileConversionService : IFileConversionService
         }
     }
 
-    public async Task<string> ConvertFileToTextAsync(IBrowserFile file, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// 使用选项转换文件到文本
+    /// </summary>
+    public async Task<FileConversionResult> ConvertFileToTextWithOptionsAsync(IBrowserFile file, FileConversionOptions? options = null, CancellationToken cancellationToken = default)
     {
         if (file == null || file.Size == 0)
         {
             throw new ArgumentException("文件不能为空", nameof(file));
         }
+
+        options ??= new FileConversionOptions();
 
         // 检查文件是否支持
         if (!IsFileSupported(file.Name, file.ContentType))
@@ -121,18 +201,26 @@ public class FileConversionService : IFileConversionService
             {
                 using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10MB limit
                 using var reader = new StreamReader(stream, Encoding.UTF8);
-                return await reader.ReadToEndAsync(cancellationToken);
+                var textContent = await reader.ReadToEndAsync(cancellationToken);
+                return new FileConversionResult
+                {
+                    Content = textContent,
+                    TextOnlyContent = textContent,
+                    HasImages = false,
+                    ImageCount = 0
+                };
             }
 
             // 调用 MarkItDown API
-            using var content = new MultipartFormDataContent();
+            using var formContent = new MultipartFormDataContent();
             using var fileStream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10MB limit
             using var streamContent = new StreamContent(fileStream);
             
             streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType ?? "application/octet-stream");
-            content.Add(streamContent, "file", file.Name);
+            formContent.Add(streamContent, "file", file.Name);
+            formContent.Add(new StringContent(options.KeepDataUris.ToString().ToLower()), "keep_data_uris");
 
-            var response = await _httpClient.PostAsync($"{_markItDownApiUrl}/convert/", content, cancellationToken);
+            var response = await _httpClient.PostAsync($"{_markItDownApiUrl}/convert/", formContent, cancellationToken);
             
             if (!response.IsSuccessStatusCode)
             {
@@ -143,14 +231,43 @@ public class FileConversionService : IFileConversionService
 
             var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
             var result = JsonSerializer.Deserialize<MarkItDownResponse>(responseContent);
-            
-            return result?.MarkdownContent ?? string.Empty;
+            var markdownContent = result?.MarkdownContent ?? string.Empty;
+
+            return ProcessMarkdownContent(markdownContent, options);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "文件转换过程中发生错误: {FileName}", file.Name);
             throw;
         }
+    }
+
+    /// <summary>
+    /// 处理 Markdown 内容，分离图片和文本
+    /// </summary>
+    private FileConversionResult ProcessMarkdownContent(string markdownContent, FileConversionOptions options)
+    {
+        var imageMatches = DataUriImageRegex.Matches(markdownContent);
+        var hasImages = imageMatches.Count > 0;
+        
+        // 创建不包含图片的纯文本版本
+        var textOnlyContent = DataUriImageRegex.Replace(markdownContent, match =>
+        {
+            var altText = match.Groups[1].Value;
+            return string.IsNullOrEmpty(altText) ? "[图片]" : $"[图片: {altText}]";
+        });
+
+        var finalContent = options.IncludeImages ? markdownContent : textOnlyContent;
+
+        _logger.LogInformation("处理 Markdown 内容完成，包含 {ImageCount} 张图片", imageMatches.Count);
+
+        return new FileConversionResult
+        {
+            Content = finalContent,
+            TextOnlyContent = textOnlyContent,
+            HasImages = hasImages,
+            ImageCount = imageMatches.Count
+        };
     }
 
     public bool IsFileSupported(string fileName, string mimeType)

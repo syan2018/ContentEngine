@@ -26,6 +26,24 @@ public interface IFileConversionService
     Task<string> ConvertFileToTextAsync(IBrowserFile file, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 使用选项将文件转换为文本内容
+    /// </summary>
+    /// <param name="file">上传的文件</param>
+    /// <param name="options">转换选项</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>转换结果</returns>
+    Task<FileConversionResult> ConvertFileToTextWithOptionsAsync(IFormFile file, FileConversionOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 使用选项将浏览器文件转换为文本内容
+    /// </summary>
+    /// <param name="file">浏览器上传的文件</param>
+    /// <param name="options">转换选项</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>转换结果</returns>
+    Task<FileConversionResult> ConvertFileToTextWithOptionsAsync(IBrowserFile file, FileConversionOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 检查文件是否支持转换
     /// </summary>
     /// <param name="fileName">文件名</param>
