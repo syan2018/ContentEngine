@@ -14,7 +14,7 @@
     <MudAlert Severity="Severity.Info" Class="mb-4">
         <MudText Typo="Typo.body1">
             <strong>开发说明：</strong>
-            狠狠谢罪！暂时没啥精力开发配置系统，所以用户只能手动配置 YAML 文件将就一下了！
+            狠狠谢罪！暂时没啥精力开发配置系统，所以用户只能手动配置 YAML 文件将就一下了！<br/>
             未来版本会提供更友好的配置界面。现阶段请按照下面的指导手动编辑配置文件以确保AI功能正常运行——
         </MudText>
     </MudAlert>
@@ -157,7 +157,7 @@
                 <MudTabPanel Text="2. 开发环境覆盖">
                     <MudText Typo="Typo.h6" Class="mb-3">创建开发环境覆盖文件</MudText>
                     <MudText Typo="Typo.body1" Class="mb-3">
-                        为了安全地管理 API Keys，推荐创建 <code>connections.dev.yaml</code> 文件来覆盖基础配置：
+                        为了安全地管理 API Keys，推荐创建 <code>Profiles/connections.dev.yaml</code> 文件来覆盖基础配置：
                     </MudText>
                     <MudPaper Class="pa-4" Elevation="1">
                         <pre><code># connections.dev.yaml - 开发环境覆盖文件
@@ -222,7 +222,9 @@ connections:
                 <MudTabPanel Text="4. Agent 配置">
                     <MudText Typo="Typo.h6" Class="mb-3">创建 Agent 配置</MudText>
                     <MudText Typo="Typo.body1" Class="mb-3">
-                        在项目根目录的 <code>Profiles/Agents/[AgentName]/agent.yaml</code> 中配置 Agent：
+                        在项目根目录的 <code>Profiles/Agents/[AgentName]/agent.yaml</code> 中配置 Agent：<br/>
+                        为支持当前项目运行，需配置 <code>Profiles/Agents/ContentEngineHelper/agent.yaml</code> 使用的chat model <br/>
+                        建议使用模型为 gemini-2.5-flash(低成本高素质) 或 gork-3(xai接口白嫖)
                     </MudText>
                     <MudPaper Class="pa-4" Elevation="1">
                         <pre><code># Agent 配置示例
