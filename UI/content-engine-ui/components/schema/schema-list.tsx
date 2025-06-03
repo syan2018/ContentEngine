@@ -1,12 +1,13 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Edit, Eye, FileInput } from "lucide-react"
+import { Eye, FileInput } from "lucide-react"
+import Link from "next/link"
 
 export default function SchemaList() {
   const schemas = [
     {
-      id: 1,
+      id: "1",
       name: "游戏角色",
       description: "定义游戏中的角色属性和特征",
       fieldCount: 12,
@@ -14,7 +15,7 @@ export default function SchemaList() {
       lastModified: "2023-05-01",
     },
     {
-      id: 2,
+      id: "2",
       name: "游戏道具",
       description: "定义游戏中的各类道具及其属性",
       fieldCount: 8,
@@ -22,7 +23,7 @@ export default function SchemaList() {
       lastModified: "2023-04-28",
     },
     {
-      id: 3,
+      id: "3",
       name: "游戏任务",
       description: "定义游戏中的任务结构和奖励",
       fieldCount: 10,
@@ -30,7 +31,7 @@ export default function SchemaList() {
       lastModified: "2023-04-25",
     },
     {
-      id: 4,
+      id: "4",
       name: "游戏场景",
       description: "定义游戏中的场景和环境",
       fieldCount: 15,
@@ -61,14 +62,18 @@ export default function SchemaList() {
             </div>
           </CardContent>
           <CardFooter className="flex justify-between gap-2">
-            <Button variant="outline" size="sm" className="flex-1">
-              <Eye className="mr-1 h-4 w-4" />
-              查看
-            </Button>
-            <Button variant="outline" size="sm" className="flex-1">
-              <FileInput className="mr-1 h-4 w-4" />
-              注入
-            </Button>
+            <Link href={`/schema-management/${schema.id}`} className="flex-1">
+              <Button variant="outline" size="sm" className="w-full">
+                <Eye className="mr-1 h-4 w-4" />
+                查看详情
+              </Button>
+            </Link>
+            <Link href={`/data-entry/manual/${schema.id}`} className="flex-1">
+              <Button variant="outline" size="sm" className="w-full">
+                <FileInput className="mr-1 h-4 w-4" />
+                录入数据
+              </Button>
+            </Link>
           </CardFooter>
         </Card>
       ))}
