@@ -28,6 +28,9 @@ builder.Services.AddScoped<ISchemaDefinitionService, SchemaDefinitionService>();
 // 注册数据实例管理服务 (可以使用 Scoped 或 Transient)
 builder.Services.AddScoped<IDataEntryService, DataEntryService>();
 
+// 注册字段编辑服务
+builder.Services.AddScoped<IFieldEditService, FieldEditService>();
+
 // *** 测试：注册 ConfigurableAIProvider 相关服务 ***
 builder.Services.AddConfigurableAIProvider(builder.Configuration);
 // ******************************************

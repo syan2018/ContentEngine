@@ -1,0 +1,447 @@
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.DataPipeline.Services
+@using Microsoft.Extensions.Logging
+@using MudBlazor
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@inject ILogger<FieldEditDialog> Logger
+@inject ISnackbar Snackbar
+@inject IFieldEditService FieldEditService
+
+<MudDialog>
+    <DialogContent>
+        <MudContainer Style="max-width: 800px;">
+            <MudStack Spacing="4">
+                <!-- 字段基本信息编辑 -->
+                <MudCard>
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6">编辑字段: @OriginalField.Name</MudText>
+                            </MudStack>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="EditedField.Name"
+                                             Label="字段名称"
+                                             Required="true"
+                                             Variant="Variant.Outlined"
+                                             HelperText="字段的内部标识名称"
+                                             Error="@(!IsFieldNameValid)"
+                                             ErrorText="@fieldNameError" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudSelect T="FieldType" 
+                                          @bind-Value="EditedField.Type"
+                                          Label="数据类型"
+                                          Variant="Variant.Outlined"
+                                          HelperText="字段的数据类型">
+                                    @foreach (FieldType type in Enum.GetValues(typeof(FieldType)))
+                                    {
+                                        <MudSelectItem Value="@type">@GetFieldTypeDisplayName(type)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudSwitch T="bool" @bind-Value="EditedField.IsRequired"
+                                          Label="必填字段"
+                                          Color="Color.Primary" />
+                            </MudItem>
+                            @if (EditedField.Type == FieldType.Reference)
+                            {
+                                <MudItem xs="12" md="6">
+                                    <MudTextField @bind-Value="EditedField.ReferenceSchemaName"
+                                                 Label="引用Schema名称"
+                                                 Variant="Variant.Outlined"
+                                                 HelperText="引用的Schema名称" />
+                                </MudItem>
+                            }
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="EditedField.Comment"
+                                             Label="字段备注"
+                                             Lines="3"
+                                             Variant="Variant.Outlined"
+                                             HelperText="字段的用途说明和备注信息" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- 变更影响分析 -->
+                @if (HasChanges)
+                {
+                    <MudCard>
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Analytics" Color="Color.Warning" />
+                                    <MudText Typo="Typo.h6">变更影响分析</MudText>
+                                </MudStack>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudStack Spacing="3">
+                                @if (recordCount > 0)
+                                {
+                                    <MudAlert Severity="Severity.Warning" Class="mb-3">
+                                        <MudText Typo="Typo.subtitle2" Class="font-weight-bold">
+                                            ⚠️ 此操作将影响 @recordCount 条既有数据记录
+                                        </MudText>
+                                    </MudAlert>
+                                }
+
+                                <!-- 变更详情 -->
+                                <MudExpansionPanels Elevation="0">
+                                    @if (changeAnalysis?.Changes != null)
+                                    {
+                                        @foreach (var change in changeAnalysis.Changes)
+                                        {
+                                            <MudExpansionPanel Text="@change.Title" Icon="@GetMudIcon(change.Icon)">
+                                                <MudStack Spacing="2">
+                                                    <MudText Typo="Typo.body2">@change.Description</MudText>
+                                                    @if (change.Risks.Any())
+                                                    {
+                                                        <MudText Typo="Typo.subtitle2" Color="Color.Error" Class="font-weight-bold">潜在风险:</MudText>
+                                                        @foreach (var risk in change.Risks)
+                                                        {
+                                                            <MudText Typo="Typo.body2" Color="Color.Error">• @risk</MudText>
+                                                        }
+                                                    }
+                                                    @if (change.Actions.Any())
+                                                    {
+                                                        <MudText Typo="Typo.subtitle2" Color="Color.Info" Class="font-weight-bold">系统将执行:</MudText>
+                                                        @foreach (var action in change.Actions)
+                                                        {
+                                                            <MudText Typo="Typo.body2" Color="Color.Info">• @action</MudText>
+                                                        }
+                                                    }
+                                                </MudStack>
+                                            </MudExpansionPanel>
+                                        }
+                                    }
+                                </MudExpansionPanels>
+
+                                <!-- 高风险操作确认 -->
+                                @if (IsHighRiskOperation)
+                                {
+                                    <MudPaper Class="pa-4" Style="background-color: var(--mud-palette-error-lighten); border-left: 4px solid var(--mud-palette-error);">
+                                        <MudStack Spacing="2">
+                                            <MudText Typo="Typo.subtitle1" Color="Color.Error" Class="font-weight-bold">
+                                                🚨 高风险操作警告
+                                            </MudText>
+                                            <MudText Typo="Typo.body2">
+                                                此操作可能导致数据丢失或不一致。请仔细阅读上述影响分析，确认您了解所有风险。
+                                            </MudText>
+                                            <MudCheckBox T="bool" @bind-Checked="riskConfirmed" 
+                                                        Label="我已了解风险并确认执行此操作" 
+                                                        Color="Color.Error" />
+                                        </MudStack>
+                                    </MudPaper>
+                                }
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+                }
+
+                <!-- 数据预览 (如果有数据) -->
+                @if (recordCount > 0 && HasChanges)
+                {
+                    <MudCard>
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                        <MudIcon Icon="@Icons.Material.Filled.Preview" Color="Color.Info" />
+                                        <MudText Typo="Typo.h6">数据预览</MudText>
+                                    </MudStack>
+                                    <MudButton Variant="Variant.Text" 
+                                              Size="Size.Small" 
+                                              OnClick="LoadDataPreview"
+                                              Disabled="isLoadingPreview">
+                                        @if (isLoadingPreview)
+                                        {
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                                            <span>加载中...</span>
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="mr-1" />
+                                            <span>刷新预览</span>
+                                        }
+                                    </MudButton>
+                                </MudStack>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            @if (dataPreview != null && dataPreview.Any())
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                                    显示前 @Math.Min(dataPreview.Count, 5) 条记录的变更预览
+                                </MudText>
+                                <MudTable Items="@dataPreview.Take(5)" Dense="true" Hover="true" Bordered="true">
+                                    <HeaderContent>
+                                        <MudTh>记录ID</MudTh>
+                                        <MudTh>当前值</MudTh>
+                                        <MudTh>变更后</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd>@context.RecordId</MudTd>
+                                        <MudTd>
+                                            <MudText Typo="Typo.body2" Class="font-mono">
+                                                @(context.CurrentValue ?? "null")
+                                            </MudText>
+                                        </MudTd>
+                                        <MudTd>
+                                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                                <MudText Typo="Typo.body2" Class="font-mono" Color="@GetStatusColor(context.Status)">
+                                                    @context.NewValue
+                                                </MudText>
+                                                @if (context.WillLoseData)
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Color="Color.Error" />
+                                                }
+                                                @if (!string.IsNullOrEmpty(context.ErrorMessage))
+                                                {
+                                                    <MudTooltip Text="@context.ErrorMessage">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Small" Color="Color.Error" />
+                                                    </MudTooltip>
+                                                }
+                                            </MudStack>
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    点击"刷新预览"查看数据变更预览
+                                </MudText>
+                            }
+                        </MudCardContent>
+                    </MudCard>
+                }
+            </MudStack>
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">取消</MudButton>
+        <MudButton Color="Color.Primary" 
+                  Variant="Variant.Filled" 
+                  OnClick="SaveChanges"
+                  Disabled="@(!CanSave)">
+            @if (isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>保存中...</span>
+            }
+            else
+            {
+                <span>保存变更</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public FieldDefinition OriginalField { get; set; } = null!;
+    [Parameter] public string SchemaName { get; set; } = string.Empty;
+    [Parameter] public int RecordCount { get; set; }
+
+    private FieldDefinition EditedField = new();
+    private int recordCount;
+    private bool riskConfirmed = false;
+    private bool isSaving = false;
+    private bool isLoadingPreview = false;
+    private string fieldNameError = string.Empty;
+    private List<DataChangePreview> dataPreview = new();
+    private FieldChangeAnalysis? changeAnalysis;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 深拷贝原始字段
+        EditedField = new FieldDefinition
+        {
+            Name = OriginalField.Name,
+            Type = OriginalField.Type,
+            IsRequired = OriginalField.IsRequired,
+            ReferenceSchemaName = OriginalField.ReferenceSchemaName,
+            Comment = OriginalField.Comment
+        };
+        
+        recordCount = RecordCount;
+        
+        // 如果有数据，自动加载分析和预览
+        if (recordCount > 0)
+        {
+            await LoadChangeAnalysis();
+            await LoadDataPreview();
+        }
+        
+        StateHasChanged();
+    }
+
+    private bool HasChanges => 
+        EditedField.Name != OriginalField.Name ||
+        EditedField.Type != OriginalField.Type ||
+        EditedField.IsRequired != OriginalField.IsRequired ||
+        EditedField.ReferenceSchemaName != OriginalField.ReferenceSchemaName ||
+        EditedField.Comment != OriginalField.Comment;
+
+    private bool IsFieldNameValid
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(EditedField.Name))
+            {
+                fieldNameError = "字段名称不能为空";
+                return false;
+            }
+            
+            if (EditedField.Name.Contains(" "))
+            {
+                fieldNameError = "字段名称不能包含空格";
+                return false;
+            }
+            
+            fieldNameError = string.Empty;
+            return true;
+        }
+    }
+
+    private bool IsHighRiskOperation => changeAnalysis?.IsHighRisk ?? false;
+
+    private bool CanSave => 
+        IsFieldNameValid && 
+        HasChanges &&
+        (!IsHighRiskOperation || riskConfirmed) &&
+        !isSaving;
+
+    private async Task LoadDataPreview()
+    {
+        if (recordCount == 0 || !HasChanges) return;
+        
+        isLoadingPreview = true;
+        StateHasChanged();
+        
+        try
+        {
+            dataPreview = await FieldEditService.GetDataChangePreviewAsync(
+                OriginalField, EditedField, SchemaName, 5);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "加载数据预览失败");
+            Snackbar.Add("加载数据预览失败", Severity.Error);
+        }
+        finally
+        {
+            isLoadingPreview = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadChangeAnalysis()
+    {
+        if (!HasChanges) return;
+        
+        try
+        {
+            changeAnalysis = await FieldEditService.AnalyzeFieldChangeAsync(
+                OriginalField, EditedField, SchemaName, recordCount);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "加载变更分析失败");
+            Snackbar.Add("加载变更分析失败", Severity.Error);
+        }
+    }
+
+
+
+    private string GetFieldTypeDisplayName(FieldType fieldType)
+    {
+        return fieldType switch
+        {
+            FieldType.Text => "文本",
+            FieldType.Number => "数值",
+            FieldType.Boolean => "布尔",
+            FieldType.Date => "日期",
+            FieldType.Reference => "引用",
+            _ => "未知"
+        };
+    }
+
+    private async Task SaveChanges()
+    {
+        if (!CanSave) return;
+        
+        isSaving = true;
+        try
+        {
+            var result = await FieldEditService.ApplyFieldChangeAsync(
+                OriginalField, EditedField, SchemaName);
+            
+            if (result.Success)
+            {
+                MudDialog.Close(DialogResult.Ok(EditedField));
+                Snackbar.Add($"字段已成功更新，处理了 {result.AffectedRecords} 条记录", Severity.Success);
+                
+                if (result.FailedConversions > 0)
+                {
+                    Snackbar.Add($"注意：{result.FailedConversions} 条记录转换失败", Severity.Warning);
+                }
+            }
+            else
+            {
+                Snackbar.Add($"保存失败: {result.ErrorMessage}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "保存字段变更失败");
+            Snackbar.Add($"保存失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetMudIcon(string iconName)
+    {
+        return iconName switch
+        {
+            "edit" => Icons.Material.Filled.Edit,
+            "transform" => Icons.Material.Filled.Transform,
+            "star" => Icons.Material.Filled.Star,
+            "star_border" => Icons.Material.Filled.StarBorder,
+            "link" => Icons.Material.Filled.Link,
+            "comment" => Icons.Material.Filled.Comment,
+            _ => Icons.Material.Filled.Info
+        };
+    }
+
+    private Color GetStatusColor(ConversionStatus status)
+    {
+        return status switch
+        {
+            ConversionStatus.Success => Color.Success,
+            ConversionStatus.DataLoss => Color.Warning,
+            ConversionStatus.Failed => Color.Error,
+            ConversionStatus.RequiresManualIntervention => Color.Info,
+            _ => Color.Default
+        };
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+
+} 

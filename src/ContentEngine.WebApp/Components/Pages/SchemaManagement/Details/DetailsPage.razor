@@ -227,13 +227,12 @@
                                 <CardHeaderContent>
                                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                         <MudText Typo="Typo.h6">字段结构 (@schema.Fields.Count 个字段)</MudText>
-                                        <MudButton Variant="Variant.Text" 
-                                                  Size="Size.Small" 
-                                                  Color="Color.Primary"
-                                                  OnClick="@(() => NavigationManager.NavigateTo($"/schema-management/edit/{SchemaId}"))">
-                                            <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" Class="mr-1" />
-                                            管理字段
-                                        </MudButton>
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">编辑字段</MudText>
+                                            <MudSwitch T="bool" @bind-Value="showFieldActions"
+                                                      Color="Color.Primary"
+                                                      Size="Size.Small" />
+                                        </MudStack>
                                     </MudStack>
                                 </CardHeaderContent>
                             </MudCardHeader>
@@ -246,6 +245,10 @@
                                             <MudTh>字段名</MudTh>
                                             <MudTh Style="width: 80px;">必填</MudTh>
                                             <MudTh>备注</MudTh>
+                                            @if (showFieldActions)
+                                            {
+                                                <MudTh Style="width: 100px;">操作</MudTh>
+                                            }
                                         </HeaderContent>
                                         <RowTemplate>
                                             <MudTd>
@@ -282,6 +285,23 @@
                                                     @(string.IsNullOrEmpty(context.Comment) ? "无备注" : context.Comment)
                                                 </MudText>
                                             </MudTd>
+                                            @if (showFieldActions)
+                                            {
+                                                <MudTd>
+                                                    <MudButtonGroup Variant="Variant.Text" Size="Size.Small">
+                                                        <MudButton OnClick="@(() => EditField(context))" 
+                                                                  Size="Size.Small"
+                                                                  Color="Color.Primary">
+                                                            <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+                                                        </MudButton>
+                                                        <MudButton OnClick="@(() => DeleteField(context))" 
+                                                                  Size="Size.Small"
+                                                                  Color="Color.Error">
+                                                            <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small" />
+                                                        </MudButton>
+                                                    </MudButtonGroup>
+                                                </MudTd>
+                                            }
                                         </RowTemplate>
                                     </MudTable>
                                 }
@@ -425,6 +445,7 @@
     private bool hasError = false;
     private bool isEditing = false;
     private bool isSaving = false;
+    private bool showFieldActions = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -555,6 +576,95 @@
     private void ShowDataStatistics()
     {
         Snackbar.Add("数据统计功能即将推出", Severity.Info);
+    }
+
+    private async Task EditField(FieldDefinition field)
+    {
+        var parameters = new DialogParameters
+        {
+            ["OriginalField"] = field,
+            ["SchemaName"] = schema!.Name,
+            ["RecordCount"] = recordCount ?? 0
+        };
+
+        var options = new DialogOptions 
+        { 
+            MaxWidth = MaxWidth.Large, 
+            FullWidth = true,
+            CloseButton = true,
+            BackdropClick = false
+        };
+
+        var dialog = await DialogService.ShowAsync<FieldEditDialog>("编辑字段", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled && result.Data is FieldDefinition editedField)
+        {
+            // 更新字段
+            var fieldIndex = schema!.Fields.FindIndex(f => f.Name == field.Name);
+            if (fieldIndex >= 0)
+            {
+                schema.Fields[fieldIndex] = editedField;
+                
+                // 保存Schema
+                try
+                {
+                    schema.UpdatedAt = DateTime.UtcNow;
+                    var success = await SchemaService.UpdateSchemaAsync(schema);
+                    if (success)
+                    {
+                        Snackbar.Add("字段已成功更新", Severity.Success);
+                        StateHasChanged();
+                    }
+                    else
+                    {
+                        Snackbar.Add("字段更新失败", Severity.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "更新字段失败: FieldName={FieldName}", field.Name);
+                    Snackbar.Add($"字段更新失败: {ex.Message}", Severity.Error);
+                }
+            }
+        }
+    }
+
+    private async Task DeleteField(FieldDefinition field)
+    {
+        var confirmMessage = recordCount > 0 
+            ? $"确定要删除字段 \"{field.Name}\" 吗？\n\n⚠️ 警告：此操作将影响 {recordCount} 条既有数据记录，删除后无法恢复！"
+            : $"确定要删除字段 \"{field.Name}\" 吗？";
+
+        bool? result = await DialogService.ShowMessageBox(
+            "确认删除字段",
+            confirmMessage,
+            yesText: "删除", cancelText: "取消");
+
+        if (result == true)
+        {
+            try
+            {
+                schema!.Fields.RemoveAll(f => f.Name == field.Name);
+                schema.UpdatedAt = DateTime.UtcNow;
+                
+                var success = await SchemaService.UpdateSchemaAsync(schema);
+                if (success)
+                {
+                    Snackbar.Add($"字段 \"{field.Name}\" 已删除", Severity.Success);
+                    StateHasChanged();
+                }
+                else
+                {
+                    Snackbar.Add("字段删除失败", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "删除字段失败: FieldName={FieldName}", field.Name);
+                Snackbar.Add($"字段删除失败: {ex.Message}", Severity.Error);
+            }
+        }
     }
 
     private Color GetFieldTypeColor(FieldType fieldType)
