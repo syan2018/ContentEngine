@@ -2,12 +2,12 @@
 
 [![.NET](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/)
 [![Blazor](https://img.shields.io/badge/Blazor-Server-purple.svg)](https://blazor.net/)
-[![LiteDB](https://img.shields.io/badge/LiteDB-5.0-green.svg)](https://www.litedb.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > 一个利用 AI 对非结构化数据进行理解、结构化处理、存储和推理的引擎，旨在自动化生成丰富、动态且具备涌现性的内容，尤其适用于游戏开发等创意领域。
 >
-> 基于 Cursor、v0 等AI编程应用开发
+> 基于 Cursor、v0 等 Vibe Coding 应用开发
+> 
+> 显然他们对 Blazor 下的审美认知相对有限
 
 [English](./README-EN.md) | **简体中文**
 
@@ -15,7 +15,9 @@
 
 ## 📖 项目概述
 
-ContentEngine 是一个现代化的 AI 驱动内容管理平台，通过深度结构化信息并进行智能推理，实现自动化内容创建和管理。项目采用 .NET 8 + Blazor Server 架构，提供直观的 Web 界面和强大的 AI 集成能力。
+ContentEngine 是一个现代化的 AI 驱动内容管理控制台应用，通过结构化信息并进行智能推理，实现自动化内容创建和管理。项目采用 .NET 8 + Blazor Server 架构，提供直观的 Web 界面和强大的 AI 集成能力。
+
+![home page](Docs/Images/homepage.png)
 
 ### 🎯 核心理念
 
@@ -23,28 +25,11 @@ ContentEngine 是一个现代化的 AI 驱动内容管理平台，通过深度�
 
 - **🤖 自动化内容创建**: 从原始数据（文本、图片、文档等）中自动提取和组织关键信息
 - **📊 实现定向信息管理**: 基于结构化数据建立索引和关联，方便查询和管理
-- **✨ 驱动涌现式体验**: 通过 AI 推理不同结构化数据间的关系和交互，生成超越手动设计的复杂行为和内容
-- **🎨 赋能创作者**: 提供内容生成的 Sparks，辅助创意过程
+- **✨ 驱动涌现式体验**: 通过 AI 推理不同结构化数据间的关系和交互，生成超越手工限制的丰富行为和内容
 
 ---
 
 ## 🚀 核心功能
-
-### 📝 智能数据录入 (Data Entry)
-- **AI 辅助录入**: 上传文档或图片，AI 自动提取并填充结构化数据
-- **手动录入界面**: 基于 Schema 自动生成的表单界面
-- **批量数据处理**: 支持批量上传和处理多个数据源
-- **数据验证**: 实时验证数据完整性和格式正确性
-
-*[截图占位符: AI 数据录入界面，展示文件上传和自动填充过程]*
-
-### 🧠 AI 推理引擎 (AI Inference)
-- **推理任务定义**: 可视化定义推理逻辑和数据组合规则
-- **多模型支持**: 集成 OpenAI、Azure OpenAI、本地模型等多种 AI 服务
-- **批量推理执行**: 支持大规模数据的批量 AI 处理
-- **结果管理**: 推理结果的存储、查看和后处理
-
-*[截图占位符: AI 推理任务配置界面和执行结果展示]*
 
 ### ⚙️ 灵活的 AI 配置
 
@@ -54,6 +39,19 @@ ContentEngine 是一个现代化的 AI 驱动内容管理平台，通过深度�
 - **配置文件管理**: 通过 YAML 文件管理连接和模型配置
 - **Agent 系统**: 预定义的专用 AI 代理，针对不同任务优化
 - **插件架构**: 支持自定义 AI 插件扩展
+
+### 📝 智能数据录入 (Data Entry)
+- **AI 辅助录入**: 上传文档或图片，AI 自动提取并填充结构化数据
+- **手动录入界面**: 基于 Schema 自动生成的表单界面
+- **批量数据处理**: 支持批量上传和处理多个数据源
+- **数据验证**: 实时验证数据完整性和格式正确性
+
+
+### 🧠 AI 推理引擎 (AI Inference)
+- **推理任务定义**: 可视化定义推理逻辑和数据组合规则
+- **多模型支持**: 集成 OpenAI、Azure OpenAI、本地模型等多种 AI 服务
+- **批量推理执行**: 支持大规模数据的批量 AI 处理
+- **结果管理**: 推理结果的存储、查看和后处理
 
 ---
 
@@ -90,7 +88,6 @@ ContentEngine.WebApp (Blazor Server UI)
 ### 环境要求
 - .NET 8.0 SDK
 - Visual Studio 2022 或 VS Code
-- (可选) Node.js 18+ (用于 Next.js 前端)
 
 ### 安装步骤
 
@@ -122,36 +119,12 @@ ContentEngine.WebApp (Blazor Server UI)
    
    访问 http://localhost:5264/
 
-*[截图占位符: 应用启动后的主界面截图]*
-
-### 配置示例
-
-**AI 服务配置** (`Profiles/connections.dev.yaml`):
-```yaml
-connections:
-  openai:
-    serviceType: OpenAI
-    apiKey: "your-openai-api-key"
-  
-  azure:
-    serviceType: AzureOpenAI
-    endpoint: "your-azure-endpoint"
-    apiKey: "your-azure-api-key"
-```
-
-**模型配置** (`Profiles/models.yaml`):
-```yaml
-models:
-  gpt4-creative:
-    connection: openai
-    modelId: "gpt-4"
-    endpointType: ChatCompletion
-    parameters: { temperature: 0.8, maxTokens: 2000 }
-```
 
 ---
 
 ## 📚 使用指南
+
+以在另一个坑 [fyyakaxyy/AnimationGPT](https://github.com/fyyakaxyy/AnimationGPT) 中的实现过的数据处理流程为例（当时还需要 Python 硬搓），未使用组合叉积推理，仅简单示例基本流程
 
 ### 1. 创建数据结构 (Schema)
 1. 访问 "数据结构管理" 页面
@@ -159,7 +132,8 @@ models:
 3. （可选在AI的协助下）定义字段名称、类型和约束
 4. 保存并激活结构
 
-*[截图占位符: Schema 创建流程的步骤截图]*
+![schema create](Docs/Images/schemacreate.png)
+
 
 ### 2. 录入数据
 1. 选择目标数据结构
@@ -168,7 +142,14 @@ models:
    - **人工导入**: 通过导入表格映射实现快速录入，或手动录入
 3. 验证并保存数据
 
-*[截图占位符: 数据录入界面的操作流程]*
+手动批量导入表格数据
+
+![manual import](Docs/Images/manualimport.png)
+
+基于非结构化文本，AI自动识别
+
+![ai import](Docs/Images/aiimport.png)
+
 
 ### 3. 配置 AI 推理任务
 1. 访问 "AI 推理" 页面
@@ -177,7 +158,10 @@ models:
 4. 配置 Prompt 模板和输出格式
 5. 执行推理任务并查看结果
 
-*[截图占位符: AI 推理任务配置和执行界面]*
+
+![inference banner](Docs/Images/inferencebanner.png)
+
+![inference result](Docs/Images/inferenceresult.png)
 
 ---
 
@@ -185,11 +169,9 @@ models:
 
 ### 内容生成
 - **角色设定管理**: 从简单描述生成完整的角色卡片
-- **世界观构建**: 基于设定文档自动生成地点、事件等内容
 - **NPC 行为推理**: 根据角色特征和环境生成动态行为模式
-- **对话内容生成**: 基于上下文生成自然的 NPC 对话
+- **对话内容生成**: 基于上下文和角色特征生成自然的 NPC 对话
 
-*[截图占位符: 游戏角色卡片生成示例]*
 
 ### 知识管理
 - **文档结构化**: 将非结构化文档转换为结构化知识库
@@ -216,11 +198,13 @@ ContentEngine/
 ```
 
 ### TODO
-1. **推理服务优化**: 断点继续推理相关功能测试
-2. **推理模板优化**: 支持通过模板快捷定义推理输出格式，约束使用Json结构输出复杂对象
+1. **推理服务优化**: 断点继续推理相关功能测试、支持 Batch 推理减少 Token 消耗
+2. **推理模板优化**: 支持通过模板快捷定义推理输出格式，约束使用 Json 结构输出复杂对象
 3. **推理输出优化**: 支持自定义数据结构的推理结果收集和导出
 4. **数据结构支持拓展**: 支持枚举等数据结构，优化部分场景
-5. **嵌入功能拓展**: 拓展数据项支持RAG，支持提供知识管理服务，同时支持更灵活的推理组合
+5. **嵌入功能拓展**: 拓展数据项支持 RAG ，支持提供知识管理服务，同时支持更灵活的推理组合
+6. **数据浏览优化**: 可视化和查询相关
+7. **整理与重构**: 受限于 Vibe Coding 上下文，部分代码
 
 当前由于没有明确进一步需求驱动，可能会暂时搁置TODO项开新坑。如果有清晰的使用需求，欢迎联系作者拓展（或者尝试使用cursor开发并贡献项目！）
 
