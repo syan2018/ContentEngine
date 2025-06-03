@@ -1,0 +1,585 @@
+@page "/schema-management/details/{SchemaId:int}"
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.DataPipeline.Services
+@using ContentEngine.WebApp.Components.Shared
+@using Microsoft.Extensions.Logging
+@using FieldType = ContentEngine.Core.DataPipeline.Models.FieldType
+@inject ILogger<DetailsPage> Logger
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject ISchemaDefinitionService SchemaService
+@inject IDataEntryService DataEntryService
+
+<PageTitle>@(schema?.Name ?? "Schema详情") - ContentEngine</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
+    <MudStack Spacing="6">
+        <!-- 面包屑导航 -->
+        <PageBreadcrumb Page="PageBreadcrumb.PageType.SchemaDetails" 
+                       SchemaName="@schema?.Name" 
+                       SchemaId="@SchemaId.ToString()" />
+
+        @if (isLoading)
+        {
+            <MudPaper Class="pa-8 text-center" Elevation="0">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                <MudText Class="mt-2">正在加载Schema详情...</MudText>
+            </MudPaper>
+        }
+        else if (hasError || schema == null)
+        {
+            <MudPaper Class="pa-8 text-center" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" Class="mb-4" />
+                <MudText Typo="Typo.h5" GutterBottom="true">加载失败</MudText>
+                <MudText Class="mud-text-secondary">无法找到指定的Schema或加载过程中发生错误</MudText>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="NavigateBackToList" Class="mt-4">
+                    返回Schema列表
+                </MudButton>
+            </MudPaper>
+        }
+        else
+        {
+            <!-- Schema基本信息 -->
+            <MudCard>
+                <MudCardContent Class="pa-6">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
+                        <div class="flex-grow-1">
+                            @if (isEditing)
+                            {
+                                <MudStack Spacing="4">
+                                    <MudTextField @bind-Value="editedSchema.Name" 
+                                                 Label="Schema名称" 
+                                                 Required="true"
+                                                 Variant="Variant.Outlined"
+                                                 HelperText="Schema的唯一标识名称" />
+                                    <MudTextField @bind-Value="editedSchema.Description" 
+                                                 Label="描述" 
+                                                 Lines="3"
+                                                 Variant="Variant.Outlined"
+                                                 HelperText="Schema的用途说明" />
+                                </MudStack>
+                            }
+                            else
+                            {
+                                <MudStack Spacing="2">
+                                    <MudText Typo="Typo.h4" Class="page-title">@schema.Name</MudText>
+                                    <MudText Typo="Typo.body1" Color="Color.Secondary">
+                                        @(string.IsNullOrEmpty(schema.Description) ? "暂无描述" : schema.Description)
+                                    </MudText>
+                                </MudStack>
+                            }
+                        </div>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">
+                                @schema.Fields.Count 个字段
+                            </MudChip>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary">
+                                @(recordCount?.ToString() ?? "N/A") 条记录
+                            </MudChip>
+                            @if (isEditing)
+                            {
+                                <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                                    <MudButton OnClick="CancelEdit" Disabled="isSaving">
+                                        <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="mr-1" />
+                                        取消
+                                    </MudButton>
+                                    <MudButton Color="Color.Primary" OnClick="SaveSchema" Disabled="isSaving">
+                                        @if (isSaving)
+                                        {
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-1" />
+                                            <span>保存中...</span>
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Save" Size="Size.Small" Class="mr-1" />
+                                            <span>保存</span>
+                                        }
+                                    </MudButton>
+                                </MudButtonGroup>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="StartEdit">
+                                    <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="mr-1" />
+                                    编辑
+                                </MudButton>
+                            }
+                        </MudStack>
+                    </MudStack>
+                </MudCardContent>
+                
+                <!-- Schema元数据 -->
+                <MudDivider />
+                <MudCardContent Class="pa-4">
+                    <MudGrid Spacing="4">
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudStack Spacing="1">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Schema ID</MudText>
+                                <MudText Typo="Typo.body2" Class="font-mono">@schema.Id</MudText>
+                            </MudStack>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudStack Spacing="1">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">创建时间</MudText>
+                                <MudText Typo="Typo.body2">@schema.CreatedAt.ToString("yyyy-MM-dd HH:mm")</MudText>
+                            </MudStack>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudStack Spacing="1">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">最后更新</MudText>
+                                <MudText Typo="Typo.body2">@schema.UpdatedAt.ToString("yyyy-MM-dd HH:mm")</MudText>
+                            </MudStack>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudStack Spacing="1">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">数据记录</MudText>
+                                <MudText Typo="Typo.body2">
+                                    @if (isLoadingRecordCount)
+                                    {
+                                        <span>加载中...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@(recordCount?.ToString() ?? "N/A") 条</span>
+                                    }
+                                </MudText>
+                            </MudStack>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- 快捷操作 -->
+            <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudIcon Icon="@Icons.Material.Filled.Bolt" Color="Color.Primary" />
+                            <MudText Typo="Typo.h6">快捷操作</MudText>
+                        </MudStack>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudGrid Spacing="3">
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudButton Variant="Variant.Outlined" 
+                                      FullWidth="true" 
+                                      Size="Size.Large"
+                                      Class="quick-action-button"
+                                      OnClick="@(() => NavigationManager.NavigateTo($"/data-entry/manual/{SchemaId}"))">
+                                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Large" Color="Color.Info" />
+                                    <MudText Typo="Typo.subtitle2">手动录入</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">创建新的数据记录</MudText>
+                                </MudStack>
+                            </MudButton>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudButton Variant="Variant.Outlined" 
+                                      FullWidth="true" 
+                                      Size="Size.Large"
+                                      Class="quick-action-button"
+                                      OnClick="@(() => NavigationManager.NavigateTo($"/data-entry/ai/{SchemaId}"))">
+                                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Large" Color="Color.Secondary" />
+                                    <MudText Typo="Typo.subtitle2">AI辅助录入</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">使用AI智能录入</MudText>
+                                </MudStack>
+                            </MudButton>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudButton Variant="Variant.Outlined" 
+                                      FullWidth="true" 
+                                      Size="Size.Large"
+                                      Class="quick-action-button"
+                                      OnClick="@(() => NavigationManager.NavigateTo($"/data-explorer/{SchemaId}"))">
+                                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Large" Color="Color.Success" />
+                                    <MudText Typo="Typo.subtitle2">浏览数据</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">查看和管理记录</MudText>
+                                </MudStack>
+                            </MudButton>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudButton Variant="Variant.Outlined" 
+                                      FullWidth="true" 
+                                      Size="Size.Large"
+                                      Class="quick-action-button"
+                                      OnClick="ShowDataStatistics">
+                                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Analytics" Size="Size.Large" Color="Color.Warning" />
+                                    <MudText Typo="Typo.subtitle2">数据统计</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">查看数据分析</MudText>
+                                </MudStack>
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- 字段详情 -->
+            <MudTabs Elevation="0" Rounded="false" PanelClass="pa-0">
+                <MudTabPanel Text="字段概览" Icon="@Icons.Material.Filled.ViewList">
+                    <div class="mt-4">
+                        <MudCard>
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                        <MudText Typo="Typo.h6">字段结构 (@schema.Fields.Count 个字段)</MudText>
+                                        <MudButton Variant="Variant.Text" 
+                                                  Size="Size.Small" 
+                                                  Color="Color.Primary"
+                                                  OnClick="@(() => NavigationManager.NavigateTo($"/schema-management/edit/{SchemaId}"))">
+                                            <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" Class="mr-1" />
+                                            管理字段
+                                        </MudButton>
+                                    </MudStack>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent Class="pa-0">
+                                @if (schema.Fields.Any())
+                                {
+                                    <MudTable Items="@schema.Fields" Hover="true" Striped="true" Dense="true">
+                                        <HeaderContent>
+                                            <MudTh Style="width: 60px;">类型</MudTh>
+                                            <MudTh>字段名</MudTh>
+                                            <MudTh Style="width: 80px;">必填</MudTh>
+                                            <MudTh>备注</MudTh>
+                                        </HeaderContent>
+                                        <RowTemplate>
+                                            <MudTd>
+                                                                                <MudChip T="string" Size="Size.Small" 
+                                        Color="@GetFieldTypeColor(context.Type)"
+                                        Variant="Variant.Filled"
+                                        Class="field-type-chip">
+                                    @GetFieldTypeDisplayName(context.Type)
+                                </MudChip>
+                                            </MudTd>
+                                            <MudTd>
+                                                <MudStack Spacing="1">
+                                                    <MudText Typo="Typo.body2" Class="font-weight-medium">@context.Name</MudText>
+                                                    @if (!string.IsNullOrEmpty(context.ReferenceSchemaName))
+                                                    {
+                                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                            引用: @context.ReferenceSchemaName
+                                                        </MudText>
+                                                    }
+                                                </MudStack>
+                                            </MudTd>
+                                            <MudTd>
+                                                                                @if (context.IsRequired)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">必填</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text">可选</MudChip>
+                                }
+                                            </MudTd>
+                                            <MudTd>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="text-truncate" Style="max-width: 300px;">
+                                                    @(string.IsNullOrEmpty(context.Comment) ? "无备注" : context.Comment)
+                                                </MudText>
+                                            </MudTd>
+                                        </RowTemplate>
+                                    </MudTable>
+                                }
+                                else
+                                {
+                                    <MudPaper Class="pa-8 text-center" Elevation="0">
+                                        <MudIcon Icon="@Icons.Material.Filled.ViewColumn" Size="Size.Large" Color="Color.Default" Class="mb-4" />
+                                        <MudText Typo="Typo.h6" GutterBottom="true">暂无字段定义</MudText>
+                                        <MudText Class="mud-text-secondary">请添加字段来定义数据结构</MudText>
+                                    </MudPaper>
+                                }
+                            </MudCardContent>
+                        </MudCard>
+                    </div>
+                </MudTabPanel>
+                
+                <MudTabPanel Text="使用情况" Icon="@Icons.Material.Filled.Analytics">
+                    <div class="mt-4">
+                        <MudCard>
+                            <MudCardContent>
+                                <MudStack Spacing="4">
+                                    <MudText Typo="Typo.h6">Schema使用统计</MudText>
+                                    
+                                    <MudGrid Spacing="4">
+                                        <MudItem xs="12" sm="6" md="3">
+                                            <MudPaper Class="pa-4 text-center" Elevation="1">
+                                                <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Large" Color="Color.Primary" Class="mb-2" />
+                                                <MudText Typo="Typo.h4" Color="Color.Primary">@(recordCount?.ToString() ?? "N/A")</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">数据记录</MudText>
+                                            </MudPaper>
+                                        </MudItem>
+                                        <MudItem xs="12" sm="6" md="3">
+                                            <MudPaper Class="pa-4 text-center" Elevation="1">
+                                                <MudIcon Icon="@Icons.Material.Filled.ViewColumn" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+                                                <MudText Typo="Typo.h4" Color="Color.Secondary">@schema.Fields.Count</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">字段数量</MudText>
+                                            </MudPaper>
+                                        </MudItem>
+                                        <MudItem xs="12" sm="6" md="3">
+                                            <MudPaper Class="pa-4 text-center" Elevation="1">
+                                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" Class="mb-2" />
+                                                <MudText Typo="Typo.h4" Color="Color.Success">@schema.Fields.Count(f => f.IsRequired)</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">必填字段</MudText>
+                                            </MudPaper>
+                                        </MudItem>
+                                        <MudItem xs="12" sm="6" md="3">
+                                            <MudPaper Class="pa-4 text-center" Elevation="1">
+                                                <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Large" Color="Color.Warning" Class="mb-2" />
+                                                <MudText Typo="Typo.h4" Color="Color.Warning">@schema.Fields.Count(f => f.Type == FieldType.Reference)</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">引用字段</MudText>
+                                            </MudPaper>
+                                        </MudItem>
+                                    </MudGrid>
+                                    
+                                    @if (recordCount > 0)
+                                    {
+                                        <MudDivider />
+                                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.subtitle1">最近活动</MudText>
+                                            <MudButton Variant="Variant.Text" 
+                                                      Size="Size.Small" 
+                                                      Color="Color.Primary"
+                                                      OnClick="@(() => NavigationManager.NavigateTo($"/data-explorer/{SchemaId}"))">
+                                                查看全部记录
+                                            </MudButton>
+                                        </MudStack>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            最后更新: @schema.UpdatedAt.ToString("yyyy-MM-dd HH:mm:ss")
+                                        </MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudDivider />
+                                        <MudPaper Class="pa-6 text-center" Elevation="0" Style="background-color: var(--mud-palette-background-grey);">
+                                            <MudIcon Icon="@Icons.Material.Filled.DataUsage" Size="Size.Large" Color="Color.Default" Class="mb-2" />
+                                            <MudText Typo="Typo.subtitle1" GutterBottom="true">暂无数据记录</MudText>
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                                                开始录入数据来查看使用统计
+                                            </MudText>
+                                            <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                                                <MudButton OnClick="@(() => NavigationManager.NavigateTo($"/data-entry/manual/{SchemaId}"))">
+                                                    手动录入
+                                                </MudButton>
+                                                <MudButton OnClick="@(() => NavigationManager.NavigateTo($"/data-entry/ai/{SchemaId}"))">
+                                                    AI辅助录入
+                                                </MudButton>
+                                            </MudButtonGroup>
+                                        </MudPaper>
+                                    }
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    </div>
+                </MudTabPanel>
+            </MudTabs>
+        }
+    </MudStack>
+</MudContainer>
+
+<style>
+    .page-title {
+        font-weight: 600;
+    }
+    
+    .font-mono {
+        font-family: 'Courier New', monospace;
+    }
+    
+    .quick-action-button {
+        height: 120px;
+        border-radius: 12px;
+        transition: all 0.2s ease-in-out;
+    }
+    
+    .quick-action-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .field-type-chip {
+        font-size: 0.75rem;
+        height: 24px;
+        font-weight: 500;
+    }
+    
+    .text-truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+</style>
+
+@code {
+    [Parameter] public int SchemaId { get; set; }
+    
+    private SchemaDefinition? schema;
+    private SchemaDefinition editedSchema = new();
+    private int? recordCount;
+    private bool isLoading = true;
+    private bool isLoadingRecordCount = false;
+    private bool hasError = false;
+    private bool isEditing = false;
+    private bool isSaving = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSchemaAsync();
+    }
+
+    private async Task LoadSchemaAsync()
+    {
+        isLoading = true;
+        hasError = false;
+        
+        try
+        {
+            schema = await SchemaService.GetSchemaByIdAsync(SchemaId);
+            if (schema == null)
+            {
+                hasError = true;
+                return;
+            }
+            
+            // 复制到编辑对象
+            editedSchema = new SchemaDefinition
+            {
+                Id = schema.Id,
+                Name = schema.Name,
+                Description = schema.Description,
+                Fields = schema.Fields,
+                CreatedAt = schema.CreatedAt,
+                UpdatedAt = schema.UpdatedAt
+            };
+            
+            // 异步加载记录数
+            _ = LoadRecordCountAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "加载Schema详情失败: SchemaId={SchemaId}", SchemaId);
+            hasError = true;
+            Snackbar.Add($"加载Schema详情失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadRecordCountAsync()
+    {
+        if (schema == null) return;
+        
+        isLoadingRecordCount = true;
+        StateHasChanged();
+        
+        try
+        {
+            recordCount = (int?)await DataEntryService.CountDataAsync(schema.Name);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "加载记录数失败: SchemaName={SchemaName}", schema.Name);
+            recordCount = null;
+        }
+        finally
+        {
+            isLoadingRecordCount = false;
+            StateHasChanged();
+        }
+    }
+
+    private void StartEdit()
+    {
+        isEditing = true;
+        editedSchema.Name = schema!.Name;
+        editedSchema.Description = schema.Description;
+    }
+
+    private void CancelEdit()
+    {
+        isEditing = false;
+        editedSchema.Name = schema!.Name;
+        editedSchema.Description = schema.Description;
+    }
+
+    private async Task SaveSchema()
+    {
+        if (schema == null || string.IsNullOrWhiteSpace(editedSchema.Name))
+        {
+            Snackbar.Add("Schema名称不能为空", Severity.Warning);
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            schema.Name = editedSchema.Name.Trim();
+            schema.Description = editedSchema.Description?.Trim() ?? string.Empty;
+            schema.UpdatedAt = DateTime.UtcNow;
+
+            var success = await SchemaService.UpdateSchemaAsync(schema);
+            if (success)
+            {
+                isEditing = false;
+                Snackbar.Add("Schema信息已更新", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("更新失败", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "更新Schema失败: SchemaId={SchemaId}", SchemaId);
+            Snackbar.Add($"更新失败: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void NavigateBackToList()
+    {
+        NavigationManager.NavigateTo("/schema-management");
+    }
+
+    private void ShowDataStatistics()
+    {
+        Snackbar.Add("数据统计功能即将推出", Severity.Info);
+    }
+
+    private Color GetFieldTypeColor(FieldType fieldType)
+    {
+        return fieldType switch
+        {
+            FieldType.Text => Color.Primary,
+            FieldType.Number => Color.Success,
+            FieldType.Boolean => Color.Warning,
+            FieldType.Date => Color.Info,
+            FieldType.Reference => Color.Secondary,
+            _ => Color.Default
+        };
+    }
+
+    private string GetFieldTypeDisplayName(FieldType fieldType)
+    {
+        return fieldType switch
+        {
+            FieldType.Text => "文本",
+            FieldType.Number => "数值",
+            FieldType.Boolean => "布尔",
+            FieldType.Date => "日期",
+            FieldType.Reference => "引用",
+            _ => "未知"
+        };
+    }
+} 
