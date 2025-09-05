@@ -66,8 +66,8 @@
                         
                         <MudItem xs="12">
                             <MudTextField @bind-Value="newQuery.FilterExpression" 
-                                         Label="筛选条件（可选）" 
-                                         Placeholder="例如：$.status == 'Active' && $.level > 10"
+                                         Label="筛选条件（可选，主要用于限定单例）" 
+                                         Placeholder="例如：$.status = 'Active' && $.level > 10"
                                          Variant="Variant.Outlined"
                                          HelperText="使用LiteDB查询语法，$表示当前文档" />
                         </MudItem>

@@ -1,5 +1,6 @@
 @using ContentEngine.Core.Inference.Models
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Cards
+@using ContentEngine.WebApp.Components.Shared.Cards
 
 <link href="Shared/AIInferenceStyles.css" rel="stylesheet" />
 
@@ -47,15 +48,19 @@
                     
                     <MudGrid Spacing="4">
                         <MudItem xs="12" md="6">
-                            <CombinationOverviewCard Title="叉积视图" 
-                                                   ViewNames="@rule.ViewNamesToCrossProduct" 
-                                                   ChipColor="Color.Primary" />
+                            <DataViewCard ViewType="DataViewCard.DataViewType.CrossProduct"
+                                         ViewNames="@rule.ViewNamesToCrossProduct"
+                                         Definition="@Definition"
+                                         ShowDataPreview="false"
+                                         IsPreviewExpanded="false" />
                         </MudItem>
                         
                         <MudItem xs="12" md="6">
-                            <CombinationOverviewCard Title="单例上下文视图" 
-                                                   ViewNames="@rule.SingletonViewNamesForContext" 
-                                                   ChipColor="Color.Info" />
+                            <DataViewCard ViewType="DataViewCard.DataViewType.Singleton"
+                                         ViewNames="@rule.SingletonViewNamesForContext"
+                                         Definition="@Definition"
+                                         ShowDataPreview="false"
+                                         IsPreviewExpanded="false" />
                         </MudItem>
                         
                         <MudItem xs="12">

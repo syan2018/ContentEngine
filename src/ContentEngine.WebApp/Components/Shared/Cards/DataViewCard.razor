@@ -1,0 +1,296 @@
+@using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.Inference.Services
+@using ContentEngine.Core.Utils
+@using LiteDB
+@inject IQueryProcessingService QueryProcessingService
+@inject ISnackbar Snackbar
+
+<MudCard Outlined="true" Class="@($"mud-height-full {AdditionalClass}")">
+    <MudCardContent>
+        <!-- 卡片标题 -->
+        <div class="d-flex align-center mb-3">
+            <MudIcon Icon="@GetViewIcon()" Color="@GetViewColor()" Class="mr-2" />
+            <MudText Typo="Typo.h6">@GetViewTitle()</MudText>
+            <MudSpacer />
+            <MudChip T="string" Size="Size.Small" Color="@GetViewColor()">
+                @(ViewNames?.Count ?? 0) 个视图
+            </MudChip>
+        </div>
+        
+        @if (ViewNames?.Any() == true)
+        {
+            <!-- 视图列表 -->
+            <MudStack Spacing="2" Class="mb-3">
+                @foreach (var viewName in ViewNames)
+                {
+                    <MudPaper Class="pa-3" Outlined="true">
+                        <div class="d-flex align-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Dataset" Color="@GetViewColor()" Size="Size.Small" Class="mr-2" />
+                            <MudText Typo="Typo.body1">@viewName</MudText>
+                            <MudSpacer />
+                            
+                            @if (ViewType == DataViewType.Singleton && ShowDataPreview && SingletonViewPreviews.ContainsKey(viewName))
+                            {
+                                var preview = SingletonViewPreviews[viewName];
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">
+                                    @(preview.Any() ? "1条数据" : "无数据")
+                                </MudText>
+                            }
+                            else if (ViewType == DataViewType.CrossProduct && ShowDataPreview && CrossProductViewPreviews.ContainsKey(viewName))
+                            {
+                                var preview = CrossProductViewPreviews[viewName];
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">
+                                    @preview.Count 条数据
+                                </MudText>
+                            }
+                            
+                            @if (OnRemoveView.HasDelegate)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Remove" 
+                                              Size="Size.Small" 
+                                              OnClick="() => OnRemoveView.InvokeAsync(viewName)"
+                                              Title="@GetRemoveTitle()">
+                                </MudIconButton>
+                            }
+                        </div>
+                        
+                        <!-- 视图类型说明和数据预览 -->
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                            @GetViewDescription()
+                        </MudText>
+                        
+                        @if (ViewType == DataViewType.Singleton && ShowDataPreview)
+                        {
+                            @if (SingletonViewPreviews.ContainsKey(viewName))
+                            {
+                                var preview = SingletonViewPreviews[viewName];
+                                @if (preview.Any())
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Warning" Class="mb-2">
+                                        ⚠️ 仅使用第一条数据，请确保筛选规则准确
+                                    </MudText>
+                                    <MudDivider Class="my-2" />
+                                    <MudText Typo="Typo.caption" Color="Color.Info" Class="mb-2">
+                                        📊 数据样例（前3个字段）
+                                    </MudText>
+                                    <MudStack Spacing="1">
+                                        @foreach (var field in preview.First().Take(3))
+                                        {
+                                            <div class="d-flex align-center">
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-3" Style="min-width: 80px;">
+                                                    @field.Key:
+                                                </MudText>
+                                                <MudText Typo="Typo.body2" Style="font-family: monospace;">
+                                                    @BsonFormUtils.GetSafeBsonValueAsString(field.Value)
+                                                </MudText>
+                                            </div>
+                                        }
+                                        @if (preview.First().Count > 3)
+                                        {
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                ...还有 @(preview.First().Count - 3) 个字段
+                                            </MudText>
+                                        }
+                                    </MudStack>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">该视图暂无数据</MudText>
+                                }
+                            }
+                            else
+                            {
+                                <div class="d-flex align-center">
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <MudText Typo="Typo.caption">加载中...</MudText>
+                                </div>
+                            }
+                        }
+                    </MudPaper>
+                }
+            </MudStack>
+        }
+        else
+        {
+            <!-- 空状态 -->
+            <MudPaper Class="pa-6" Outlined="true" Style="text-align: center;">
+                <MudIcon Icon="@GetViewIcon()" Color="Color.Secondary" Size="Size.Large" Class="mb-2" />
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @GetEmptyStateText()
+                </MudText>
+            </MudPaper>
+        }
+    </MudCardContent>
+</MudCard>
+
+@code {
+    public enum DataViewType
+    {
+        CrossProduct,
+        Singleton
+    }
+    
+    [Parameter] public DataViewType ViewType { get; set; } = DataViewType.CrossProduct;
+    [Parameter] public List<string>? ViewNames { get; set; }
+    [Parameter] public ReasoningTransactionDefinition? Definition { get; set; }
+    [Parameter] public bool ShowDataPreview { get; set; } = false;
+    [Parameter] public bool IsPreviewExpanded { get; set; } = false;
+    [Parameter] public string AdditionalClass { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> OnRemoveView { get; set; }
+    
+    // 存储不同类型视图的数据预览
+    private Dictionary<string, List<BsonDocument>> SingletonViewPreviews = new();
+    private Dictionary<string, List<BsonDocument>> CrossProductViewPreviews = new();
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ShowDataPreview && ViewNames?.Any() == true && Definition?.QueryDefinitions?.Any() == true)
+        {
+            await LoadViewPreviews();
+        }
+    }
+    
+    /// <summary>
+    /// 获取视图图标
+    /// </summary>
+    private string GetViewIcon()
+    {
+        return ViewType switch
+        {
+            DataViewType.CrossProduct => Icons.Material.Filled.CallMerge,
+            DataViewType.Singleton => Icons.Material.Filled.Info,
+            _ => Icons.Material.Filled.Dataset
+        };
+    }
+    
+    /// <summary>
+    /// 获取视图颜色
+    /// </summary>
+    private Color GetViewColor()
+    {
+        return ViewType switch
+        {
+            DataViewType.CrossProduct => Color.Primary,
+            DataViewType.Singleton => Color.Info,
+            _ => Color.Secondary
+        };
+    }
+    
+    /// <summary>
+    /// 获取视图标题
+    /// </summary>
+    private string GetViewTitle()
+    {
+        return ViewType switch
+        {
+            DataViewType.CrossProduct => "叉积视图",
+            DataViewType.Singleton => "单例上下文视图",
+            _ => "数据视图"
+        };
+    }
+    
+    /// <summary>
+    /// 获取视图描述
+    /// </summary>
+    private string GetViewDescription()
+    {
+        return ViewType switch
+        {
+            DataViewType.CrossProduct => "与其他视图进行笛卡尔积组合",
+            DataViewType.Singleton => "为所有组合提供共享的上下文数据",
+            _ => ""
+        };
+    }
+    
+    /// <summary>
+    /// 获取移除按钮标题
+    /// </summary>
+    private string GetRemoveTitle()
+    {
+        return ViewType switch
+        {
+            DataViewType.CrossProduct => "从叉积中移除",
+            DataViewType.Singleton => "从单例上下文中移除",
+            _ => "移除视图"
+        };
+    }
+    
+    /// <summary>
+    /// 获取空状态文本
+    /// </summary>
+    private string GetEmptyStateText()
+    {
+        return ViewType switch
+        {
+            DataViewType.CrossProduct => "尚未选择任何叉积视图",
+            DataViewType.Singleton => "尚未选择任何单例上下文视图",
+            _ => "尚未选择任何视图"
+        };
+    }
+    
+    /// <summary>
+    /// 加载所有视图的数据预览
+    /// </summary>
+    private async Task LoadViewPreviews()
+    {
+        if (ViewNames == null || Definition?.QueryDefinitions == null) return;
+        
+        foreach (var viewName in ViewNames)
+        {
+            if (ViewType == DataViewType.Singleton && !SingletonViewPreviews.ContainsKey(viewName))
+            {
+                await LoadSingletonViewPreview(viewName);
+            }
+            else if (ViewType == DataViewType.CrossProduct && !CrossProductViewPreviews.ContainsKey(viewName))
+            {
+                await LoadCrossProductViewPreview(viewName);
+            }
+        }
+    }
+    
+    /// <summary>
+    /// 加载单例视图的数据预览
+    /// </summary>
+    private async Task LoadSingletonViewPreview(string viewName)
+    {
+        try
+        {
+            var queryDef = Definition?.QueryDefinitions?.FirstOrDefault(q => q.OutputViewName == viewName);
+            if (queryDef != null)
+            {
+                // 单例只需要第一条数据
+                var previewData = await QueryProcessingService.PreviewQueryAsync(queryDef, maxResults: 1);
+                SingletonViewPreviews[viewName] = previewData;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"加载视图 {viewName} 的数据预览失败: {ex.Message}", Severity.Warning);
+            SingletonViewPreviews[viewName] = new List<BsonDocument>();
+        }
+    }
+    
+    /// <summary>
+    /// 加载叉积视图的数据预览
+    /// </summary>
+    private async Task LoadCrossProductViewPreview(string viewName)
+    {
+        try
+        {
+            var queryDef = Definition?.QueryDefinitions?.FirstOrDefault(q => q.OutputViewName == viewName);
+            if (queryDef != null)
+            {
+                // 叉积需要知道数据量，预览10条用于计数
+                var previewData = await QueryProcessingService.PreviewQueryAsync(queryDef, maxResults: 10);
+                CrossProductViewPreviews[viewName] = previewData;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"加载视图 {viewName} 的数据预览失败: {ex.Message}", Severity.Warning);
+            CrossProductViewPreviews[viewName] = new List<BsonDocument>();
+        }
+    }
+}
