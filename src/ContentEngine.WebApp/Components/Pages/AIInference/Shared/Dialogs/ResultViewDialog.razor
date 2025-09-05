@@ -57,11 +57,28 @@
                                       Title="复制内容" />
                     </div>
                     
-                    <MudPaper Class="pa-4 result-content" Outlined="true">
-                        <MudText Typo="Typo.body2" Class="result-text" Style="white-space: pre-wrap; line-height: 1.6;">
-                            @Content
-                        </MudText>
-                    </MudPaper>
+                    <MudTabs Dense="true">
+                        <MudTabPanel Text="文本">
+                            <MudPaper Class="pa-4 result-content" Outlined="true">
+                                <MudText Typo="Typo.body2" Class="result-text" Style="white-space: pre-wrap; line-height: 1.6;">
+                                    @Content
+                                </MudText>
+                            </MudPaper>
+                        </MudTabPanel>
+                        <MudTabPanel Text="JSON">
+                            <MudPaper Class="pa-4 result-content" Outlined="true">
+                                @if (TryFormatJson(Content, out var prettyJson))
+                                {
+                                    <pre>@prettyJson</pre>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">非合法 JSON，显示为原始文本。</MudText>
+                                    <pre>@Content</pre>
+                                }
+                            </MudPaper>
+                        </MudTabPanel>
+                    </MudTabs>
                 </div>
 
                 <!-- 统计信息 -->
@@ -149,5 +166,22 @@
     private void Cancel()
     {
         MudDialog.Cancel();
+    }
+
+    private bool TryFormatJson(string? text, out string pretty)
+    {
+        pretty = string.Empty;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(text);
+            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            pretty = System.Text.Json.JsonSerializer.Serialize(doc.RootElement, opts);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 } 

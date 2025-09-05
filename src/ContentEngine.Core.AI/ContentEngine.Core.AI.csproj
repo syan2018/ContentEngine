@@ -9,6 +9,9 @@
     <ItemGroup>
         <ProjectReference Include="..\ContentEngine.Core\ContentEngine.Core.csproj" />
         <ProjectReference Include="..\ConfigurableAIProvider\ConfigurableAIProvider.csproj" />
+        <PackageReference Include="Microsoft.Extensions.AI" Version="9.8.0" />
+        <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.64.0" />
+        <PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureOpenAI" Version="1.64.0" />
     </ItemGroup>
 
 </Project>

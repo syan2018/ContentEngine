@@ -348,8 +348,23 @@ namespace ContentEngine.Core.Inference.Services
                 // 填充Prompt模板
                 var filledPrompt = PromptTemplatingEngine.Fill(definition.PromptTemplate.TemplateContent, combination.DataMap);
 
-                // 执行AI调用
-                var result = await _promptExecutionService.ExecutePromptAsync(filledPrompt, "ContentEngineHelper", cancellationToken);
+                // 执行AI调用（当启用结构化输出时强制 JSON）
+                ContentEngine.Core.Inference.Services.PromptExecutionResult result;
+                if (definition.EnableStructuredJsonOutput && definition.OutputFields.Any())
+                {
+                    var options = new ContentEngine.Core.Inference.Services.PromptExecutionOptions
+                    {
+                        ForceJsonOutput = true,
+                        OutputFields = definition.OutputFields
+                    };
+                    result = await _promptExecutionService.ExecutePromptWithOptionsAsync(
+                        filledPrompt, options, "ContentEngineHelper", cancellationToken);
+                }
+                else
+                {
+                    result = await _promptExecutionService.ExecutePromptAsync(
+                        filledPrompt, "ContentEngineHelper", cancellationToken);
+                }
                 var executionTime = DateTime.UtcNow - startTime;
 
                 return new ReasoningOutputItem

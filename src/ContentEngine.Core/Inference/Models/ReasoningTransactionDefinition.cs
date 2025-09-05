@@ -1,4 +1,5 @@
 using LiteDB;
+using ContentEngine.Core.DataPipeline.Models;
 using System;
 using System.Collections.Generic;
 
@@ -44,6 +45,16 @@ namespace ContentEngine.Core.Inference.Models
         /// 执行约束
         /// </summary>
         public ExecutionConstraints ExecutionConstraints { get; set; } = new();
+
+        /// <summary>
+        /// 是否启用结构化 JSON 输出（平坦字段，无嵌套）
+        /// </summary>
+        public bool EnableStructuredJsonOutput { get; set; } = false;
+
+        /// <summary>
+        /// 当启用结构化输出时，定义输出的平坦字段集合
+        /// </summary>
+        public List<FieldDefinition> OutputFields { get; set; } = new();
 
         /// <summary>
         /// 创建时间

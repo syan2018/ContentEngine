@@ -2,12 +2,16 @@ using ConfigurableAIProvider.Services.Factories;
 using ContentEngine.Core.Inference.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
+using System.Text;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using System.Text.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.AI;
 
 namespace ContentEngine.Core.AI.Services
 {
@@ -77,6 +81,157 @@ namespace ContentEngine.Core.AI.Services
 
                 return result;
             }
+        }
+
+        public async Task<PromptExecutionResult> ExecutePromptWithOptionsAsync(
+            string promptText,
+            PromptExecutionOptions options,
+            string agentName = "ContentEngineHelper",
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(promptText))
+                throw new ArgumentException("Prompt文本不能为空", nameof(promptText));
+
+            options ??= new PromptExecutionOptions();
+
+            var stopwatch = Stopwatch.StartNew();
+            var result = new PromptExecutionResult();
+
+            try
+            {
+                var kernel = await _kernelFactory.BuildKernelAsync(agentName);
+
+                _logger.LogDebug("执行Prompt(带选项): {AgentName}, 长度: {PromptLength}, ForceJson: {ForceJson}", agentName, promptText.Length, options.ForceJsonOutput);
+
+                if (options.ForceJsonOutput)
+                {
+                    // 使用 OpenAI 结构化输出（严格 JSON Schema）
+                    var schemaJson = BuildFlatJsonSchema(options.OutputFields);
+                    var responseFormat = ChatResponseFormat.ForJsonSchema(schemaJson);
+
+                    var exec = new OpenAIPromptExecutionSettings
+                    {
+                        ResponseFormat = responseFormat
+                    };
+
+                    var response = await kernel.InvokePromptAsync(promptText, new KernelArguments(exec), cancellationToken: cancellationToken);
+                    
+                    
+                    stopwatch.Stop();
+                    var text = response.ToString();
+                    result.IsSuccess = true;
+                    result.GeneratedText = text;
+                    result.ExecutionTime = stopwatch.Elapsed;
+                    result.InputTokens = EstimateTokenCount(promptText);
+                    result.OutputTokens = EstimateTokenCount(text);
+                    result.CostUSD = CalculateCost(result.InputTokens, result.OutputTokens);
+                    return result;
+                }
+                else
+                {
+                    var response = await kernel.InvokePromptAsync(promptText, cancellationToken: cancellationToken);
+
+                    stopwatch.Stop();
+                    var text = response.ToString();
+                    result.IsSuccess = true;
+                    result.GeneratedText = text;
+                    result.ExecutionTime = stopwatch.Elapsed;
+                    result.InputTokens = EstimateTokenCount(promptText);
+                    result.OutputTokens = EstimateTokenCount(text);
+                    result.CostUSD = CalculateCost(result.InputTokens, result.OutputTokens);
+                    return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                result.IsSuccess = false;
+                result.FailureReason = ex.Message;
+                result.ExecutionTime = stopwatch.Elapsed;
+                _logger.LogError(ex, "Prompt执行失败(带选项): {AgentName}, 耗时: {ElapsedMs}ms", agentName, stopwatch.ElapsedMilliseconds);
+                return result;
+            }
+        }
+
+        private static string BuildJsonOnlyPrompt(
+            string userPrompt,
+            List<ContentEngine.Core.DataPipeline.Models.FieldDefinition> fields)
+        {
+            var sb = new StringBuilder();
+            
+            sb.AppendLine(userPrompt);
+            
+            sb.AppendLine("你必须严格只输出 JSON，不要包含额外解释、Markdown 或前后缀。");
+            sb.AppendLine("输出为一个对象（无嵌套），包含以下字段和类型：");
+
+            foreach (var f in fields ?? new())
+            {
+                var type = f.Type switch
+                {
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Text => "string",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Number => "number",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Boolean => "boolean",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Date => "string(ISO 8601 格式)",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Reference => "string",
+                    _ => "string"
+                };
+                var requiredMark = f.IsRequired ? "(required)" : "(optional)";
+                sb.AppendLine($"- {f.Name}: {type} {requiredMark}");
+            }
+
+            if (fields != null && fields.Any(f => f.IsRequired))
+            {
+                var req = string.Join(", ", fields.Where(f => f.IsRequired).Select(f => f.Name));
+                sb.AppendLine($"必填字段: [{req}]");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("请根据以上字段，提取并输出严格合法的 JSON：");
+            
+
+            return sb.ToString();
+        }
+
+        private static JsonElement BuildFlatJsonSchema(List<ContentEngine.Core.DataPipeline.Models.FieldDefinition> fields)
+        {
+            // 构建平坦对象 Schema（严格、禁止额外属性）
+            var properties = new Dictionary<string, object?>();
+            var required = new List<string>();
+
+            foreach (var f in fields ?? new())
+            {
+                var type = f.Type switch
+                {
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Text => "string",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Number => "number",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Boolean => "boolean",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Date => "string", // JSON Schema 中日期通常用 string 表示，可附带 format
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Reference => "string",
+                    _ => "string"
+                };
+
+                properties[f.Name] = new Dictionary<string, object?>
+                {
+                    ["type"] = type,
+                    ["description"] = f.Comment
+                };
+
+                if (f.IsRequired)
+                {
+                    required.Add(f.Name);
+                }
+            }
+
+            var schema = new Dictionary<string, object?>
+            {
+                ["type"] = "object",
+                ["additionalProperties"] = false,
+                ["properties"] = properties,
+                ["required"] = required
+            };
+
+            // 核心改动：将 schema 对象直接序列化为 JsonElement
+            return JsonSerializer.SerializeToElement(schema);
         }
 
         public async Task<List<PromptExecutionResult>> ExecutePromptsBatchAsync(

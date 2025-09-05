@@ -2,7 +2,7 @@ description: "Suggests schema fields based on natural language description."
 
 models:
   # 使用你在 models.yaml 中定义好的聊天模型 ID
-  chat: grok-3-fast
+  chat: gpt-5-nano
 
 plugins:
   # 引用 Agent 本地的插件

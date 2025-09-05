@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using ContentEngine.Core.DataPipeline.Models;
 
 namespace ContentEngine.Core.Inference.Services
 {
@@ -64,6 +65,20 @@ namespace ContentEngine.Core.Inference.Services
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 执行单个Prompt（带执行选项）
+        /// </summary>
+        /// <param name="promptText">Prompt文本</param>
+        /// <param name="options">执行选项，如强制JSON输出、输出字段等</param>
+        /// <param name="agentName">使用的Agent名称</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>执行结果</returns>
+        Task<PromptExecutionResult> ExecutePromptWithOptionsAsync(
+            string promptText,
+            PromptExecutionOptions options,
+            string agentName = "ContentEngineHelper",
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 批量执行多个Prompt
         /// </summary>
         /// <param name="prompts">Prompt列表</param>
@@ -91,5 +106,21 @@ namespace ContentEngine.Core.Inference.Services
         /// <param name="text">文本内容</param>
         /// <returns>Token数量</returns>
         int EstimateTokenCount(string text);
+    }
+
+    /// <summary>
+    /// Prompt 执行选项
+    /// </summary>
+    public class PromptExecutionOptions
+    {
+        /// <summary>
+        /// 是否强制要求模型仅输出合法的 JSON（不包含多余文本/Markdown）
+        /// </summary>
+        public bool ForceJsonOutput { get; set; } = false;
+
+        /// <summary>
+        /// 当启用结构化输出时，定义平坦的输出字段集合
+        /// </summary>
+        public List<FieldDefinition> OutputFields { get; set; } = new();
     }
 } 

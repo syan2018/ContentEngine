@@ -2,6 +2,8 @@
 @inject ISnackbar Snackbar
 @inject IJSRuntime JSRuntime
 @inject IDataEntryService DataService
+@using ContentEngine.WebApp.Components.Shared
+@using FieldDataType = ContentEngine.Core.DataPipeline.Models.FieldType
 
 <link href="Shared/AIInferenceStyles.css" rel="stylesheet" />
 
@@ -95,6 +97,40 @@
                         </div>
                     }
                 </MudPaper>
+            </div>
+        </MudTabPanel>
+
+        <MudTabPanel Text="输出结构" Icon="@Icons.Material.Filled.TableChart">
+            <div class="pa-4">
+                <MudStack Spacing="3">
+                    <MudSwitch T="bool"
+                               @bind-Value="Definition.EnableStructuredJsonOutput"
+                               Color="Color.Primary"
+                               Label="启用结构化 JSON 输出" />
+
+                    @if (Definition.EnableStructuredJsonOutput)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            将使用 JSON Schema 严格约束模型输出为平坦对象（无嵌套）。
+                        </MudAlert>
+
+                        <div class="d-flex gap-2">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="GenerateDraftOutputFields">
+                                从视图字段生成草稿
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="ClearOutputFields">
+                                清空
+                            </MudButton>
+                        </div>
+
+                        <FieldDefinitionTable Fields="Definition.OutputFields"
+                                              ReadOnly="false"
+                                              ShowAddButton="true"
+                                              ShowRemoveButton="true"
+                                              OnAddField="OnAddOutputField"
+                                              OnRemoveField="OnRemoveOutputField" />
+                    }
+                </MudStack>
             </div>
         </MudTabPanel>
     </MudTabs>
@@ -234,6 +270,53 @@
         }
         
         PreviewContent = content;
+    }
+
+    private void GenerateDraftOutputFields()
+    {
+        if (!Definition.EnableStructuredJsonOutput)
+            return;
+
+        var existing = new HashSet<string>(Definition.OutputFields.Select(f => f.Name));
+        foreach (var q in Definition.QueryDefinitions)
+        {
+            foreach (var f in q.SelectFields)
+            {
+                var name = string.IsNullOrWhiteSpace(q.OutputViewName) ? f : $"{q.OutputViewName}_{f}";
+                if (!existing.Contains(name))
+                {
+                    Definition.OutputFields.Add(new ContentEngine.Core.DataPipeline.Models.FieldDefinition
+                    {
+                        Name = name,
+                        Type = FieldDataType.Text,
+                        IsRequired = false
+                    });
+                    existing.Add(name);
+                }
+            }
+        }
+    }
+
+    private void ClearOutputFields()
+    {
+        Definition.OutputFields.Clear();
+    }
+
+    private async Task OnAddOutputField()
+    {
+        Definition.OutputFields.Add(new ContentEngine.Core.DataPipeline.Models.FieldDefinition
+        {
+            Name = string.Empty,
+            Type = FieldDataType.Text,
+            IsRequired = false
+        });
+        await Task.CompletedTask;
+    }
+
+    private async Task OnRemoveOutputField(ContentEngine.Core.DataPipeline.Models.FieldDefinition field)
+    {
+        Definition.OutputFields.Remove(field);
+        await Task.CompletedTask;
     }
 
     private async Task<Dictionary<string, string>> GenerateMockDataForView(string viewName)
