@@ -1,28 +1,40 @@
 @using MudBlazor
+@using ContentEngine.Core.DataPipeline.Models
+@using ContentEngine.Core.Utils
+@using ContentEngine.WebApp.Components.Shared.Cards
 
 <MudDialog>
     <DialogContent>
-        <div class="prompt-preview-container">
-            <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
-                <MudIcon Icon="@Icons.Material.Filled.TextSnippet" Class="mr-2" Color="Color.Primary" />
-                生成的Prompt预览
-            </MudText>
+        <MudText Typo="Typo.h6" Class="mb-3 d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Filled.TextSnippet" Class="mr-2" Color="Color.Primary" />
+            Prompt预览
+            @if (HasStructuredOutput)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2">结构化输出</MudChip>
+            }
+        </MudText>
+        
+        <MudGrid Spacing="3">
+            <!-- Prompt 内容 -->
+            <MudItem>
+                <PromptDisplayCard 
+                    OriginalPrompt="@Content"
+                    OutputFields="@(HasStructuredOutput ? OutputFields : null)"
+                    ShowCard="false"
+                    ShowStatistics="true" />
+            </MudItem>
             
-            <MudCard Outlined="true" Class="prompt-card">
-                <MudCardContent Class="pa-3">
-                    <pre class="prompt-content">@Content</pre>
-                </MudCardContent>
-            </MudCard>
-            
-            <div class="prompt-stats mt-3">
-                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
-                    字符数: @Content?.Length
-                </MudChip>
-                <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Text">
-                    行数: @(Content?.Split('\n').Length ?? 0)
-                </MudChip>
-            </div>
-        </div>
+            <!-- 输出字段（如果有） -->
+            @if (HasStructuredOutput && OutputFields?.Any() == true)
+            {
+                <MudItem>
+                    <OutputFieldsCard 
+                        Fields="@OutputFields"
+                        Title="输出字段"
+                        ShowStatistics="true" />
+                </MudItem>
+            }
+        </MudGrid>
     </DialogContent>
     <DialogActions>
         <MudButton Variant="Variant.Text" 
@@ -38,51 +50,19 @@
     </DialogActions>
 </MudDialog>
 
-<style>
-.prompt-preview-container {
-    min-width: 600px;
-    max-width: 800px;
-}
-
-.prompt-card {
-}
-
-.prompt-content {
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 0.875rem;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    margin: 0;
-    max-height: 400px;
-    overflow-y: auto;
-    background-color: transparent;
-}
-
-.prompt-stats {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-/* 响应式设计 */
-@@media (max-width: 768px) {
-    .prompt-preview-container {
-        min-width: unset;
-        max-width: unset;
-        width: 100%;
-    }
-    
-    .prompt-content {
-        font-size: 0.8rem;
-        max-height: 300px;
-    }
-}
-</style>
-
 @code {
     [CascadingParameter] IMudDialogInstance? MudDialog { get; set; }
     [Parameter] public string Content { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// 是否启用结构化输出
+    /// </summary>
+    [Parameter] public bool HasStructuredOutput { get; set; } = false;
+    
+    /// <summary>
+    /// 输出字段定义
+    /// </summary>
+    [Parameter] public List<FieldDefinition>? OutputFields { get; set; }
 
     private void Submit() => MudDialog?.Close(DialogResult.Ok(true));
 
@@ -94,4 +74,5 @@
         await Task.CompletedTask;
         // TODO: 实现复制到剪贴板功能
     }
+    
 } 

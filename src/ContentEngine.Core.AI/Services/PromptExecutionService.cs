@@ -101,12 +101,16 @@ namespace ContentEngine.Core.AI.Services
             {
                 var kernel = await _kernelFactory.BuildKernelAsync(agentName);
 
-                _logger.LogDebug("执行Prompt(带选项): {AgentName}, 长度: {PromptLength}, ForceJson: {ForceJson}", agentName, promptText.Length, options.ForceJsonOutput);
-
                 if (options.ForceJsonOutput)
                 {
+                    // 构建包含格式说明的增强 Prompt
+                    var enhancedPrompt = ContentEngine.Core.Utils.JsonParsingUtils.BuildEnhancedPrompt(promptText, options.OutputFields ?? new());
+                    
+                    _logger.LogDebug("执行结构化Prompt: {AgentName}, 原始长度: {OriginalLength}, 增强长度: {EnhancedLength}, 字段数: {FieldCount}", 
+                        agentName, promptText.Length, enhancedPrompt.Length, options.OutputFields?.Count ?? 0);
+                    
                     // 使用 OpenAI 结构化输出（严格 JSON Schema）
-                    var schemaJson = BuildFlatJsonSchema(options.OutputFields);
+                    var schemaJson = BuildFlatJsonSchema(options.OutputFields ?? new());
                     var responseFormat = ChatResponseFormat.ForJsonSchema(schemaJson);
 
                     var exec = new OpenAIPromptExecutionSettings
@@ -114,7 +118,7 @@ namespace ContentEngine.Core.AI.Services
                         ResponseFormat = responseFormat
                     };
 
-                    var response = await kernel.InvokePromptAsync(promptText, new KernelArguments(exec), cancellationToken: cancellationToken);
+                    var response = await kernel.InvokePromptAsync(enhancedPrompt, new KernelArguments(exec), cancellationToken: cancellationToken);
                     
                     
                     stopwatch.Stop();
@@ -129,6 +133,7 @@ namespace ContentEngine.Core.AI.Services
                 }
                 else
                 {
+                    _logger.LogDebug("执行普通Prompt: {AgentName}, 长度: {PromptLength}", agentName, promptText.Length);
                     var response = await kernel.InvokePromptAsync(promptText, cancellationToken: cancellationToken);
 
                     stopwatch.Stop();
@@ -153,44 +158,6 @@ namespace ContentEngine.Core.AI.Services
             }
         }
 
-        private static string BuildJsonOnlyPrompt(
-            string userPrompt,
-            List<ContentEngine.Core.DataPipeline.Models.FieldDefinition> fields)
-        {
-            var sb = new StringBuilder();
-            
-            sb.AppendLine(userPrompt);
-            
-            sb.AppendLine("你必须严格只输出 JSON，不要包含额外解释、Markdown 或前后缀。");
-            sb.AppendLine("输出为一个对象（无嵌套），包含以下字段和类型：");
-
-            foreach (var f in fields ?? new())
-            {
-                var type = f.Type switch
-                {
-                    ContentEngine.Core.DataPipeline.Models.FieldType.Text => "string",
-                    ContentEngine.Core.DataPipeline.Models.FieldType.Number => "number",
-                    ContentEngine.Core.DataPipeline.Models.FieldType.Boolean => "boolean",
-                    ContentEngine.Core.DataPipeline.Models.FieldType.Date => "string(ISO 8601 格式)",
-                    ContentEngine.Core.DataPipeline.Models.FieldType.Reference => "string",
-                    _ => "string"
-                };
-                var requiredMark = f.IsRequired ? "(required)" : "(optional)";
-                sb.AppendLine($"- {f.Name}: {type} {requiredMark}");
-            }
-
-            if (fields != null && fields.Any(f => f.IsRequired))
-            {
-                var req = string.Join(", ", fields.Where(f => f.IsRequired).Select(f => f.Name));
-                sb.AppendLine($"必填字段: [{req}]");
-            }
-
-            sb.AppendLine();
-            sb.AppendLine("请根据以上字段，提取并输出严格合法的 JSON：");
-            
-
-            return sb.ToString();
-        }
 
         private static JsonElement BuildFlatJsonSchema(List<ContentEngine.Core.DataPipeline.Models.FieldDefinition> fields)
         {

@@ -1,0 +1,114 @@
+@using ContentEngine.Core.DataPipeline.Models
+
+@if (ShowCard)
+{
+    <MudCard Outlined="true" Class="@CardClass">
+        @if (!string.IsNullOrEmpty(Title))
+        {
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <div class="d-flex align-center">
+                        <MudText Typo="Typo.subtitle1">@Title</MudText>
+                        @if (ShowStatistics && Fields?.Any() == true)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-2">
+                                @Fields.Count 个字段
+                            </MudChip>
+                        }
+                    </div>
+                </CardHeaderContent>
+            </MudCardHeader>
+        }
+        <MudCardContent Class="pa-3">
+            @FieldsTable
+        </MudCardContent>
+    </MudCard>
+}
+else
+{
+    @FieldsTable
+}
+
+@code {
+    [Parameter] public List<FieldDefinition>? Fields { get; set; }
+    [Parameter] public bool ShowCard { get; set; } = true;
+    [Parameter] public string? Title { get; set; } = "输出数据结构";
+    [Parameter] public bool ShowStatistics { get; set; } = true;
+    [Parameter] public bool Dense { get; set; } = true;
+    [Parameter] public string CardClass { get; set; } = "";
+    
+    private RenderFragment FieldsTable => @<MudSimpleTable Dense="@Dense" Hover="true" Class="output-fields-table">
+        <thead>
+            <tr>
+                <th style="font-weight: bold; width: 30%;">字段名</th>
+                <th style="font-weight: bold; width: 20%;">类型</th>
+                <th style="font-weight: bold; width: 15%;">必填</th>
+                <th style="font-weight: bold; width: 35%;">说明</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (Fields?.Any() == true)
+            {
+                @foreach (var field in Fields)
+                {
+                    <tr>
+                        <td>
+                            <span class="field-name">@field.Name</span>
+                        </td>
+                        <td>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined">
+                                @field.Type.ToString()
+                            </MudChip>
+                        </td>
+                        <td>
+                            @if (field.IsRequired)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">必填</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">可选</MudChip>
+                            }
+                        </td>
+                        <td>
+                            <span class="field-comment">@(field.Comment ?? "-")</span>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="4" class="text-center pa-4">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">暂无字段定义</MudText>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>;
+}
+
+<style>
+.output-fields-table .field-name {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-weight: 600;
+    color: #1976d2;
+}
+
+.output-fields-table .field-comment {
+    font-size: 0.875rem;
+    color: #666;
+}
+
+.output-fields-table {
+    font-size: 0.875rem;
+}
+
+.output-fields-table th {
+    background-color: #f5f5f5;
+}
+
+.output-fields-table tbody tr:hover {
+    background-color: #f9f9f9;
+}
+</style>

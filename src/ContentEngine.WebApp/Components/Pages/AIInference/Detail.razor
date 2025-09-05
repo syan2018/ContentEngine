@@ -1,6 +1,7 @@
 @page "/ai-inference/detail/{TaskId}"
 @using ContentEngine.Core.Inference.Services
 @using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.Inference.Utils
 @using ContentEngine.Core.Utils
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
@@ -264,12 +265,21 @@
 
     private async Task ShowPromptPreview(string promptContent)
     {
-        await DialogService.ShowAsync<PromptPreviewDialog>("Prompt预览", new DialogParameters
+        var parameters = new DialogParameters
         {
             ["Content"] = promptContent
-        }, new DialogOptions
+        };
+        
+        // 如果启用了结构化输出，添加相关参数
+        if (definition?.EnableStructuredJsonOutput == true && definition.OutputFields?.Any() == true)
         {
-            MaxWidth = MaxWidth.Medium,
+            parameters["HasStructuredOutput"] = true;
+            parameters["OutputFields"] = definition.OutputFields;
+        }
+        
+        await DialogService.ShowAsync<PromptPreviewDialog>("Prompt预览", parameters, new DialogOptions
+        {
+            MaxWidth = MaxWidth.Large, // 增加宽度以容纳更多内容
             FullWidth = true
         });
     }
@@ -305,6 +315,26 @@
                     }
                 }
 
+                // 获取调试信息：原始 Prompt 和输出字段
+                string? originalPrompt = null;
+                List<ContentEngine.Core.DataPipeline.Models.FieldDefinition>? outputFields = null;
+                
+                if (definition?.EnableStructuredJsonOutput == true && definition.PromptTemplate?.TemplateContent != null)
+                {
+                    try
+                    {
+                        // 填充 Prompt 模板得到原始 Prompt
+                        originalPrompt = PromptTemplatingEngine.Fill(definition.PromptTemplate.TemplateContent, combination.DataMap);
+                        outputFields = definition.OutputFields;
+                    }
+                    catch (Exception ex)
+                    {
+                        // 如果填充失败，至少提供模板
+                        originalPrompt = definition.PromptTemplate.TemplateContent;
+                        outputFields = definition.OutputFields;
+                    }
+                }
+
                 await DialogService.ShowAsync<ResultViewDialog>("查看结果", new DialogParameters
                 {
                     ["Content"] = output.GeneratedText,
@@ -314,7 +344,9 @@
                     ["GeneratedAt"] = output.GeneratedAt,
                     ["HasStructuredData"] = output.HasStructuredData,
                     ["StructuredFields"] = structuredFields,
-                    ["StructuredDataParseError"] = output.StructuredDataParseError
+                    ["StructuredDataParseError"] = output.StructuredDataParseError,
+                    ["OriginalPrompt"] = originalPrompt,
+                    ["OutputFields"] = outputFields
                 }, new DialogOptions
                 {
                     MaxWidth = MaxWidth.Medium,

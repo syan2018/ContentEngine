@@ -14,14 +14,14 @@
                 <MudGrid Spacing="4">
                     <MudItem xs="12">
                         <MudTextField @bind-Value="Definition.PromptTemplate.TemplateContent" 
-                                     Label="Prompt模板内容" 
-                                     Lines="12"
-                                     Variant="Variant.Outlined"
-                                     Placeholder="输入 Prompt 模板，使用 {{ViewName.field}} 引用数据字段..."
-                                     HelperText="使用 {{ViewName.FieldName}} 格式引用数据视图中的字段"
-                                     Immediate="true"
-                                     OnKeyUp="OnTemplateChanged"
-                                     Class="font-mono" />
+                                      Label="Prompt模板内容" 
+                                      Lines="12"
+                                      Variant="Variant.Outlined"
+                                      Placeholder="输入 Prompt 模板，使用 {{ViewName.field}} 引用数据字段..."
+                                      HelperText="使用 {{ViewName.FieldName}} 格式引用数据视图中的字段"
+                                      Immediate="true"
+                                      OnKeyUp="OnTemplateChanged"
+                                      Class="font-mono" />
                     </MudItem>
                     
                     <MudItem xs="12">
@@ -46,9 +46,9 @@
                                 {
                                     var isValid = AvailableViews.Contains(viewName);
                                     <MudChip T="string" 
-                                            Color="@(isValid ? Color.Success : Color.Error)" 
-                                            Size="Size.Small"
-                                            Icon="@(isValid ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)">
+                                             Color="@(isValid ? Color.Success : Color.Error)" 
+                                             Size="Size.Small"
+                                             Icon="@(isValid ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)">
                                         @viewName
                                     </MudChip>
                                 }
@@ -68,39 +68,6 @@
                     </MudItem>
                 </MudGrid>
             </div>
-        </MudTabPanel>
-        
-        <MudTabPanel Text="预览" Icon="@Icons.Material.Filled.Preview">
-            <div class="pa-4">
-                <div class="d-flex align-center justify-space-between mb-4">
-                    <MudText Typo="Typo.h6">Prompt预览</MudText>
-                    <MudButton Variant="Variant.Outlined" 
-                              StartIcon="@Icons.Material.Filled.Refresh"
-                              OnClick="GeneratePreview"
-                              Size="Size.Small">
-                        刷新预览
-                    </MudButton>
-                </div>
-                
-                <MudPaper Class="pa-4" Outlined="true" Style="min-height: 300px;">
-                    @if (!string.IsNullOrWhiteSpace(PreviewContent))
-                    {
-                        <pre class="preview-content">@PreviewContent</pre>
-                    }
-                    else
-                    {
-                        <div class="text-center pa-8">
-                            <MudIcon Icon="@Icons.Material.Outlined.Preview" Size="Size.Large" Color="Color.Secondary" />
-                            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">
-                                模板为空或未包含任何视图引用
-                            </MudText>
-                        </div>
-                    }
-                </MudPaper>
-            </div>
-        </MudTabPanel>
-
-        <MudTabPanel Text="输出结构" Icon="@Icons.Material.Filled.TableChart">
             <div class="pa-4">
                 <MudStack Spacing="3">
                     <MudSwitch T="bool"
@@ -131,6 +98,36 @@
                                               OnRemoveField="OnRemoveOutputField" />
                     }
                 </MudStack>
+            </div>
+        </MudTabPanel>
+        
+        <MudTabPanel Text="预览" Icon="@Icons.Material.Filled.Preview">
+            <div class="pa-4">
+                <div class="d-flex align-center justify-space-between mb-4">
+                    <MudText Typo="Typo.h6">Prompt预览</MudText>
+                    <MudButton Variant="Variant.Outlined" 
+                              StartIcon="@Icons.Material.Filled.Refresh"
+                              OnClick="GeneratePreview"
+                              Size="Size.Small">
+                        刷新预览
+                    </MudButton>
+                </div>
+                
+                <MudPaper Class="pa-4" Outlined="true" Style="min-height: 300px;">
+                    @if (!string.IsNullOrWhiteSpace(PreviewContent))
+                    {
+                        <pre class="preview-content">@PreviewContent</pre>
+                    }
+                    else
+                    {
+                        <div class="text-center pa-8">
+                            <MudIcon Icon="@Icons.Material.Outlined.Preview" Size="Size.Large" Color="Color.Secondary" />
+                            <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">
+                                模板为空或未包含任何视图引用
+                            </MudText>
+                        </div>
+                    }
+                </MudPaper>
             </div>
         </MudTabPanel>
     </MudTabs>

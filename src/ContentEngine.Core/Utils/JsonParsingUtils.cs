@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using LiteDB;
@@ -322,6 +323,84 @@ namespace ContentEngine.Core.Utils
                 bsonArray.Add(bsonValue);
             }
             return (BsonValue)bsonArray; // 使用显式转换
+        }
+
+        /// <summary>
+        /// 生成带有格式说明的增强 Prompt
+        /// </summary>
+        /// <param name="originalPrompt">原始 Prompt 文本</param>
+        /// <param name="fields">输出字段定义</param>
+        /// <returns>增强后的 Prompt</returns>
+        public static string BuildEnhancedPrompt(string originalPrompt, List<ContentEngine.Core.DataPipeline.Models.FieldDefinition> fields)
+        {
+            if (fields == null || !fields.Any())
+                return originalPrompt;
+
+            var sb = new StringBuilder();
+            
+            sb.AppendLine(originalPrompt);
+            sb.AppendLine();
+            
+            sb.AppendLine("## 输出格式要求");
+            sb.AppendLine("你必须严格只输出 JSON 格式，不要包含任何额外解释、Markdown 标记或前后缀。");
+            sb.AppendLine("输出为一个平坦的 JSON 对象（不允许嵌套），包含以下字段：");
+            sb.AppendLine();
+
+            foreach (var f in fields)
+            {
+                var type = f.Type switch
+                {
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Text => "string",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Number => "number",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Boolean => "boolean",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Date => "string (ISO 8601 格式，如 \"2024-01-01T12:00:00Z\")",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Reference => "string",
+                    _ => "string"
+                };
+                var requiredMark = f.IsRequired ? "**必填**" : "*可选*";
+                var comment = !string.IsNullOrEmpty(f.Comment) ? $" - {f.Comment}" : "";
+                sb.AppendLine($"- **{f.Name}**: {type} ({requiredMark}){comment}");
+            }
+
+            if (fields.Any(f => f.IsRequired))
+            {
+                sb.AppendLine();
+                var req = string.Join(", ", fields.Where(f => f.IsRequired).Select(f => f.Name));
+                sb.AppendLine($"**注意：以下字段为必填项**: {req}");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("## 示例格式");
+            sb.AppendLine("输出必须是严格的 JSON 格式，如下所示：");
+            
+            // 生成示例 JSON
+            var exampleFields = new Dictionary<string, string>();
+            foreach (var f in fields)
+            {
+                var exampleValue = f.Type switch
+                {
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Text => "\"示例文本\"",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Number => "123",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Boolean => "true",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Date => "\"2024-01-01T12:00:00Z\"",
+                    ContentEngine.Core.DataPipeline.Models.FieldType.Reference => "\"参考值\"",
+                    _ => "\"值\""
+                };
+                exampleFields[f.Name] = exampleValue;
+            }
+            
+            if (exampleFields.Any())
+            {
+                sb.AppendLine("{");
+                var fieldEntries = exampleFields.Select(kvp => $"  \"{kvp.Key}\": {kvp.Value}");
+                sb.AppendLine(string.Join(",\n", fieldEntries));
+                sb.AppendLine("}");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("请严格按照上述格式输出 JSON，不要添加任何其他内容：");
+            
+            return sb.ToString();
         }
 
         /// <summary>

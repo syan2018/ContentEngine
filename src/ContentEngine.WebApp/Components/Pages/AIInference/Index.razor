@@ -1,6 +1,7 @@
 @page "/ai-inference"
 @using ContentEngine.Core.Inference.Services
 @using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.Utils
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Cards
 @inject NavigationManager Navigation
@@ -270,42 +271,10 @@
             var definition = GetDefinitionForInstance(instance);
             if (definition != null)
             {
-                // 复制任务逻辑 - 基于定义创建新定义（这会自动创建新的默认实例）
-                var newDefinition = new ReasoningTransactionDefinition
-                {
-                    Name = $"{definition.Name} (副本)",
-                    Description = definition.Description,
-                    QueryDefinitions = definition.QueryDefinitions.Select(q => new QueryDefinition
-                    {
-                        OutputViewName = q.OutputViewName,
-                        SourceSchemaName = q.SourceSchemaName,
-                        FilterExpression = q.FilterExpression,
-                        SelectFields = new List<string>(q.SelectFields)
-                    }).ToList(),
-                    PromptTemplate = new PromptTemplateDefinition
-                    {
-                        TemplateContent = definition.PromptTemplate.TemplateContent,
-                        ExpectedInputViewNames = new List<string>(definition.PromptTemplate.ExpectedInputViewNames)
-                    },
-                    DataCombinationRules = definition.DataCombinationRules.Select(r => new DataCombinationRule
-                    {
-                        ViewNamesToCrossProduct = new List<string>(r.ViewNamesToCrossProduct),
-                        SingletonViewNamesForContext = new List<string>(r.SingletonViewNamesForContext),
-                        MaxCombinations = r.MaxCombinations,
-                        Strategy = r.Strategy,
-                        SamplingRule = r.SamplingRule
-                    }).ToList(),
-                    ExecutionConstraints = new ExecutionConstraints
-                    {
-                        MaxEstimatedCostUSD = definition.ExecutionConstraints.MaxEstimatedCostUSD,
-                        MaxExecutionTimeMinutes = definition.ExecutionConstraints.MaxExecutionTimeMinutes,
-                        MaxConcurrentAICalls = definition.ExecutionConstraints.MaxConcurrentAICalls,
-                        EnableBatching = definition.ExecutionConstraints.EnableBatching,
-                        BatchSize = definition.ExecutionConstraints.BatchSize
-                    }
-                };
+                var newDefinition = definition.DeepClone();
+                newDefinition!.Id = Guid.NewGuid().ToString();
+                newDefinition.Name = $"{definition.Name} (副本)";
                 
-                // TODO: 重构通用的Instance复制接口
                 await ReasoningDefinitionService.CreateDefinitionAsync(newDefinition);
                 await ReasoningInstanceService.CreateInstanceAsync(newDefinition.Id);
                 Snackbar.Add("任务复制成功", Severity.Success);

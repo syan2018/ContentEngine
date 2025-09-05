@@ -133,6 +133,90 @@
                                 }
                             </MudPaper>
                         </MudTabPanel>
+                        
+                        @if (HasStructuredData && OutputFields?.Any() == true && !string.IsNullOrEmpty(OriginalPrompt))
+                        {
+                            <MudTabPanel Text="调试信息" Icon="@Icons.Material.Filled.BugReport">
+                                <MudPaper Class="pa-4 result-content" Outlined="true">
+                                    <MudExpansionPanels Elevation="0" Dense="true">
+                                        <MudExpansionPanel Title="原始 Prompt">
+                                            <TitleContent>
+                                                <div style="display: flex; align-items: center;">
+                                                    <MudIcon Icon="@Icons.Material.Filled.TextSnippet" Class="mr-3" />
+                                                    <MudText><strong>原始 Prompt</strong></MudText>
+                                                </div>
+                                            </TitleContent>
+                                            <ChildContent>
+                                                <pre style="background: #f8f9fa; padding: 12px; border-radius: 4px; margin: 0;">@OriginalPrompt</pre>
+                                            </ChildContent>
+                                        </MudExpansionPanel>
+                                        
+                                        <MudExpansionPanel Title="增强后的 Prompt">
+                                            <TitleContent>
+                                                <div style="display: flex; align-items: center;">
+                                                    <MudIcon Icon="@Icons.Material.Filled.AutoFixHigh" Class="mr-3" />
+                                                    <MudText><strong>增强后的 Prompt</strong></MudText>
+                                                    <MudSpacer />
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                                        @(GetEnhancedPrompt().Length - OriginalPrompt.Length) 字符增强
+                                                    </MudChip>
+                                                </div>
+                                            </TitleContent>
+                                            <ChildContent>
+                                                <pre style="background: #f0f7ff; padding: 12px; border-radius: 4px; margin: 0;">@GetEnhancedPrompt()</pre>
+                                            </ChildContent>
+                                        </MudExpansionPanel>
+                                        
+                                        <MudExpansionPanel Title="字段定义">
+                                            <TitleContent>
+                                                <div style="display: flex; align-items: center;">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Schema" Class="mr-3" />
+                                                    <MudText><strong>字段定义</strong></MudText>
+                                                    <MudSpacer />
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Success">
+                                                        @OutputFields.Count 个字段
+                                                    </MudChip>
+                                                </div>
+                                            </TitleContent>
+                                            <ChildContent>
+                                                <MudSimpleTable Dense="true" Bordered="true">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="font-weight: bold;">字段名</th>
+                                                            <th style="font-weight: bold;">类型</th>
+                                                            <th style="font-weight: bold;">必填</th>
+                                                            <th style="font-weight: bold;">说明</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var field in OutputFields)
+                                                        {
+                                                            <tr>
+                                                                <td style="font-family: monospace; font-weight: bold;">@field.Name</td>
+                                                                <td>
+                                                                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary">@field.Type.ToString()</MudChip>
+                                                                </td>
+                                                                <td>
+                                                                    @if (field.IsRequired)
+                                                                    {
+                                                                        <MudChip T="string" Size="Size.Small" Color="Color.Error">必填</MudChip>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <MudChip T="string" Size="Size.Small" Color="Color.Default">可选</MudChip>
+                                                                    }
+                                                                </td>
+                                                                <td>@(field.Comment ?? "-")</td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </MudSimpleTable>
+                                            </ChildContent>
+                                        </MudExpansionPanel>
+                                    </MudExpansionPanels>
+                                </MudPaper>
+                            </MudTabPanel>
+                        }
                     </MudTabs>
                 </div>
 
@@ -219,6 +303,16 @@
     /// 结构化数据解析错误（如果有）
     /// </summary>
     [Parameter] public string? StructuredDataParseError { get; set; }
+    
+    /// <summary>
+    /// 输出字段定义（用于调试）
+    /// </summary>
+    [Parameter] public List<ContentEngine.Core.DataPipeline.Models.FieldDefinition>? OutputFields { get; set; }
+    
+    /// <summary>
+    /// 原始Prompt（用于调试）
+    /// </summary>
+    [Parameter] public string? OriginalPrompt { get; set; }
 
     private async Task CopyContent()
     {
@@ -253,5 +347,13 @@
         {
             return false;
         }
+    }
+
+    private string GetEnhancedPrompt()
+    {
+        if (string.IsNullOrEmpty(OriginalPrompt) || OutputFields?.Any() != true)
+            return OriginalPrompt ?? string.Empty;
+        
+        return ContentEngine.Core.Utils.JsonParsingUtils.BuildEnhancedPrompt(OriginalPrompt, OutputFields);
     }
 } 
