@@ -209,7 +209,7 @@
         }
     }
 
-    private async Task LoadStatistics()
+    private Task LoadStatistics()
     {
         try
         {
@@ -223,6 +223,7 @@
         {
             Snackbar.Add($"加载统计数据失败: {ex.Message}", Severity.Error);
         }
+        return Task.CompletedTask;
     }
 
     private ReasoningTransactionDefinition? GetDefinitionForInstance(ReasoningTransactionInstance instance)
@@ -246,7 +247,7 @@
         var instance = instances.FirstOrDefault(i => i.InstanceId == instanceId);
         if (instance != null)
         {
-            Navigation.NavigateTo($"/ai-inference/edit/{instance.DefinitionId}");
+            Navigation.NavigateTo($"/ai-inference/create?editId={instance.DefinitionId}");
         }
     }
 
@@ -338,7 +339,7 @@
             var dialog = await DialogService.ShowAsync<ExecuteConfirmDialog>("确认执行", parameters);
             var result = await dialog.Result;
 
-            if (!result.Canceled)
+            if (result != null && !result.Canceled)
             {
                 Snackbar.Add("推理事务已开始执行", Severity.Success);
                 

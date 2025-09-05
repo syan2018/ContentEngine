@@ -1,6 +1,7 @@
 @page "/ai-inference/create"
 @using ContentEngine.Core.Inference.Services
 @using ContentEngine.Core.Inference.Models
+@using Microsoft.AspNetCore.WebUtilities
 @inject IReasoningDefinitionService ReasoningDefinitionService
 @inject IReasoningInstanceService ReasoningInstanceService
 @inject IReasoningEstimationService ReasoningEstimationService
@@ -8,7 +9,7 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
-<PageTitle>创建推理事务 - ContentEngine</PageTitle>
+<PageTitle>@(IsEditMode ? "编辑推理事务" : "创建推理事务") - ContentEngine</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="pa-4">
     <MudBreadcrumbs Items="breadcrumbItems" Class="mb-4" />
@@ -105,7 +106,7 @@
                 <MudPaper Class="pa-4" Outlined="true">
                     <div class="d-flex align-center justify-space-between">
                         <MudText Typo="Typo.body1" Color="Color.Secondary">
-                            请确认以上配置正确无误，点击"创建推理事务"完成设置
+                            请确认以上配置正确无误，点击"@(IsEditMode ? "更新推理事务" : "创建推理事务")"完成设置
                         </MudText>
                         <div class="d-flex gap-2">
                             <MudButton Variant="Variant.Filled" 
@@ -116,11 +117,11 @@
                                 @if (isSaving)
                                 {
                                     <MudProgressCircular Size="Size.Small" Indeterminate="true" />
-                                    <span class="ml-2">保存中...</span>
+                                    <span class="ml-2">@(IsEditMode ? "更新中..." : "保存中...")</span>
                                 }
                                 else
                                 {
-                                    <span>创建推理事务</span>
+                                    <span>@(IsEditMode ? "更新推理事务" : "创建推理事务")</span>
                                 }
                             </MudButton>
                             
@@ -147,6 +148,11 @@
     private ReasoningTransactionDefinition definition = new();
     private List<SchemaDefinition> availableSchemas = new();
     
+    // 编辑模式支持
+    private bool IsEditMode => !string.IsNullOrWhiteSpace(editId);
+    private string? editId;
+    private ReasoningTransactionDefinition? originalDefinition;
+    
     // 预估数据
     private decimal estimatedCost = 0;
     private TimeSpan estimatedTime = TimeSpan.Zero;
@@ -159,16 +165,30 @@
     private PromptTemplateStep? promptTemplateStep;
     private ExecutionConstraintsStep? executionConstraintsStep;
 
-    private List<BreadcrumbItem> breadcrumbItems = new()
-    {
-        new BreadcrumbItem("AI推理引擎", href: "/ai-inference", icon: Icons.Material.Filled.Psychology),
-        new BreadcrumbItem("创建推理事务", href: null, disabled: true)
-    };
+    private List<BreadcrumbItem> breadcrumbItems = new();
 
     protected override async Task OnInitializedAsync()
     {
+        // 解析查询参数
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var queryParams = QueryHelpers.ParseQuery(uri.Query);
+        if (queryParams.TryGetValue("editId", out var editIdValue))
+        {
+            editId = editIdValue.FirstOrDefault();
+        }
+
         await LoadAvailableSchemas();
-        InitializeDefinition();
+        
+        if (IsEditMode)
+        {
+            await LoadDefinitionForEditing();
+            UpdateBreadcrumbs();
+        }
+        else
+        {
+            InitializeDefinition();
+            UpdateBreadcrumbs();
+        }
         
         // 初始化完成后进行一次验证
         await Task.Delay(100); // 等待组件渲染完成
@@ -185,6 +205,74 @@
         {
             Snackbar.Add($"加载Schema列表失败: {ex.Message}", Severity.Error);
         }
+    }
+
+    private async Task LoadDefinitionForEditing()
+    {
+        if (string.IsNullOrWhiteSpace(editId)) return;
+
+        try
+        {
+            originalDefinition = await ReasoningDefinitionService.GetDefinitionByIdAsync(editId);
+            if (originalDefinition != null)
+            {
+                // 深拷贝定义以避免直接修改原始对象
+                definition = new ReasoningTransactionDefinition
+                {
+                    Id = originalDefinition.Id,
+                    Name = originalDefinition.Name,
+                    Description = originalDefinition.Description,
+                    QueryDefinitions = originalDefinition.QueryDefinitions.Select(q => new QueryDefinition
+                    {
+                        OutputViewName = q.OutputViewName,
+                        SourceSchemaName = q.SourceSchemaName,
+                        FilterExpression = q.FilterExpression,
+                        SelectFields = new List<string>(q.SelectFields)
+                    }).ToList(),
+                    PromptTemplate = new PromptTemplateDefinition
+                    {
+                        TemplateContent = originalDefinition.PromptTemplate.TemplateContent,
+                        ExpectedInputViewNames = new List<string>(originalDefinition.PromptTemplate.ExpectedInputViewNames)
+                    },
+                    DataCombinationRules = originalDefinition.DataCombinationRules.Select(r => new DataCombinationRule
+                    {
+                        ViewNamesToCrossProduct = new List<string>(r.ViewNamesToCrossProduct),
+                        SingletonViewNamesForContext = new List<string>(r.SingletonViewNamesForContext),
+                        MaxCombinations = r.MaxCombinations,
+                        Strategy = r.Strategy,
+                        SamplingRule = r.SamplingRule
+                    }).ToList(),
+                    ExecutionConstraints = new ExecutionConstraints
+                    {
+                        MaxEstimatedCostUSD = originalDefinition.ExecutionConstraints.MaxEstimatedCostUSD,
+                        MaxExecutionTimeMinutes = originalDefinition.ExecutionConstraints.MaxExecutionTimeMinutes,
+                        MaxConcurrentAICalls = originalDefinition.ExecutionConstraints.MaxConcurrentAICalls,
+                        EnableBatching = originalDefinition.ExecutionConstraints.EnableBatching,
+                        BatchSize = originalDefinition.ExecutionConstraints.BatchSize
+                    }
+                };
+            }
+            else
+            {
+                Snackbar.Add("找不到要编辑的推理事务定义", Severity.Error);
+                Navigation.NavigateTo("/ai-inference");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"加载推理事务定义失败: {ex.Message}", Severity.Error);
+            Navigation.NavigateTo("/ai-inference");
+        }
+    }
+
+    private void UpdateBreadcrumbs()
+    {
+        breadcrumbItems = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("AI推理引擎", href: "/ai-inference", icon: Icons.Material.Filled.Psychology),
+            new BreadcrumbItem(IsEditMode ? "编辑推理事务" : "创建推理事务", href: null, disabled: true)
+        };
     }
 
     private void InitializeDefinition()
@@ -291,73 +379,73 @@
         }
     }
 
-    private async Task<bool> ValidateStep1()
+    private Task<bool> ValidateStep1()
     {
         if (string.IsNullOrWhiteSpace(definition.Name))
         {
             errorMessage = "请输入推理事务名称";
-            return false;
+            return Task.FromResult(false);
         }
         
         if (string.IsNullOrWhiteSpace(definition.Description))
         {
             errorMessage = "请输入推理事务描述";
-            return false;
+            return Task.FromResult(false);
         }
         
-        return true;
+        return Task.FromResult(true);
     }
 
-    private async Task<bool> ValidateStep2()
+    private Task<bool> ValidateStep2()
     {
         if (!definition.QueryDefinitions.Any())
         {
             errorMessage = "请至少添加一个数据查询定义";
-            return false;
+            return Task.FromResult(false);
         }
         
-        return true;
+        return Task.FromResult(true);
     }
 
-    private async Task<bool> ValidateStep3()
+    private Task<bool> ValidateStep3()
     {
         if (!definition.DataCombinationRules.Any())
         {
             errorMessage = "请设置数据组合规则";
-            return false;
+            return Task.FromResult(false);
         }
         
         var rule = definition.DataCombinationRules[0];
         if (!rule.ViewNamesToCrossProduct.Any() && !rule.SingletonViewNamesForContext.Any())
         {
             errorMessage = "请至少设置一个叉积视图或单例上下文";
-            return false;
+            return Task.FromResult(false);
         }
         
-        return true;
+        return Task.FromResult(true);
     }
 
-    private async Task<bool> ValidateStep4()
+    private Task<bool> ValidateStep4()
     {
         if (string.IsNullOrWhiteSpace(definition.PromptTemplate.TemplateContent))
         {
             errorMessage = "请输入Prompt模板内容";
-            return false;
+            return Task.FromResult(false);
         }
         
         if (!definition.PromptTemplate.ExpectedInputViewNames.Any())
         {
             errorMessage = "Prompt模板必须包含至少一个视图引用";
-            return false;
+            return Task.FromResult(false);
         }
         
-        return true;
+        return Task.FromResult(true);
     }
 
-    private async Task<bool> ValidateStep5()
+    private Task<bool> ValidateStep5()
     {
         // 执行约束总是有效的，有默认值
-        return true;
+        return Task.FromResult(true);
     }
 
     private void OnStepValidationChanged(bool isValid)
@@ -432,18 +520,28 @@
                 return;
             }
 
-            // 保存定义
-            await ReasoningDefinitionService.CreateDefinitionAsync(definition);
-            Snackbar.Add("推理事务定义创建成功", Severity.Success);
+            if (IsEditMode)
+            {
+                // 更新现有定义
+                await ReasoningDefinitionService.UpdateDefinitionAsync(definition);
+                Snackbar.Add("推理事务定义更新成功", Severity.Success);
+            }
+            else
+            {
+                // 创建新定义
+                await ReasoningDefinitionService.CreateDefinitionAsync(definition);
+                Snackbar.Add("推理事务定义创建成功", Severity.Success);
 
-            await ReasoningInstanceService.CreateInstanceAsync(definition.Id);
-            Snackbar.Add("推理事务实例创建成功", Severity.Success);
+                // 只有创建新定义时才创建新实例
+                await ReasoningInstanceService.CreateInstanceAsync(definition.Id);
+                Snackbar.Add("推理事务实例创建成功", Severity.Success);
+            }
             
             Navigation.NavigateTo("/ai-inference");
         }
         catch (Exception ex)
         {
-            errorMessage = $"创建推理事务定义失败: {ex.Message}";
+            errorMessage = $"{(IsEditMode ? "更新" : "创建")}推理事务定义失败: {ex.Message}";
             StateHasChanged(); // 立即刷新UI显示错误消息
         }
         finally
