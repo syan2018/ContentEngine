@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         // --- Register Core Services ---
         services.TryAddSingleton<IConnectionProvider, ConnectionProvider>();
         services.TryAddSingleton<IAgentConfigLoader, AgentConfigLoader>();
+        services.TryAddSingleton<IModelsConfigLoader, ModelsConfigLoader>();
         services.TryAddSingleton<IModelProvider, ModelProvider>();
         services.TryAddScoped<IAIKernelFactory, DefaultAIKernelFactory>();
 
