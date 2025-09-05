@@ -73,7 +73,7 @@ Refs/
 .github
 
 # Ignore environment-specific configuration files in Profiles
-/Profiles/*.dev.yaml
+*.dev.yaml
 
 # In ContentEngine/.gitignore or ContentEngine/SupportServices/MARKITDOWN/.gitignore
 .venv/

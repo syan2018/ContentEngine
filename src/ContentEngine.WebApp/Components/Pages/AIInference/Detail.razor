@@ -204,6 +204,7 @@
     {
         if (definition == null) return;
         Navigation.NavigateTo($"/ai-inference/create?editId={definition.Id}");
+        await Task.CompletedTask;
     }
 
     private async Task RefreshCombinations()
@@ -385,34 +386,177 @@
         
         try
         {
-            var exportData = instance.Outputs
-                .Where(o => o.IsSuccess && !string.IsNullOrWhiteSpace(o.GeneratedText))
-                .Select(output => new
+            var defaultName = $"ai_inference_results_{instance.InstanceId[..8]}_{DateTime.Now:yyyyMMdd_HHmmss}";
+            var dialog = await DialogService.ShowAsync<ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs.ExportOptionsDialog>("导出选项", new DialogParameters
+            {
+                ["DefaultFileName"] = defaultName
+            }, new DialogOptions
+            {
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true
+            });
+
+            var dialogResult = await dialog.Result;
+            if (dialogResult == null || dialogResult.Canceled)
+            {
+                return;
+            }
+
+            if (dialogResult.Data is not ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs.ExportOptionsDialog.ExportOptions options)
+            {
+                Snackbar.Add("未获取到导出选项", Severity.Warning);
+                return;
+            }
+
+            var filtered = options.Scope switch
+            {
+                "success" => instance.Outputs.Where(o => o.IsSuccess),
+                "failed" => instance.Outputs.Where(o => !o.IsSuccess),
+                _ => instance.Outputs.AsEnumerable()
+            };
+
+            var records = filtered
+                .Select(output => new ExportRecord
                 {
                     CombinationId = output.InputCombinationId,
+                    IsSuccess = output.IsSuccess,
                     GeneratedText = output.GeneratedText,
+                    FailureReason = output.FailureReason,
                     Cost = output.CostUSD,
-                    GeneratedAt = output.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"),
+                    GeneratedAt = output.GeneratedAt,
                     InputData = instance.InputCombinations
                         ?.FirstOrDefault(c => c.CombinationId == output.InputCombinationId)
-                        ?.DataMap?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString())
+                        ?.DataMap?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString()) ?? new Dictionary<string, string>()
                 })
                 .ToList();
+
+            if (records.Count == 0)
+            {
+                Snackbar.Add("所选范围内暂无记录", Severity.Info);
+                return;
+            }
+
+            string contentType;
+            string fileExt;
+            string content;
+
+            switch (options.Format)
+            {
+                case "csv":
+                    contentType = "text/csv";
+                    fileExt = ".csv";
+                    content = BuildCsv(records);
+                    break;
+                case "md":
+                    contentType = "text/markdown";
+                    fileExt = ".md";
+                    content = BuildMarkdown(records, instance.InstanceId);
+                    break;
+                default:
+                    contentType = "application/json";
+                    fileExt = ".json";
+                    content = System.Text.Json.JsonSerializer.Serialize(records.Select(r => new
+                    {
+                        r.CombinationId,
+                        r.IsSuccess,
+                        r.GeneratedText,
+                        r.FailureReason,
+                        r.Cost,
+                        GeneratedAt = r.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"),
+                        r.InputData
+                    }), new System.Text.Json.JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    });
+                    break;
+            }
+
+            var finalFileName = string.IsNullOrWhiteSpace(options.FileName) ? defaultName : options.FileName;
+            await JSRuntime.InvokeVoidAsync("downloadFile", $"{finalFileName}{fileExt}", contentType, content);
             
-            var json = System.Text.Json.JsonSerializer.Serialize(exportData, new System.Text.Json.JsonSerializerOptions 
-            { 
-                WriteIndented = true,
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            });
-            
-            var fileName = $"ai_inference_results_{instance.InstanceId[..8]}_{DateTime.Now:yyyyMMdd_HHmmss}.json";
-            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, "application/json", json);
-            
-            Snackbar.Add($"结果已导出：{exportData.Count} 条记录", Severity.Success);
+            Snackbar.Add($"结果已导出：{records.Count} 条记录", Severity.Success);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"导出失败: {ex.Message}", Severity.Error);
         }
+    }
+
+    private string BuildCsv(List<ExportRecord> records)
+    {
+        var header = new[] { "CombinationId", "IsSuccess", "Cost", "GeneratedAt", "FailureReason", "InputData", "GeneratedText" };
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(string.Join(",", header));
+
+        foreach (var r in records)
+        {
+            string Escape(object? v)
+            {
+                var s = v?.ToString() ?? string.Empty;
+                s = s.Replace("\r", string.Empty).Replace("\n", "\\n");
+                s = s.Replace("\"", "\"\"");
+                return $"\"{s}\"";
+            }
+
+            var row = new List<object?>()
+            {
+                r.CombinationId,
+                r.IsSuccess,
+                r.Cost,
+                r.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"),
+                r.FailureReason ?? string.Empty,
+                System.Text.Json.JsonSerializer.Serialize(r.InputData, new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }),
+                r.GeneratedText
+            };
+
+            sb.AppendLine(string.Join(",", row.Select(v => Escape(v))));
+        }
+
+        return sb.ToString();
+    }
+
+    private string BuildMarkdown(List<ExportRecord> records, string instanceId)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"# 推理结果导出 ({instanceId[..8]})");
+        sb.AppendLine($"> 导出时间: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine();
+
+        foreach (var r in records)
+        {
+            var inputJson = System.Text.Json.JsonSerializer.Serialize(r.InputData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+
+            sb.AppendLine($"## 组合 {r.CombinationId}");
+            sb.AppendLine($"- 状态: {(r.IsSuccess ? "成功" : "失败")}");
+            sb.AppendLine($"- 成本: ${r.Cost}");
+            sb.AppendLine($"- 时间: {r.GeneratedAt:yyyy-MM-dd HH:mm:ss}");
+            if (!r.IsSuccess && !string.IsNullOrWhiteSpace(r.FailureReason))
+                sb.AppendLine($"- 失败原因: {r.FailureReason}");
+            sb.AppendLine();
+            sb.AppendLine("### 输入数据");
+            sb.AppendLine("```json");
+            sb.AppendLine(inputJson);
+            sb.AppendLine("```");
+            sb.AppendLine();
+            sb.AppendLine("### 生成内容");
+            sb.AppendLine("```");
+            sb.AppendLine(r.GeneratedText ?? string.Empty);
+            sb.AppendLine("```");
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    private class ExportRecord
+    {
+        public string CombinationId { get; set; } = string.Empty;
+        public bool IsSuccess { get; set; }
+        public string GeneratedText { get; set; } = string.Empty;
+        public string? FailureReason { get; set; }
+        public decimal Cost { get; set; }
+        public DateTime GeneratedAt { get; set; }
+        public Dictionary<string, string> InputData { get; set; } = new();
     }
 } 

@@ -1,0 +1,58 @@
+@using MudBlazor
+@namespace ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
+
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">导出选项</MudText>
+
+            <MudRadioGroup T="string" @bind-Value="SelectedFormat" Row="true">
+                <MudRadio T="string" Value='@("json")' Color="Color.Primary">JSON</MudRadio>
+                <MudRadio T="string" Value='@("csv")' Color="Color.Primary">CSV</MudRadio>
+                <MudRadio T="string" Value='@("md")' Color="Color.Primary">Markdown</MudRadio>
+            </MudRadioGroup>
+
+            <MudSelect T="string" Label="导出范围" @bind-Value="SelectedScope">
+                <MudSelectItem T="string" Value='@("all")'>全部结果</MudSelectItem>
+                <MudSelectItem T="string" Value='@("success")'>仅成功</MudSelectItem>
+                <MudSelectItem T="string" Value='@("failed")'>仅失败</MudSelectItem>
+            </MudSelect>
+
+            <MudTextField @bind-Value="FileName" Label="文件名(无需扩展名)" Placeholder="ai_inference_results" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">取消</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Confirm">导出</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string DefaultFileName { get; set; } = "ai_inference_results";
+
+    public string SelectedFormat { get; set; } = "json";
+    public string SelectedScope { get; set; } = "success";
+    public string FileName { get; set; } = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        if (string.IsNullOrWhiteSpace(FileName))
+            FileName = DefaultFileName;
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Confirm()
+    {
+        MudDialog.Close(DialogResult.Ok(new ExportOptions(SelectedFormat, SelectedScope, FileName)));
+    }
+
+    public record ExportOptions(string Format, string Scope, string FileName);
+}
+
+
