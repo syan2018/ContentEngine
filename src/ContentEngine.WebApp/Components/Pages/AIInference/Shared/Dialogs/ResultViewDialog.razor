@@ -58,6 +58,44 @@
                     </div>
                     
                     <MudTabs Dense="true">
+                        @if (HasStructuredData && StructuredFields?.Any() == true)
+                        {
+                            <MudTabPanel Text="结构化数据" Icon="@Icons.Material.Filled.TableChart">
+                                <MudPaper Class="pa-4" Outlined="true">
+                                    <MudSimpleTable Dense="true" Striped="true" Bordered="true">
+                                        <thead>
+                                            <tr>
+                                                <th style="font-weight: bold;">字段名</th>
+                                                <th style="font-weight: bold;">值</th>
+                                                <th style="font-weight: bold;">类型</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var field in StructuredFields.OrderBy(kvp => kvp.Key))
+                                            {
+                                                <tr>
+                                                    <td style="font-family: monospace; font-weight: bold;">@field.Key</td>
+                                                    <td style="max-width: 400px; word-break: break-word;">
+                                                        @if (field.Value != null)
+                                                        {
+                                                            @field.Value.ToString()
+                                                        }
+                                                        else
+                                                        {
+                                                            <span style="color: gray; font-style: italic;">null</span>
+                                                        }
+                                                    </td>
+                                                    <td style="font-size: 0.8em; color: gray;">
+                                                        @(field.Value?.GetType().Name ?? "null")
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </MudSimpleTable>
+                                </MudPaper>
+                            </MudTabPanel>
+                        }
+                        
                         <MudTabPanel Text="文本">
                             <MudPaper Class="pa-4 result-content" Outlined="true">
                                 <MudText Typo="Typo.body2" Class="result-text" Style="white-space: pre-wrap; line-height: 1.6;">
@@ -65,8 +103,18 @@
                                 </MudText>
                             </MudPaper>
                         </MudTabPanel>
+                        
                         <MudTabPanel Text="JSON">
                             <MudPaper Class="pa-4 result-content" Outlined="true">
+                                @if (HasStructuredData && StructuredFields?.Any() == true)
+                                {
+                                    <MudText Typo="Typo.subtitle2" Class="mb-2">解析后的结构化数据：</MudText>
+                                    <pre style="background: #f8f9fa; padding: 12px; border-radius: 4px;">@System.Text.Json.JsonSerializer.Serialize(StructuredFields, new System.Text.Json.JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping })</pre>
+                                    
+                                    <MudDivider Class="my-3" />
+                                    <MudText Typo="Typo.subtitle2" Class="mb-2">原始AI输出：</MudText>
+                                }
+                                
                                 @if (TryFormatJson(Content, out var prettyJson))
                                 {
                                     <pre>@prettyJson</pre>
@@ -75,6 +123,13 @@
                                 {
                                     <MudText Typo="Typo.body2" Color="Color.Secondary">非合法 JSON，显示为原始文本。</MudText>
                                     <pre>@Content</pre>
+                                }
+                                
+                                @if (!string.IsNullOrWhiteSpace(StructuredDataParseError))
+                                {
+                                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                                        <strong>结构化数据解析错误：</strong> @StructuredDataParseError
+                                    </MudAlert>
                                 }
                             </MudPaper>
                         </MudTabPanel>
@@ -149,6 +204,21 @@
     [Parameter] public Dictionary<string, object>? InputData { get; set; }
     [Parameter] public decimal? Cost { get; set; }
     [Parameter] public DateTime? GeneratedAt { get; set; }
+    
+    /// <summary>
+    /// 是否包含结构化数据
+    /// </summary>
+    [Parameter] public bool HasStructuredData { get; set; } = false;
+    
+    /// <summary>
+    /// 结构化数据字段
+    /// </summary>
+    [Parameter] public Dictionary<string, object?>? StructuredFields { get; set; }
+    
+    /// <summary>
+    /// 结构化数据解析错误（如果有）
+    /// </summary>
+    [Parameter] public string? StructuredDataParseError { get; set; }
 
     private async Task CopyContent()
     {

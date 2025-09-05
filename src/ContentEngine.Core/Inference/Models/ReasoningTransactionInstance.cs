@@ -254,6 +254,21 @@ namespace ContentEngine.Core.Inference.Models
         public string GeneratedText { get; set; } = string.Empty;
 
         /// <summary>
+        /// 解析后的结构化数据（当启用结构化JSON输出时）
+        /// </summary>
+        public BsonDocument? StructuredData { get; set; }
+
+        /// <summary>
+        /// 是否成功解析为结构化数据
+        /// </summary>
+        public bool HasStructuredData { get; set; } = false;
+
+        /// <summary>
+        /// 结构化数据解析失败的原因（如果有）
+        /// </summary>
+        public string? StructuredDataParseError { get; set; }
+
+        /// <summary>
         /// 生成时间
         /// </summary>
         public DateTime GeneratedAt { get; set; } = DateTime.UtcNow;

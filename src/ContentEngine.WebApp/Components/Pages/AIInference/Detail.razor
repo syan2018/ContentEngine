@@ -292,13 +292,29 @@
                     }
                 }
                 
+                // 如果有结构化数据，转换为Dictionary<string, object?>
+                Dictionary<string, object?>? structuredFields = null;
+                if (output.HasStructuredData && output.StructuredData != null)
+                {
+                    structuredFields = new Dictionary<string, object?>();
+                    foreach (var field in output.StructuredData)
+                    {
+                        // 将BsonValue转换为可显示的值
+                        var value = ConvertBsonValueForDisplay(field.Value);
+                        structuredFields[field.Key] = value;
+                    }
+                }
+
                 await DialogService.ShowAsync<ResultViewDialog>("查看结果", new DialogParameters
                 {
                     ["Content"] = output.GeneratedText,
                     ["CombinationId"] = combination.CombinationId,
                     ["InputData"] = inputData,
                     ["Cost"] = output.CostUSD,
-                    ["GeneratedAt"] = output.GeneratedAt
+                    ["GeneratedAt"] = output.GeneratedAt,
+                    ["HasStructuredData"] = output.HasStructuredData,
+                    ["StructuredFields"] = structuredFields,
+                    ["StructuredDataParseError"] = output.StructuredDataParseError
                 }, new DialogOptions
                 {
                     MaxWidth = MaxWidth.Medium,
@@ -416,17 +432,34 @@
             };
 
             var records = filtered
-                .Select(output => new ExportRecord
+                .Select(output => 
                 {
-                    CombinationId = output.InputCombinationId,
-                    IsSuccess = output.IsSuccess,
-                    GeneratedText = output.GeneratedText,
-                    FailureReason = output.FailureReason,
-                    Cost = output.CostUSD,
-                    GeneratedAt = output.GeneratedAt,
-                    InputData = instance.InputCombinations
-                        ?.FirstOrDefault(c => c.CombinationId == output.InputCombinationId)
-                        ?.DataMap?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString()) ?? new Dictionary<string, string>()
+                    var record = new ExportRecord
+                    {
+                        CombinationId = output.InputCombinationId,
+                        IsSuccess = output.IsSuccess,
+                        GeneratedText = output.GeneratedText,
+                        FailureReason = output.FailureReason,
+                        Cost = output.CostUSD,
+                        GeneratedAt = output.GeneratedAt,
+                        InputData = instance.InputCombinations
+                            ?.FirstOrDefault(c => c.CombinationId == output.InputCombinationId)
+                            ?.DataMap?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString()) ?? new Dictionary<string, string>(),
+                        HasStructuredData = output.HasStructuredData
+                    };
+
+                    // 如果有结构化数据，提取字段
+                    if (output.HasStructuredData && output.StructuredData != null)
+                    {
+                        foreach (var field in output.StructuredData)
+                        {
+                            // 将BsonValue转换为可导出的值
+                            var value = ConvertBsonValueForExport(field.Value);
+                            record.StructuredFields[field.Key] = value;
+                        }
+                    }
+
+                    return record;
                 })
                 .ToList();
 
@@ -463,7 +496,9 @@
                         r.FailureReason,
                         r.Cost,
                         GeneratedAt = r.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"),
-                        r.InputData
+                        r.InputData,
+                        r.HasStructuredData,
+                        StructuredFields = r.HasStructuredData ? r.StructuredFields : null
                     }), new System.Text.Json.JsonSerializerOptions
                     {
                         WriteIndented = true,
@@ -485,7 +520,36 @@
 
     private string BuildCsv(List<ExportRecord> records)
     {
-        var header = new[] { "CombinationId", "IsSuccess", "Cost", "GeneratedAt", "FailureReason", "InputData", "GeneratedText" };
+        // 收集所有可能的结构化字段名称
+        var allStructuredFields = records
+            .Where(r => r.HasStructuredData)
+            .SelectMany(r => r.StructuredFields.Keys)
+            .Distinct()
+            .OrderBy(k => k)
+            .ToList();
+
+        // 构建表头
+        var header = new List<string> 
+        { 
+            "CombinationId", "IsSuccess", "Cost", "GeneratedAt", "FailureReason" 
+        };
+
+        if (records.Any(r => r.InputData.Count > 0))
+        {
+            header.AddRange(records.SelectMany(r => r.InputData.Keys).Distinct().OrderBy(k => k));
+        }
+        
+        // 添加结构化数据字段列
+        if (allStructuredFields.Any())
+        {
+            header.AddRange(allStructuredFields);
+        }
+        else
+        {
+            // 如果没有结构化数据，保留原始文本列
+            header.Add("GeneratedText");
+        }
+
         var sb = new System.Text.StringBuilder();
         sb.AppendLine(string.Join(",", header));
 
@@ -506,9 +570,32 @@
                 r.Cost,
                 r.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"),
                 r.FailureReason ?? string.Empty,
-                System.Text.Json.JsonSerializer.Serialize(r.InputData, new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }),
-                r.GeneratedText
             };
+
+            if (r.InputData.Count > 0)
+            {
+                foreach (var kvp in r.InputData)
+                {
+                    row.Add(kvp.Value);
+                }
+            }
+
+            // 添加结构化数据字段值
+            if (allStructuredFields.Any())
+            {
+                foreach (var fieldName in allStructuredFields)
+                {
+                    var value = r.HasStructuredData && r.StructuredFields.TryGetValue(fieldName, out var fieldValue) 
+                        ? fieldValue 
+                        : null;
+                    row.Add(value);
+                }
+            }
+            else
+            {
+                // 如果没有结构化数据，添加原始文本
+                row.Add(r.GeneratedText);
+            }
 
             sb.AppendLine(string.Join(",", row.Select(v => Escape(v))));
         }
@@ -534,12 +621,38 @@
             if (!r.IsSuccess && !string.IsNullOrWhiteSpace(r.FailureReason))
                 sb.AppendLine($"- 失败原因: {r.FailureReason}");
             sb.AppendLine();
+            
             sb.AppendLine("### 输入数据");
             sb.AppendLine("```json");
             sb.AppendLine(inputJson);
             sb.AppendLine("```");
             sb.AppendLine();
-            sb.AppendLine("### 生成内容");
+
+            if (r.HasStructuredData && r.StructuredFields.Any())
+            {
+                sb.AppendLine("### 结构化输出字段");
+                sb.AppendLine("| 字段名 | 值 |");
+                sb.AppendLine("|--------|-----|");
+                
+                foreach (var field in r.StructuredFields.OrderBy(kvp => kvp.Key))
+                {
+                    var value = field.Value?.ToString()?.Replace("|", "\\|").Replace("\n", "<br/>") ?? "";
+                    sb.AppendLine($"| {field.Key} | {value} |");
+                }
+                sb.AppendLine();
+                
+                sb.AppendLine("### 完整JSON输出");
+                sb.AppendLine("```json");
+                sb.AppendLine(System.Text.Json.JsonSerializer.Serialize(r.StructuredFields, new System.Text.Json.JsonSerializerOptions 
+                { 
+                    WriteIndented = true, 
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping 
+                }));
+                sb.AppendLine("```");
+                sb.AppendLine();
+            }
+            
+            sb.AppendLine("### 原始生成内容");
             sb.AppendLine("```");
             sb.AppendLine(r.GeneratedText ?? string.Empty);
             sb.AppendLine("```");
@@ -547,6 +660,56 @@
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 将BsonValue转换为可显示的值
+    /// </summary>
+    private static object? ConvertBsonValueForDisplay(LiteDB.BsonValue bsonValue)
+    {
+        return ConvertBsonValueForExport(bsonValue);
+    }
+
+    /// <summary>
+    /// 将BsonValue转换为可导出的值
+    /// </summary>
+    private static object? ConvertBsonValueForExport(LiteDB.BsonValue bsonValue)
+    {
+        if (bsonValue == null || bsonValue.IsNull)
+            return null;
+        
+        return bsonValue.Type switch
+        {
+            LiteDB.BsonType.String => bsonValue.AsString,
+            LiteDB.BsonType.Int32 => bsonValue.AsInt32,
+            LiteDB.BsonType.Int64 => bsonValue.AsInt64,
+            LiteDB.BsonType.Double => bsonValue.AsDouble,
+            LiteDB.BsonType.Boolean => bsonValue.AsBoolean,
+            LiteDB.BsonType.DateTime => bsonValue.AsDateTime,
+            LiteDB.BsonType.Document or LiteDB.BsonType.Array => System.Text.Json.JsonSerializer.Serialize(BsonValueToObject(bsonValue)),
+            _ => bsonValue.ToString()
+        };
+    }
+
+    /// <summary>
+    /// 将BsonValue转换为普通.NET对象
+    /// </summary>
+    private static object? BsonValueToObject(LiteDB.BsonValue bsonValue)
+    {
+        if (bsonValue == null || bsonValue.IsNull) return null;
+        
+        return bsonValue.Type switch
+        {
+            LiteDB.BsonType.String => bsonValue.AsString,
+            LiteDB.BsonType.Int32 => bsonValue.AsInt32,
+            LiteDB.BsonType.Int64 => bsonValue.AsInt64,
+            LiteDB.BsonType.Double => bsonValue.AsDouble,
+            LiteDB.BsonType.Boolean => bsonValue.AsBoolean,
+            LiteDB.BsonType.DateTime => bsonValue.AsDateTime,
+            LiteDB.BsonType.Document => bsonValue.AsDocument.ToDictionary(kvp => kvp.Key, kvp => BsonValueToObject(kvp.Value)),
+            LiteDB.BsonType.Array => bsonValue.AsArray.Select(BsonValueToObject).ToArray(),
+            _ => bsonValue.ToString()
+        };
     }
 
     private class ExportRecord
@@ -558,5 +721,15 @@
         public decimal Cost { get; set; }
         public DateTime GeneratedAt { get; set; }
         public Dictionary<string, string> InputData { get; set; } = new();
+        
+        /// <summary>
+        /// 结构化数据字段（当有结构化输出时）
+        /// </summary>
+        public Dictionary<string, object?> StructuredFields { get; set; } = new();
+        
+        /// <summary>
+        /// 是否包含结构化数据
+        /// </summary>
+        public bool HasStructuredData { get; set; }
     }
 } 

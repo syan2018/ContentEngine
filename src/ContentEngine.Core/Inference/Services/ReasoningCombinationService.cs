@@ -1,5 +1,6 @@
 using ContentEngine.Core.Inference.Models;
 using ContentEngine.Core.Inference.Utils;
+using ContentEngine.Core.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace ContentEngine.Core.Inference.Services
@@ -367,7 +368,8 @@ namespace ContentEngine.Core.Inference.Services
                 }
                 var executionTime = DateTime.UtcNow - startTime;
 
-                return new ReasoningOutputItem
+                // 创建输出项
+                var outputItem = new ReasoningOutputItem
                 {
                     InputCombinationId = combination.CombinationId,
                     IsSuccess = result.IsSuccess,
@@ -376,6 +378,46 @@ namespace ContentEngine.Core.Inference.Services
                     CostUSD = result.CostUSD,
                     ExecutionTime = executionTime
                 };
+
+                // 如果启用了结构化输出，尝试解析JSON
+                if (definition.EnableStructuredJsonOutput && result.IsSuccess && !string.IsNullOrWhiteSpace(result.GeneratedText))
+                {
+                    try
+                    {
+                        var parseResult = JsonParsingUtils.TryParseJson(result.GeneratedText, forceJsonMode: true);
+                        
+                        if (parseResult.IsSuccess && parseResult.StructuredData != null)
+                        {
+                            outputItem.HasStructuredData = true;
+                            outputItem.StructuredData = parseResult.StructuredData;
+                            
+                            _logger.LogDebug("成功解析结构化数据，组合 {CombinationId}", combination.CombinationId);
+                        }
+                        else
+                        {
+                            outputItem.HasStructuredData = false;
+                            outputItem.StructuredDataParseError = parseResult.ErrorMessage;
+                            
+                            // 在强制JSON模式下，解析失败应该将整个输出标记为失败
+                            outputItem.IsSuccess = false;
+                            outputItem.FailureReason = $"JSON解析失败: {parseResult.ErrorMessage}";
+                            
+                            _logger.LogWarning("强制JSON模式下解析失败，组合 {CombinationId}: {Error}", 
+                                combination.CombinationId, parseResult.ErrorMessage);
+                        }
+                    }
+                    catch (Exception parseEx)
+                    {
+                        outputItem.HasStructuredData = false;
+                        outputItem.StructuredDataParseError = parseEx.Message;
+                        outputItem.IsSuccess = false;
+                        outputItem.FailureReason = $"JSON解析异常: {parseEx.Message}";
+                        
+                        _logger.LogError(parseEx, "解析JSON时发生异常，组合 {CombinationId}", combination.CombinationId);
+                    }
+                }
+
+                return outputItem;
             }
             catch (Exception ex)
             {
