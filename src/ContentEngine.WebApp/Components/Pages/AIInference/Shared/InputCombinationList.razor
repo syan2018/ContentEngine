@@ -166,6 +166,10 @@
     private HubConnection? hubConnection;
     private readonly Dictionary<string, CombinationExecutionStatus> _executionStatuses = new();
     private readonly HashSet<string> _subscribedCombinations = new();
+    
+    // 同步状态追踪 - 防止永远卡在"同步中"
+    private readonly Dictionary<string, DateTime> _syncStartTimes = new();
+    private const int MaxSyncTimeSeconds = 5; // 最大同步等待时间
 
     protected override async Task OnInitializedAsync()
     {
@@ -413,31 +417,9 @@
         var output = GetOutput(combination);
         var executionStatus = GetExecutionStatus(combination.CombinationId);
         
-        // ✅ 修复：智能判断状态和结果的一致性
-        // 如果SignalR状态显示已完成，但本地输出结果还是失败的，说明数据未同步
-        if (executionStatus?.Status == CombinationStatus.Completed)
-        {
-            if (output?.IsSuccess == true && !string.IsNullOrWhiteSpace(output.GeneratedText))
-            {
-                // 状态和结果一致，显示成功结果
-                return @<div class="result-preview @(Dense ? "compact" : "")">
-                    <div class="result-text" title="@output.GeneratedText">
-                        @output.GeneratedText
-                    </div>
-                </div>;
-            }
-            else
-            {
-                // 状态显示完成但本地结果还是旧的，显示同步中状态
-                return @<div class="result-preview syncing @(Dense ? "compact" : "")">
-                    <div class="result-text" title="执行完成，正在同步最新结果...">
-                        <MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Small" Class="mr-1 rotating" />
-                        同步中...
-                    </div>
-                </div>;
-            }
-        }
-        else if (executionStatus?.Status == CombinationStatus.Executing || executionStatus?.Status == CombinationStatus.Retrying)
+        // ✅ 修复：正确处理SignalR状态和本地结果的关系
+        // 优先使用SignalR实时状态，因为它更及时准确
+        if (executionStatus?.Status == CombinationStatus.Executing || executionStatus?.Status == CombinationStatus.Retrying)
         {
             // 正在执行中，显示执行状态
             var statusText = executionStatus.Status == CombinationStatus.Retrying ? "重试中..." : "执行中...";
@@ -448,26 +430,138 @@
                 </div>
             </div>;
         }
-        else if (output?.IsSuccess == true && !string.IsNullOrWhiteSpace(output.GeneratedText))
+        else if (executionStatus?.Status == CombinationStatus.Completed)
         {
-            // 有成功的输出结果
-            return @<div class="result-preview @(Dense ? "compact" : "")">
-                <div class="result-text" title="@output.GeneratedText">
-                    @output.GeneratedText
-                </div>
-            </div>;
+            // SignalR状态显示成功完成
+            if (output?.IsSuccess == true && !string.IsNullOrWhiteSpace(output.GeneratedText))
+            {
+                // 状态和结果一致，清理同步记录，显示成功结果
+                _syncStartTimes.Remove(combination.CombinationId);
+                return @<div class="result-preview @(Dense ? "compact" : "")">
+                    <div class="result-text" title="@output.GeneratedText">
+                        @output.GeneratedText
+                    </div>
+                </div>;
+            }
+            else if (output != null && !output.IsSuccess)
+            {
+                // 状态显示成功但本地结果是失败，说明状态更新有误，显示实际失败结果
+                return @<div class="result-preview error @(Dense ? "compact" : "")">
+                    <div class="result-text error-text" title="@(output.FailureReason ?? "未知错误")">
+                        @(output.FailureReason ?? "未知错误")
+                    </div>
+                </div>;
+            }
+            else
+            {
+                // 状态显示成功但没有输出结果，检查同步超时
+                var combinationId = combination.CombinationId;
+                var now = DateTime.UtcNow;
+                
+                // 记录同步开始时间
+                if (!_syncStartTimes.ContainsKey(combinationId))
+                {
+                    _syncStartTimes[combinationId] = now;
+                }
+                
+                // 检查是否超时
+                var syncDuration = now - _syncStartTimes[combinationId];
+                if (syncDuration.TotalSeconds > MaxSyncTimeSeconds)
+                {
+                    // 超时，清理同步记录，显示数据不一致警告
+                    _syncStartTimes.Remove(combinationId);
+                    return @<div class="result-preview error @(Dense ? "compact" : "")">
+                        <div class="result-text error-text" title="数据同步超时，请刷新页面或重试">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="mr-1" />
+                            同步超时
+                        </div>
+                    </div>;
+                }
+                
+                // 正常显示同步中
+                return @<div class="result-preview syncing @(Dense ? "compact" : "")">
+                    <div class="result-text" title="执行完成，正在同步结果...">
+                        <MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Small" Class="mr-1 rotating" />
+                        同步中...
+                    </div>
+                </div>;
+            }
         }
-        else if (output != null && !output.IsSuccess)
+        else if (executionStatus?.Status == CombinationStatus.Failed)
         {
-            // 有失败的输出结果
-            return @<div class="result-preview error @(Dense ? "compact" : "")">
-                <div class="result-text error-text" title="@(output.FailureReason ?? "未知错误")">
-                    @(output.FailureReason ?? "未知错误")
-                </div>
-            </div>;
+            // SignalR状态显示失败
+            if (output != null && !output.IsSuccess)
+            {
+                // 状态和结果一致，清理同步记录，显示失败结果
+                _syncStartTimes.Remove(combination.CombinationId);
+                return @<div class="result-preview error @(Dense ? "compact" : "")">
+                    <div class="result-text error-text" title="@(output.FailureReason ?? "未知错误")">
+                        @(output.FailureReason ?? "未知错误")
+                    </div>
+                </div>;
+            }
+            else
+            {
+                // 状态显示失败但没有失败结果，检查同步超时
+                var combinationId = combination.CombinationId;
+                var now = DateTime.UtcNow;
+                
+                // 记录同步开始时间
+                if (!_syncStartTimes.ContainsKey(combinationId))
+                {
+                    _syncStartTimes[combinationId] = now;
+                }
+                
+                // 检查是否超时
+                var syncDuration = now - _syncStartTimes[combinationId];
+                if (syncDuration.TotalSeconds > MaxSyncTimeSeconds)
+                {
+                    // 超时，清理同步记录，显示数据不一致警告
+                    _syncStartTimes.Remove(combinationId);
+                    return @<div class="result-preview error @(Dense ? "compact" : "")">
+                        <div class="result-text error-text" title="数据同步超时，请刷新页面或重试">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="mr-1" />
+                            同步超时
+                        </div>
+                    </div>;
+                }
+                
+                // 正常显示同步中
+                return @<div class="result-preview syncing @(Dense ? "compact" : "")">
+                    <div class="result-text" title="执行失败，正在同步结果...">
+                        <MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Small" Class="mr-1 rotating" />
+                        同步中...
+                    </div>
+                </div>;
+            }
         }
-        
-        return @<span class="no-data">未执行</span>;
+        else
+        {
+            // 没有SignalR状态或状态为待处理，回退到基于输出结果的显示
+            if (output?.IsSuccess == true && !string.IsNullOrWhiteSpace(output.GeneratedText))
+            {
+                // 有成功的输出结果
+                return @<div class="result-preview @(Dense ? "compact" : "")">
+                    <div class="result-text" title="@output.GeneratedText">
+                        @output.GeneratedText
+                    </div>
+                </div>;
+            }
+            else if (output != null && !output.IsSuccess)
+            {
+                // 有失败的输出结果
+                return @<div class="result-preview error @(Dense ? "compact" : "")">
+                    <div class="result-text error-text" title="@(output.FailureReason ?? "未知错误")">
+                        @(output.FailureReason ?? "未知错误")
+                    </div>
+                </div>;
+            }
+            else
+            {
+                // 没有任何结果
+                return @<span class="no-data">未执行</span>;
+            }
+        }
     }
 
     private RenderFragment GetActionButtons(ReasoningInputCombination combination)
@@ -475,13 +569,18 @@
         var output = GetOutput(combination);
         var executionStatus = GetExecutionStatus(combination.CombinationId);
         
-        // ✅ 修复：根据SignalR状态和输出结果智能显示操作按钮
+        // ✅ 修复：正确处理SignalR状态和输出结果的操作按钮逻辑
         var isExecuting = executionStatus?.Status == CombinationStatus.Executing || 
                          executionStatus?.Status == CombinationStatus.Retrying ||
                          executionStatus?.Status == CombinationStatus.Queuing;
         
-        var isCompleted = executionStatus?.Status == CombinationStatus.Completed || output?.IsSuccess == true;
-        var hasFailed = executionStatus?.Status == CombinationStatus.Failed || (output != null && !output.IsSuccess);
+        // 成功完成的条件：SignalR状态为Completed 或 有成功的输出结果
+        var isCompleted = executionStatus?.Status == CombinationStatus.Completed || 
+                         (output?.IsSuccess == true);
+        
+        // 失败的条件：SignalR状态为Failed 或 有失败的输出结果
+        var hasFailed = executionStatus?.Status == CombinationStatus.Failed || 
+                       (output != null && !output.IsSuccess);
         
         return @<div class="action-buttons">
             @if (isExecuting)
@@ -493,8 +592,9 @@
                                   Disabled="true" />
                 </MudTooltip>
             }
-            else if (isCompleted)
+            else if (isCompleted && !hasFailed)
             {
+                <!-- 只有在真正成功且没有失败时才显示查看结果按钮 -->
                 <MudTooltip Text="查看结果">
                     <MudIconButton Icon="@Icons.Material.Filled.Visibility"
                                   Color="Color.Success"
@@ -504,6 +604,7 @@
             }
             else if (hasFailed)
             {
+                <!-- 失败时显示重试按钮 -->
                 <MudTooltip Text="重试执行">
                     <MudIconButton Icon="@Icons.Material.Filled.Refresh"
                                   Color="Color.Warning"
@@ -513,6 +614,7 @@
             }
             else
             {
+                <!-- 默认显示执行按钮 -->
                 <MudTooltip Text="执行组合">
                     <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
                                   Color="Color.Primary"
