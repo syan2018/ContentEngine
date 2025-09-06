@@ -120,6 +120,10 @@ namespace ContentEngine.Core.Inference.Services
                 throw new InvalidOperationException($"与实例 {instanceId} 关联的推理事务定义 {instance.DefinitionId} 不存在。");
             }
 
+            // 更新实例状态为生成输出中
+            instance.Status = TransactionStatus.GeneratingOutputs;
+            await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
+
             var result = new BatchCombinationExecutionResult
             {
                 TotalRequested = combinationIds.Count

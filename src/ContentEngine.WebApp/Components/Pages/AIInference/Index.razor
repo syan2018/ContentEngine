@@ -9,6 +9,7 @@
 @inject IDialogService DialogService
 @inject IReasoningDefinitionService ReasoningDefinitionService
 @inject IReasoningInstanceService ReasoningInstanceService
+@inject IReasoningExecutionService ReasoningExecutionService
 
 <PageTitle>AI推理引擎 - ContentEngine</PageTitle>
 
@@ -310,10 +311,12 @@
 
             if (result != null && !result.Canceled)
             {
+                // 实际开始执行推理事务
+                await ReasoningExecutionService.ExecuteTransactionAsync(instanceId);
                 Snackbar.Add("推理事务已开始执行", Severity.Success);
                 
-                // 导航到执行监控页面
-                Navigation.NavigateTo($"/ai-inference/detail/{instanceId}");
+                // 刷新实例列表以更新状态
+                await LoadInstances();
             }
         }
         catch (Exception ex)

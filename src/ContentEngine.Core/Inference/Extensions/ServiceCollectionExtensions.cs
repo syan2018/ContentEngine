@@ -27,6 +27,9 @@ namespace ContentEngine.Core.Inference.Extensions
             
             // 注册状态跟踪服务（单例，用于跨请求共享状态）
             services.AddSingleton<ICombinationStatusTracker, CombinationStatusTracker>();
+            
+            // 注册推理进度管理器（单例，用于跨请求共享进度状态）
+            services.AddSingleton<IReasoningProgressManager, ReasoningProgressManager>();
 
             return services;
         }

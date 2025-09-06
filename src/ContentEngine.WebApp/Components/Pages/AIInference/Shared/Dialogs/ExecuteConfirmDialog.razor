@@ -138,6 +138,7 @@
     public ReasoningTransactionDefinition? Definition { get; set; }
 
     private bool isLoading = true;
+    private bool hasLoadedEstimates = false;
     private int estimatedCombinations = 0;
     private decimal estimatedCost = 0;
     private TimeSpan estimatedTime = TimeSpan.Zero;
@@ -145,6 +146,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (hasLoadedEstimates) return; // 防止重复初始化
 
         if (Instance != null)
         {
@@ -155,6 +157,7 @@
         {
             await LoadEstimates();
         }
+        hasLoadedEstimates = true;
         isLoading = false;
     }
 
@@ -162,19 +165,27 @@
     {
         try
         {
-            if (Definition == null) return;
+            if (Definition == null || hasLoadedEstimates) return;
 
-            estimatedCombinations = await ReasoningEstimationService.EstimateCombinationCountAsync(Definition.Id);
-            estimatedCost = await ReasoningEstimationService.EstimateExecutionCostAsync(Definition.Id);
-            estimatedTime = await ReasoningEstimationService.EstimateExecutionTimeAsync(Definition.Id);
+            // 使用 Task.WhenAll 并行执行，减少等待时间
+            var combinationsTask = ReasoningEstimationService.EstimateCombinationCountAsync(Definition.Id);
+            var costTask = ReasoningEstimationService.EstimateExecutionCostAsync(Definition.Id);
+            var timeTask = ReasoningEstimationService.EstimateExecutionTimeAsync(Definition.Id);
+
+            await Task.WhenAll(combinationsTask, costTask, timeTask);
+            
+            estimatedCombinations = await combinationsTask;
+            estimatedCost = await costTask;
+            estimatedTime = await timeTask;
 
             // 检查约束违规
             hasConstraintViolations = estimatedCost > Definition.ExecutionConstraints.MaxEstimatedCostUSD ||
                                     estimatedTime.TotalMinutes > Definition.ExecutionConstraints.MaxExecutionTimeMinutes;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // 忽略预估错误，使用默认值
+            Console.WriteLine($"加载预估信息失败: {ex.Message}");
         }
     }
 

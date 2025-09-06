@@ -1,0 +1,186 @@
+@using ContentEngine.Core.Inference.Models
+@using ContentEngine.Core.Inference.Services
+@implements IDisposable
+@inject IReasoningProgressManager ProgressManager
+
+@if (progress != null)
+{
+    <MudStack Spacing="@(Compact ? 1 : 2)">
+        @if (!HideLabel)
+        {
+            <MudGrid>
+                <MudItem xs="8">
+                    <MudText Typo="@(Compact ? Typo.caption : Typo.body2)">
+                        @progress.GetStatusDisplayText()
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @progress.GetDetailedProgressText()
+                    </MudText>
+                </MudItem>
+                @if (ShowCost && progress.TotalCost > 0)
+                {
+                    <MudItem xs="4" Class="text-right">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                            $@progress.TotalCost.ToString("F3")
+                        </MudChip>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+        
+        <MudProgressLinear Color="@GetProgressColor()" 
+                          Striped="@progress.IsActive" 
+                          Size="@Size"
+                          Value="@progress.OverallProgress" />
+        
+        @if (ShowDetails && !Compact)
+        {
+            <MudStack Row Spacing="1" Wrap="Wrap.Wrap">
+                @if (progress.ExecutingCount > 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Icon="@Icons.Material.Filled.PlayArrow" Variant="Variant.Text">
+                        执行中 @progress.ExecutingCount
+                    </MudChip>
+                }
+                @if (progress.QueueingCount > 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.Queue" Variant="Variant.Text">
+                        排队中 @progress.QueueingCount
+                    </MudChip>
+                }
+                @if (progress.PendingCount > 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Icon="@Icons.Material.Filled.Schedule" Variant="Variant.Text">
+                        待处理 @progress.PendingCount
+                    </MudChip>
+                }
+                @if (progress.FailedCount > 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Icon="@Icons.Material.Filled.Error" Variant="Variant.Text">
+                        失败 @progress.FailedCount
+                    </MudChip>
+                }
+            </MudStack>
+        }
+    </MudStack>
+}
+else if (IsLoading)
+{
+    <MudStack Spacing="@(Compact ? 1 : 2)">
+        <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="@(Compact ? "16px" : "24px")" />
+        @if (!Compact)
+        {
+            <MudSkeleton SkeletonType="SkeletonType.Text" />
+        }
+    </MudStack>
+}
+else
+{
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">
+        暂无进度信息
+    </MudText>
+}
+
+@* 使用MudBlazor原生样式，无需自定义CSS *@
+
+@code {
+    [Parameter] public string InstanceId { get; set; } = string.Empty;
+    [Parameter] public bool Compact { get; set; } = false;
+    [Parameter] public bool ShowDetails { get; set; } = true;
+    [Parameter] public bool ShowCost { get; set; } = true;
+    [Parameter] public bool HideLabel { get; set; } = false;
+    [Parameter] public Size Size { get; set; } = Size.Medium;
+    [Parameter] public bool IsLoading { get; set; } = false;
+    
+    private ReasoningProgress? progress;
+    private System.Timers.Timer? _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 订阅进度更新事件
+        ProgressManager.ProgressUpdated += OnProgressUpdated;
+        
+        // 初始加载进度
+        await LoadProgressAsync();
+        
+        // 设置定时刷新（每3秒）
+        _refreshTimer = new System.Timers.Timer(3000);
+        _refreshTimer.Elapsed += async (_, _) => await RefreshProgress();
+        _refreshTimer.Start();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(InstanceId))
+        {
+            await LoadProgressAsync();
+        }
+    }
+
+    private async Task LoadProgressAsync()
+    {
+        if (string.IsNullOrEmpty(InstanceId))
+            return;
+            
+        try
+        {
+            progress = await ProgressManager.GetProgressAsync(InstanceId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"加载进度失败: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshProgress()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(InstanceId))
+            {
+                await ProgressManager.RefreshInstanceProgressAsync(InstanceId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"刷新进度失败: {ex.Message}");
+        }
+    }
+
+    private async void OnProgressUpdated(string instanceId, ReasoningProgress updatedProgress)
+    {
+        if (instanceId == InstanceId)
+        {
+            progress = updatedProgress;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private Color GetProgressColor()
+    {
+        if (progress == null)
+            return Color.Default;
+            
+        // 基于真实的执行状态判断颜色
+        if (progress.IsActive) // 真正在执行
+            return Color.Primary;
+            
+        return progress.Status switch
+        {
+            TransactionStatus.Completed => Color.Success,
+            TransactionStatus.Failed => Color.Error,
+            TransactionStatus.FetchingData or TransactionStatus.CombiningData => Color.Info,
+            TransactionStatus.Paused => Color.Warning,
+            TransactionStatus.GeneratingOutputs when progress.CanContinue => Color.Warning, // 可继续但暂停
+            _ => Color.Default
+        };
+    }
+
+    public void Dispose()
+    {
+        ProgressManager.ProgressUpdated -= OnProgressUpdated;
+        _refreshTimer?.Stop();
+        _refreshTimer?.Dispose();
+    }
+}

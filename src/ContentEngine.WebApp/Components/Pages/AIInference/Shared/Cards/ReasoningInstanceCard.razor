@@ -1,10 +1,12 @@
 @using ContentEngine.Core.Inference.Models
 @using ContentEngine.Core.Inference.Services
+@using ContentEngine.WebApp.Components.Shared
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject IDialogService DialogService
 @inject IReasoningDefinitionService ReasoningDefinitionService
 @inject IReasoningInstanceService ReasoningInstanceService
+@inject IReasoningProgressManager ProgressManager
 
 <MudCard Class="inference-card" Elevation="2">
     <MudCardContent Class="pa-6">
@@ -36,25 +38,14 @@
             </div>
         }
 
-        <!-- 进度条（如果有运行中的实例） -->
-        @if (Instance.Status == TransactionStatus.GeneratingOutputs || 
-             Instance.Status == TransactionStatus.FetchingData || 
-             Instance.Status == TransactionStatus.CombiningData)
-        {
-            <div class="mb-4">
-                <div class="d-flex justify-space-between align-center mb-2">
-                    <MudText Typo="Typo.body2" Class="font-weight-medium">执行进度</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Primary" Class="font-weight-medium">
-                        @Instance.Metrics.ProcessedCombinations / @Instance.Metrics.TotalCombinations
-                        (@Instance.Metrics.ProgressPercentage.ToString("F0")%)
-                    </MudText>
-                </div>
-                <MudProgressLinear Value="@Instance.Metrics.ProgressPercentage" 
-                                  Color="Color.Primary" 
-                                  Size="Size.Medium"
-                                  Class="progress-bar" />
-            </div>
-        }
+        <!-- 智能进度条 -->
+        <div class="progress-section mb-4">
+            <ReasoningProgressBar InstanceId="@Instance.InstanceId" 
+                                 Compact="true" 
+                                 ShowDetails="false" 
+                                 ShowCost="true" 
+                                 Size="Size.Small" />
+        </div>
 
         <!-- 底部信息和操作 -->
         <div class="d-flex justify-space-between align-center pt-2">
@@ -96,13 +87,7 @@
                           OnClick="() => OnCopyTask.InvokeAsync(Instance.InstanceId)">
                     复制任务
                 </MudButton>
-                <MudButton Variant="Variant.Filled" 
-                          Color="Color.Primary" 
-                          Size="Size.Small"
-                          StartIcon="@Icons.Material.Filled.PlayArrow"
-                          OnClick="() => OnExecute.InvokeAsync(Instance.InstanceId)">
-                    重新执行
-                </MudButton>
+                @GetExecuteButton()
                 <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Color="Color.Default">
                     <MudMenuItem Icon="@Icons.Material.Filled.Edit" 
                                 OnClick="() => OnEdit.InvokeAsync(Instance.InstanceId)">
@@ -186,5 +171,102 @@
         };
         
         return @<MudChip T="string" Size="Size.Small" Color="@color" Class="status-chip">@text</MudChip>;
+    }
+
+    private RenderFragment GetExecuteButton()
+    {
+        // 获取详细的进度信息来做智能判断
+        var progress = ProgressManager.GetProgress(Instance.InstanceId);
+        var (text, icon, color, variant, disabled) = GetSmartButtonState(progress);
+
+        return @<MudButton Variant="@variant" 
+                          Color="@color" 
+                          Size="Size.Small"
+                          StartIcon="@icon"
+                          Disabled="@disabled"
+                          OnClick="@(() => HandleExecuteClick())">
+                    @text
+                </MudButton>;
+    }
+
+    /// <summary>
+    /// 智能判断按钮状态
+    /// </summary>
+    private (string text, string icon, Color color, Variant variant, bool disabled) GetSmartButtonState(ReasoningProgress? progress)
+    {
+        // 如果没有进度信息，基于实例状态判断
+        if (progress == null)
+        {
+            return Instance.Status switch
+            {
+                TransactionStatus.Completed => ("已完成", Icons.Material.Filled.CheckCircle, Color.Success, Variant.Text, true),
+                TransactionStatus.Failed => ("重新执行", Icons.Material.Filled.Refresh, Color.Warning, Variant.Filled, false),
+                _ => ("开始执行", Icons.Material.Filled.PlayArrow, Color.Primary, Variant.Filled, false)
+            };
+        }
+
+        // 基于详细进度信息的智能判断
+        if (progress.IsCompleted)
+        {
+            if (progress.Status == TransactionStatus.Completed)
+                return ("已完成", Icons.Material.Filled.CheckCircle, Color.Success, Variant.Text, true);
+            else
+                return ("重新执行", Icons.Material.Filled.Refresh, Color.Warning, Variant.Filled, false);
+        }
+
+        // 正在执行中（真正有任务在执行或排队）
+        if (progress.IsActive)
+        {
+            return ("查看进度", Icons.Material.Filled.Visibility, Color.Primary, Variant.Outlined, false);
+        }
+
+        // 可以继续执行（有未完成工作但当前不在执行）
+        if (progress.CanContinue)
+        {
+            return ("继续执行", Icons.Material.Filled.PlayArrow, Color.Primary, Variant.Filled, false);
+        }
+
+        // 纯失败状态（有失败任务但没有成功任务）
+        if (progress.FailedCount > 0 && progress.CompletedCount == 0)
+        {
+            return ("重新执行", Icons.Material.Filled.Refresh, Color.Warning, Variant.Filled, false);
+        }
+
+        // 未开始（没有任何输出）
+        if (progress.CompletedCount == 0 && progress.FailedCount == 0 && progress.TotalCombinations > 0)
+        {
+            return ("开始执行", Icons.Material.Filled.PlayArrow, Color.Primary, Variant.Filled, false);
+        }
+
+        // 默认情况
+        return ("开始执行", Icons.Material.Filled.PlayArrow, Color.Primary, Variant.Filled, false);
+    }
+
+    private async Task HandleExecuteClick()
+    {
+        var progress = ProgressManager.GetProgress(Instance.InstanceId);
+        var (text, _, _, _, disabled) = GetSmartButtonState(progress);
+        
+        // 如果按钮被禁用，不执行任何操作
+        if (disabled) return;
+
+        // 根据按钮文字判断执行逻辑
+        switch (text)
+        {
+            case "查看进度":
+                // 正在执行中，跳转到详情页查看进度
+                await OnViewDetail.InvokeAsync(Instance.InstanceId);
+                break;
+            case "开始执行":
+            case "继续执行": 
+            case "重新执行":
+                // 开始、继续或重新执行
+                await OnExecute.InvokeAsync(Instance.InstanceId);
+                break;
+            default:
+                // 默认执行逻辑
+                await OnExecute.InvokeAsync(Instance.InstanceId);
+                break;
+        }
     }
 } 
