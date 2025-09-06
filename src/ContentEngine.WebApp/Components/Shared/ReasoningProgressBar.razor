@@ -1,7 +1,9 @@
 @using ContentEngine.Core.Inference.Models
 @using ContentEngine.Core.Inference.Services
-@implements IDisposable
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
 @inject IReasoningProgressManager ProgressManager
+@inject NavigationManager Navigation
 
 @if (progress != null)
 {
@@ -93,28 +95,33 @@ else
     [Parameter] public bool IsLoading { get; set; } = false;
     
     private ReasoningProgress? progress;
-    private System.Timers.Timer? _refreshTimer;
+    private HubConnection? hubConnection;
+    private string? currentInstanceId;
 
     protected override async Task OnInitializedAsync()
     {
-        // 订阅进度更新事件
-        ProgressManager.ProgressUpdated += OnProgressUpdated;
-        
-        // 初始加载进度
-        await LoadProgressAsync();
-        
-        // 设置定时刷新（每3秒）
-        _refreshTimer = new System.Timers.Timer(3000);
-        _refreshTimer.Elapsed += async (_, _) => await RefreshProgress();
-        _refreshTimer.Start();
+        await InitializeAsync();
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        if (!string.IsNullOrEmpty(InstanceId))
+        // 如果实例ID发生变化，需要重新订阅
+        if (currentInstanceId != InstanceId)
         {
-            await LoadProgressAsync();
+            await ResubscribeToInstance();
         }
+    }
+
+    private async Task InitializeAsync()
+    {
+        // 初始加载进度
+        await LoadProgressAsync();
+        
+        // 初始化 SignalR 连接
+        await InitializeSignalRConnection();
+        
+        // 订阅当前实例
+        await SubscribeToCurrentInstance();
     }
 
     private async Task LoadProgressAsync()
@@ -124,6 +131,7 @@ else
             
         try
         {
+            IsLoading = true;
             progress = await ProgressManager.GetProgressAsync(InstanceId);
             StateHasChanged();
         }
@@ -131,24 +139,96 @@ else
         {
             Console.WriteLine($"加载进度失败: {ex.Message}");
         }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
-    private async Task RefreshProgress()
+    private async Task InitializeSignalRConnection()
     {
         try
         {
-            if (!string.IsNullOrEmpty(InstanceId))
-            {
-                await ProgressManager.RefreshInstanceProgressAsync(InstanceId);
-            }
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/reasoning-progress-hub"))
+                .Build();
+
+            // 订阅进度更新事件
+            hubConnection.On<string, ReasoningProgress>("ProgressUpdated", OnProgressUpdated);
+            hubConnection.On<string, TransactionStatus, TransactionStatus>("StatusChanged", OnStatusChanged);
+
+            await hubConnection.StartAsync();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"刷新进度失败: {ex.Message}");
+            Console.WriteLine($"SignalR连接失败，回退到事件订阅: {ex.Message}");
+            
+            // 回退到本地事件订阅
+            ProgressManager.ProgressUpdated += OnLocalProgressUpdated;
         }
     }
 
-    private async void OnProgressUpdated(string instanceId, ReasoningProgress updatedProgress)
+    private async Task SubscribeToCurrentInstance()
+    {
+        if (hubConnection?.State == HubConnectionState.Connected && !string.IsNullOrEmpty(InstanceId))
+        {
+            try
+            {
+                await hubConnection.SendAsync("SubscribeToInstance", InstanceId);
+                currentInstanceId = InstanceId;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"订阅实例失败: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task ResubscribeToInstance()
+    {
+        if (hubConnection?.State == HubConnectionState.Connected)
+        {
+            try
+            {
+                // 取消旧的订阅
+                if (!string.IsNullOrEmpty(currentInstanceId))
+                {
+                    await hubConnection.SendAsync("UnsubscribeFromInstance", currentInstanceId);
+                }
+
+                // 订阅新的实例
+                await SubscribeToCurrentInstance();
+                
+                // 加载新实例的进度
+                await LoadProgressAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"重新订阅实例失败: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task OnProgressUpdated(string instanceId, ReasoningProgress updatedProgress)
+    {
+        if (instanceId == InstanceId)
+        {
+            progress = updatedProgress;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OnStatusChanged(string instanceId, TransactionStatus oldStatus, TransactionStatus newStatus)
+    {
+        if (instanceId == InstanceId && progress != null)
+        {
+            progress.Status = newStatus;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // 本地事件订阅的回退处理
+    private async void OnLocalProgressUpdated(string instanceId, ReasoningProgress updatedProgress)
     {
         if (instanceId == InstanceId)
         {
@@ -177,10 +257,29 @@ else
         };
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        ProgressManager.ProgressUpdated -= OnProgressUpdated;
-        _refreshTimer?.Stop();
-        _refreshTimer?.Dispose();
+        // 清理本地事件订阅
+        ProgressManager.ProgressUpdated -= OnLocalProgressUpdated;
+        
+        // 清理 SignalR 连接
+        if (hubConnection is not null)
+        {
+            try
+            {
+                if (hubConnection.State == HubConnectionState.Connected && !string.IsNullOrEmpty(currentInstanceId))
+                {
+                    await hubConnection.SendAsync("UnsubscribeFromInstance", currentInstanceId);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"取消订阅失败: {ex.Message}");
+            }
+            finally
+            {
+                await hubConnection.DisposeAsync();
+            }
+        }
     }
 }

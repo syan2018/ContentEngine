@@ -2,11 +2,42 @@
 @using ContentEngine.Core.Inference.Utils
 @using ContentEngine.Core.Inference.Services
 @using LiteDB
-@implements IDisposable
-@inject ICombinationStatusTracker StatusTracker
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+@inject NavigationManager Navigation
 @using CombinationStatus = ContentEngine.Core.Inference.Models.CombinationStatus
 
 <link href="/Shared/CombinationStyles.css" rel="stylesheet" />
+
+<style>
+    .result-preview.syncing {
+        background-color: #e3f2fd;
+        border-left: 4px solid #2196f3;
+    }
+    
+    .result-preview.executing {
+        background-color: #f3e5f5;
+        border-left: 4px solid #9c27b0;
+    }
+    
+    .rotating {
+        animation: spin 1s linear infinite;
+    }
+    
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .status-animated {
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+</style>
 
 <MudTable Items="@Combinations" 
           Hover="true" 
@@ -132,21 +163,16 @@
     [Parameter] public EventCallback OnExportResults { get; set; }
 
     private List<string> ViewNames = new();
-    private System.Timers.Timer? _refreshTimer;
+    private HubConnection? hubConnection;
     private readonly Dictionary<string, CombinationExecutionStatus> _executionStatuses = new();
+    private readonly HashSet<string> _subscribedCombinations = new();
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        // 订阅状态更新事件
-        StatusTracker.StatusUpdated += OnStatusUpdated;
-        
-        // 设置定时刷新（每2秒）
-        _refreshTimer = new System.Timers.Timer(2000);
-        _refreshTimer.Elapsed += async (_, _) => await RefreshStatuses();
-        _refreshTimer.Start();
+        await InitializeSignalRConnection();
     }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         ViewNames = Combinations
             .SelectMany(c => c.DataMap.Keys)
@@ -154,53 +180,119 @@
             .OrderBy(name => name)
             .ToList();
             
-        // 刷新状态信息
-        RefreshStatuses().ConfigureAwait(false);
+        // 订阅当前组合的状态变化
+        await SubscribeToCurrentCombinations();
     }
 
-    private async Task RefreshStatuses()
+    /// <summary>
+    /// 初始化 SignalR 连接
+    /// </summary>
+    private async Task InitializeSignalRConnection()
     {
         try
         {
-            var allStatuses = StatusTracker.GetAllStatuses();
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/reasoning-progress-hub"))
+                .Build();
+
+            // 订阅组合状态更新事件
+            hubConnection.On<string, CombinationExecutionStatus>("CombinationStatusUpdated", OnCombinationStatusUpdated);
             
-            bool hasChanges = false;
-            foreach (var combo in Combinations)
+            // 启动连接
+            await hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"初始化 SignalR 连接失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 订阅当前组合的状态变化
+    /// </summary>
+    private async Task SubscribeToCurrentCombinations()
+    {
+        if (hubConnection?.State != HubConnectionState.Connected || Combinations?.Any() != true)
+            return;
+
+        try
+        {
+            var currentCombinationIds = Combinations.Select(c => c.CombinationId).ToHashSet();
+            
+            // 取消不再需要的订阅
+            var obsoleteSubscriptions = _subscribedCombinations.Except(currentCombinationIds).ToList();
+            foreach (var combinationId in obsoleteSubscriptions)
             {
-                if (allStatuses.TryGetValue(combo.CombinationId, out var status))
-                {
-                    if (!_executionStatuses.ContainsKey(combo.CombinationId) || 
-                        !_executionStatuses[combo.CombinationId].Equals(status))
-                    {
-                        _executionStatuses[combo.CombinationId] = status;
-                        hasChanges = true;
-                    }
-                }
+                await hubConnection.SendAsync("UnsubscribeFromCombination", combinationId);
+                _subscribedCombinations.Remove(combinationId);
             }
             
-            if (hasChanges)
+            // 添加新的订阅
+            var newSubscriptions = currentCombinationIds.Except(_subscribedCombinations).ToList();
+            foreach (var combinationId in newSubscriptions)
+            {
+                await hubConnection.SendAsync("SubscribeToCombination", combinationId);
+                _subscribedCombinations.Add(combinationId);
+            }
+            
+            // 清理过期的本地状态缓存
+            var obsoleteKeys = _executionStatuses.Keys.Except(currentCombinationIds).ToList();
+            foreach (var key in obsoleteKeys)
+            {
+                _executionStatuses.Remove(key);
+            }
+            
+            if (obsoleteKeys.Any())
             {
                 await InvokeAsync(StateHasChanged);
             }
         }
         catch (Exception ex)
         {
-            // 静默处理错误，避免影响UI
-            Console.WriteLine($"刷新状态时出错: {ex.Message}");
+            Console.WriteLine($"订阅组合状态失败: {ex.Message}");
         }
     }
 
-    private async void OnStatusUpdated(string combinationId, CombinationExecutionStatus status)
+    /// <summary>
+    /// SignalR 组合状态更新事件处理器
+    /// </summary>
+    private async void OnCombinationStatusUpdated(string combinationId, CombinationExecutionStatus status)
     {
-        _executionStatuses[combinationId] = status;
-        await InvokeAsync(StateHasChanged);
+        // 只处理当前组件关心的组合
+        if (Combinations?.Any(c => c.CombinationId == combinationId) == true)
+        {
+            var oldStatus = _executionStatuses.TryGetValue(combinationId, out var existing) ? existing : null;
+            
+            // 只有状态真正变化时才更新UI
+            if (oldStatus == null || !oldStatus.Equals(status))
+            {
+                _executionStatuses[combinationId] = status;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        StatusTracker.StatusUpdated -= OnStatusUpdated;
-        _refreshTimer?.Stop();
-        _refreshTimer?.Dispose();
+        if (hubConnection is not null)
+        {
+            try
+            {
+                // 取消所有组合的订阅
+                foreach (var combinationId in _subscribedCombinations)
+                {
+                    await hubConnection.SendAsync("UnsubscribeFromCombination", combinationId);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"取消组合订阅失败: {ex.Message}");
+            }
+            finally
+            {
+                await hubConnection.DisposeAsync();
+            }
+        }
     }
 
     private string GetShortId(string combinationId) => 
@@ -319,9 +411,46 @@
     private RenderFragment GetResultPreview(ReasoningInputCombination combination)
     {
         var output = GetOutput(combination);
+        var executionStatus = GetExecutionStatus(combination.CombinationId);
         
-        if (output?.IsSuccess == true && !string.IsNullOrWhiteSpace(output.GeneratedText))
+        // ✅ 修复：智能判断状态和结果的一致性
+        // 如果SignalR状态显示已完成，但本地输出结果还是失败的，说明数据未同步
+        if (executionStatus?.Status == CombinationStatus.Completed)
         {
+            if (output?.IsSuccess == true && !string.IsNullOrWhiteSpace(output.GeneratedText))
+            {
+                // 状态和结果一致，显示成功结果
+                return @<div class="result-preview @(Dense ? "compact" : "")">
+                    <div class="result-text" title="@output.GeneratedText">
+                        @output.GeneratedText
+                    </div>
+                </div>;
+            }
+            else
+            {
+                // 状态显示完成但本地结果还是旧的，显示同步中状态
+                return @<div class="result-preview syncing @(Dense ? "compact" : "")">
+                    <div class="result-text" title="执行完成，正在同步最新结果...">
+                        <MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Small" Class="mr-1 rotating" />
+                        同步中...
+                    </div>
+                </div>;
+            }
+        }
+        else if (executionStatus?.Status == CombinationStatus.Executing || executionStatus?.Status == CombinationStatus.Retrying)
+        {
+            // 正在执行中，显示执行状态
+            var statusText = executionStatus.Status == CombinationStatus.Retrying ? "重试中..." : "执行中...";
+            return @<div class="result-preview executing @(Dense ? "compact" : "")">
+                <div class="result-text" title="@statusText">
+                    <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" Class="mr-1 rotating" />
+                    @statusText
+                </div>
+            </div>;
+        }
+        else if (output?.IsSuccess == true && !string.IsNullOrWhiteSpace(output.GeneratedText))
+        {
+            // 有成功的输出结果
             return @<div class="result-preview @(Dense ? "compact" : "")">
                 <div class="result-text" title="@output.GeneratedText">
                     @output.GeneratedText
@@ -330,6 +459,7 @@
         }
         else if (output != null && !output.IsSuccess)
         {
+            // 有失败的输出结果
             return @<div class="result-preview error @(Dense ? "compact" : "")">
                 <div class="result-text error-text" title="@(output.FailureReason ?? "未知错误")">
                     @(output.FailureReason ?? "未知错误")
@@ -343,18 +473,27 @@
     private RenderFragment GetActionButtons(ReasoningInputCombination combination)
     {
         var output = GetOutput(combination);
+        var executionStatus = GetExecutionStatus(combination.CombinationId);
+        
+        // ✅ 修复：根据SignalR状态和输出结果智能显示操作按钮
+        var isExecuting = executionStatus?.Status == CombinationStatus.Executing || 
+                         executionStatus?.Status == CombinationStatus.Retrying ||
+                         executionStatus?.Status == CombinationStatus.Queuing;
+        
+        var isCompleted = executionStatus?.Status == CombinationStatus.Completed || output?.IsSuccess == true;
+        var hasFailed = executionStatus?.Status == CombinationStatus.Failed || (output != null && !output.IsSuccess);
         
         return @<div class="action-buttons">
-            @if (output == null)
+            @if (isExecuting)
             {
-                <MudTooltip Text="执行组合">
-                    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
-                                  Color="Color.Primary"
+                <MudTooltip Text="执行中...">
+                    <MudIconButton Icon="@Icons.Material.Filled.HourglassEmpty"
+                                  Color="Color.Info"
                                   Size="Size.Small"
-                                  OnClick="() => OnExecute.InvokeAsync(combination)" />
+                                  Disabled="true" />
                 </MudTooltip>
             }
-            else if (output.IsSuccess)
+            else if (isCompleted)
             {
                 <MudTooltip Text="查看结果">
                     <MudIconButton Icon="@Icons.Material.Filled.Visibility"
@@ -363,13 +502,22 @@
                                   OnClick="() => OnViewResult.InvokeAsync(combination)" />
                 </MudTooltip>
             }
-            else
+            else if (hasFailed)
             {
                 <MudTooltip Text="重试执行">
                     <MudIconButton Icon="@Icons.Material.Filled.Refresh"
                                   Color="Color.Warning"
                                   Size="Size.Small"
                                   OnClick="() => OnRetry.InvokeAsync(combination)" />
+                </MudTooltip>
+            }
+            else
+            {
+                <MudTooltip Text="执行组合">
+                    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow"
+                                  Color="Color.Primary"
+                                  Size="Size.Small"
+                                  OnClick="() => OnExecute.InvokeAsync(combination)" />
                 </MudTooltip>
             }
             

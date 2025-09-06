@@ -1,4 +1,5 @@
 using ContentEngine.WebApp.Components;
+using ContentEngine.WebApp.Components.Hubs;
 using ContentEngine.Core.Storage;
 using ContentEngine.Core.DataPipeline.Services;
 using ContentEngine.Core.AI.Services;
@@ -15,6 +16,9 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddMudServices();
+
+// 添加 SignalR 服务
+builder.Services.AddSignalR();
 
 // 1. 添加本地化服务
 builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
@@ -53,6 +57,9 @@ builder.Services.AddInferenceServices();
 // 注册Prompt执行服务（来自AI模块）
 builder.Services.AddScoped<ContentEngine.Core.Inference.Services.IPromptExecutionService, ContentEngine.Core.AI.Services.PromptExecutionService>();
 
+// 注册 SignalR 推理进度通知后台服务
+builder.Services.AddHostedService<SignalRProgressNotificationService>();
+
 // 2. 配置请求本地化选项 (可选，但推荐)
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
@@ -87,5 +94,8 @@ app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// 映射 SignalR Hub
+app.MapHub<ReasoningProgressHub>("/reasoning-progress-hub");
 
 app.Run();

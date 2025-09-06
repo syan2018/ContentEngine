@@ -4,12 +4,15 @@
 @using ContentEngine.Core.Utils
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Cards
+@using Microsoft.AspNetCore.SignalR.Client
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IReasoningDefinitionService ReasoningDefinitionService
 @inject IReasoningInstanceService ReasoningInstanceService
 @inject IReasoningExecutionService ReasoningExecutionService
+@inject IReasoningProgressManager ProgressManager
+@implements IAsyncDisposable
 
 <PageTitle>AI推理引擎 - ContentEngine</PageTitle>
 
@@ -181,10 +184,15 @@
     private int completedInstances = 0;
     private decimal totalCost = 0;
 
+    // SignalR 连接
+    private HubConnection? hubConnection;
+    private Dictionary<string, ReasoningProgressSummary> progressSummaries = new();
+
     protected override async Task OnInitializedAsync()
     {
         await LoadInstances();
         await LoadStatistics();
+        await InitializeSignalRConnection();
     }
 
     private async Task LoadInstances()
@@ -351,6 +359,174 @@
         catch (Exception ex)
         {
             Snackbar.Add($"删除推理实例失败: {ex.Message}", Severity.Error);
+        }
+    }
+
+    /// <summary>
+    /// 初始化 SignalR 连接
+    /// </summary>
+    private async Task InitializeSignalRConnection()
+    {
+        try
+        {
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/reasoning-progress-hub"))
+                .Build();
+
+            // 订阅全局进度摘要更新
+            hubConnection.On<List<ReasoningProgressSummary>>("AllProgressUpdated", OnAllProgressUpdated);
+            hubConnection.On<string, ReasoningProgressSummary>("ProgressSummaryUpdated", OnProgressSummaryUpdated);
+            hubConnection.On<string, TransactionStatus, TransactionStatus>("StatusChanged", OnStatusChanged);
+
+            await hubConnection.StartAsync();
+            
+            // 订阅所有进度更新
+            await hubConnection.SendAsync("SubscribeToAllProgress");
+
+            Snackbar.Add("实时进度更新已启用", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"连接实时更新服务失败: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    /// <summary>
+    /// 处理全局进度更新
+    /// </summary>
+    private async Task OnAllProgressUpdated(List<ReasoningProgressSummary> summaries)
+    {
+        try
+        {
+            progressSummaries.Clear();
+            foreach (var summary in summaries)
+            {
+                progressSummaries[summary.InstanceId] = summary;
+            }
+
+            // 更新统计数据
+            await UpdateStatisticsFromProgress();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"处理全局进度更新失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 处理单个进度摘要更新
+    /// </summary>
+    private async Task OnProgressSummaryUpdated(string instanceId, ReasoningProgressSummary summary)
+    {
+        try
+        {
+            progressSummaries[instanceId] = summary;
+            
+            // 更新对应的实例状态（如果在列表中）
+            var instance = instances.FirstOrDefault(i => i.InstanceId == instanceId);
+            if (instance != null)
+            {
+                instance.Status = summary.Status;
+            }
+
+            await UpdateStatisticsFromProgress();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"处理进度摘要更新失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 处理状态变化
+    /// </summary>
+    private async Task OnStatusChanged(string instanceId, TransactionStatus oldStatus, TransactionStatus newStatus)
+    {
+        try
+        {
+            var instance = instances.FirstOrDefault(i => i.InstanceId == instanceId);
+            if (instance != null)
+            {
+                instance.Status = newStatus;
+                await InvokeAsync(StateHasChanged);
+                
+                // 显示状态变化通知
+                var definition = GetDefinitionForInstance(instance);
+                var displayName = definition?.Name ?? "未知任务";
+                Snackbar.Add($"{displayName} 状态变更: {GetStatusDisplayText(newStatus)}", 
+                           GetSeverityForStatus(newStatus));
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"处理状态变化失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 基于进度摘要更新统计数据
+    /// </summary>
+    private Task UpdateStatisticsFromProgress()
+    {
+        try
+        {
+            runningInstances = progressSummaries.Values.Count(s => s.IsActive);
+            completedInstances = progressSummaries.Values.Count(s => s.Status == TransactionStatus.Completed);
+            
+            // 实际成本需要从实例数据获取，因为摘要中没有成本信息
+            totalCost = instances.Sum(i => i.Metrics.ActualCostUSD);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"更新统计数据失败: {ex.Message}");
+        }
+        
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 获取状态显示文本
+    /// </summary>
+    private string GetStatusDisplayText(TransactionStatus status)
+    {
+        return status switch
+        {
+            TransactionStatus.Pending => "待处理",
+            TransactionStatus.FetchingData => "获取数据中",
+            TransactionStatus.CombiningData => "组合数据中",
+            TransactionStatus.GeneratingOutputs => "生成输出中",
+            TransactionStatus.Completed => "已完成",
+            TransactionStatus.Failed => "执行失败",
+            TransactionStatus.Paused => "已暂停",
+            _ => "未知状态"
+        };
+    }
+
+    /// <summary>
+    /// 根据状态获取通知级别
+    /// </summary>
+    private Severity GetSeverityForStatus(TransactionStatus status)
+    {
+        return status switch
+        {
+            TransactionStatus.Completed => Severity.Success,
+            TransactionStatus.Failed => Severity.Error,
+            TransactionStatus.GeneratingOutputs => Severity.Info,
+            TransactionStatus.Paused => Severity.Warning,
+            _ => Severity.Normal
+        };
+    }
+
+    /// <summary>
+    /// 清理 SignalR 连接
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
         }
     }
 } 

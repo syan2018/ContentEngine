@@ -155,7 +155,7 @@ namespace ContentEngine.Core.Inference.Services
             
         }
 
-        public async Task<InstanceProgressInfo> GetInstanceProgressAsync(
+        public async Task<InstanceBasicStats> GetInstanceBasicStatsAsync(
             string instanceId, 
             CancellationToken cancellationToken = default)
         {
@@ -163,49 +163,19 @@ namespace ContentEngine.Core.Inference.Services
             if (instance == null)
                 throw new InvalidOperationException($"推理事务实例不存在: {instanceId}");
 
-            var progress = new InstanceProgressInfo
+            return new InstanceBasicStats
             {
                 InstanceId = instanceId,
-                Status = instance.Status,
-                TotalCombinations = instance.Metrics.TotalCombinations,
-                ProcessedCombinations = instance.Metrics.ProcessedCombinations,
-                SuccessfulOutputs = instance.Metrics.SuccessfulOutputs,
-                FailedOutputs = instance.Metrics.FailedOutputs,
-                ElapsedTime = instance.Metrics.ElapsedTime
-            };
-
-            // 计算预估剩余时间
-            if (progress.ProcessedCombinations > 0 && progress.TotalCombinations > progress.ProcessedCombinations)
-            {
-                var avgTimePerCombination = progress.ElapsedTime.TotalSeconds / progress.ProcessedCombinations;
-                var remainingCombinations = progress.TotalCombinations - progress.ProcessedCombinations;
-                progress.EstimatedRemainingTime = TimeSpan.FromSeconds(avgTimePerCombination * remainingCombinations);
-            }
-
-            return progress;
-        }
-
-        public async Task<InstanceStatistics> GetInstanceStatisticsAsync(
-            string instanceId, 
-            CancellationToken cancellationToken = default)
-        {
-            var instance = await GetInstanceByIdAsync(instanceId, cancellationToken);
-            if (instance == null)
-                throw new InvalidOperationException($"推理事务实例不存在: {instanceId}");
-
-            return new InstanceStatistics
-            {
-                InstanceId = instanceId,
-                TotalCombinations = instance.Metrics.TotalCombinations,
-                ProcessedCombinations = instance.Metrics.ProcessedCombinations,
-                SuccessfulOutputs = instance.Metrics.SuccessfulOutputs,
-                FailedOutputs = instance.Metrics.FailedOutputs,
-                EstimatedCostUSD = instance.Metrics.EstimatedCostUSD,
-                ActualCostUSD = instance.Metrics.ActualCostUSD,
-                ElapsedTime = instance.Metrics.ElapsedTime,
+                DefinitionId = instance.DefinitionId,
                 StartedAt = instance.StartedAt,
                 CompletedAt = instance.CompletedAt,
-                Errors = instance.Errors
+                FinalStatus = instance.Status,
+                TotalCombinations = instance.Metrics.TotalCombinations,
+                SuccessfulOutputs = instance.Metrics.SuccessfulOutputs,
+                FailedOutputs = instance.Metrics.FailedOutputs,
+                ActualCostUSD = instance.Metrics.ActualCostUSD,
+                TotalExecutionTime = instance.Metrics.ElapsedTime,
+                CriticalErrors = instance.Errors.Where(e => !e.IsRetriable).ToList()
             };
         }
     }

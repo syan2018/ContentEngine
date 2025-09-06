@@ -66,6 +66,11 @@ public class ReasoningProgress
     /// 最后更新时间
     /// </summary>
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    
+    /// <summary>
+    /// 完成时间（如果已完成）
+    /// </summary>
+    public DateTime? CompletedAt { get; set; }
 
     /// <summary>
     /// 计算完成百分比
@@ -78,6 +83,18 @@ public class ReasoningProgress
     /// </summary>
     public double OverallProgress => 
         TotalCombinations == 0 ? 0 : (double)(CompletedCount + FailedCount + ExecutingCount * 0.5) / TotalCombinations * 100;
+    
+    /// <summary>
+    /// 计算成功率
+    /// </summary>
+    public double SuccessRate => 
+        (CompletedCount + FailedCount) == 0 ? 0 : (double)CompletedCount / (CompletedCount + FailedCount) * 100;
+        
+    /// <summary>
+    /// 总执行时间
+    /// </summary>
+    public TimeSpan ElapsedTime => 
+        (CompletedAt ?? DateTime.UtcNow) - StartedAt;
 
     /// <summary>
     /// 是否已完成（成功或失败）

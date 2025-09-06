@@ -16,6 +16,7 @@ namespace ContentEngine.Core.Inference.Services
         private readonly IQueryProcessingService _queryProcessingService;
         private readonly IPromptExecutionService _promptExecutionService;
         private readonly ICombinationStatusTracker _statusTracker;
+        private readonly IReasoningProgressManager _progressManager;
         private readonly ILogger<ReasoningCombinationService> _logger;
 
         public ReasoningCombinationService(
@@ -24,6 +25,7 @@ namespace ContentEngine.Core.Inference.Services
             IQueryProcessingService queryProcessingService,
             IPromptExecutionService promptExecutionService,
             ICombinationStatusTracker statusTracker,
+            IReasoningProgressManager progressManager,
             ILogger<ReasoningCombinationService> logger)
         {
             _definitionService = definitionService;
@@ -31,6 +33,7 @@ namespace ContentEngine.Core.Inference.Services
             _queryProcessingService = queryProcessingService;
             _promptExecutionService = promptExecutionService;
             _statusTracker = statusTracker;
+            _progressManager = progressManager;
             _logger = logger;
         }
 
@@ -70,16 +73,33 @@ namespace ContentEngine.Core.Inference.Services
                 throw new InvalidOperationException($"组合ID {combinationId} 在实例 {instanceId} 中未找到。");
             }
 
-            // 执行单个组合
-            var output = await ExecuteSingleCombinationAsync(definition, targetCombination, cancellationToken);
+            // 更新状态：开始执行
+            _statusTracker.UpdateStatus(combinationId, CombinationStatus.Executing, "正在执行AI推理");
 
-            // 持久化结果到实例中
-            await PersistCombinationResultAsync(instance, output, cancellationToken);
+            try
+            {
+                // 执行单个组合
+                var output = await ExecuteSingleCombinationAsync(definition, targetCombination, cancellationToken);
 
-            _logger.LogInformation("实例 {InstanceId} 中的组合 {CombinationId} 执行完成，成功: {IsSuccess}", 
-                instanceId, combinationId, output.IsSuccess);
-            
+                // 更新状态：执行完成
+                _statusTracker.UpdateStatus(combinationId, 
+                    output.IsSuccess ? CombinationStatus.Completed : CombinationStatus.Failed,
+                    output.IsSuccess ? "执行成功" : output.FailureReason);
+
+                // 持久化结果到实例中
+                await PersistCombinationResultAsync(instance, output, cancellationToken);
+
+                _logger.LogInformation("实例 {InstanceId} 中的组合 {CombinationId} 执行完成，成功: {IsSuccess}", 
+                    instanceId, combinationId, output.IsSuccess);
+                
                 return output;
+            }
+            catch (Exception ex)
+            {
+                // 更新状态：执行失败
+                _statusTracker.UpdateStatus(combinationId, CombinationStatus.Failed, $"执行失败: {ex.Message}");
+                throw;
+            }
         }
 
         public async Task<ReasoningOutputItem?> GetOutputForCombinationAsync(
@@ -120,9 +140,8 @@ namespace ContentEngine.Core.Inference.Services
                 throw new InvalidOperationException($"与实例 {instanceId} 关联的推理事务定义 {instance.DefinitionId} 不存在。");
             }
 
-            // 更新实例状态为生成输出中
-            instance.Status = TransactionStatus.GeneratingOutputs;
-            await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
+            _logger.LogInformation("开始批量执行推理组合: {InstanceId}, 组合数: {Count}, 并发数: {Concurrency}", 
+                instanceId, combinationIds.Count, maxConcurrency);
 
             var result = new BatchCombinationExecutionResult
             {
@@ -132,6 +151,9 @@ namespace ContentEngine.Core.Inference.Services
             var startTime = DateTime.UtcNow;
             var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
             var tasks = new List<Task>();
+
+            // 通过进度管理器刷新状态，这会自动设置为GeneratingOutputs状态
+            await _progressManager.RefreshInstanceProgressAsync(instanceId, cancellationToken);
 
             foreach (var combinationId in combinationIds)
             {
@@ -146,30 +168,11 @@ namespace ContentEngine.Core.Inference.Services
             await Task.WhenAll(tasks);
             result.TotalExecutionTime = DateTime.UtcNow - startTime;
 
-            // 最终持久化实例状态，确保所有结果都被保存
-            try
-            {
-                await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
-                _logger.LogInformation("批量执行完成并持久化: {InstanceId}, 请求: {Total}, 成功: {Success}, 失败: {Failed}", 
-                    instanceId, result.TotalRequested, result.SuccessfullyExecuted, result.Failed);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "批量执行最终持久化失败: {InstanceId}, 尝试重试", instanceId);
-                
-                // 重试一次持久化
-                try
-                {
-                    await Task.Delay(1000, cancellationToken); // 等待1秒后重试
-                    await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
-                    _logger.LogWarning("批量执行持久化重试成功: {InstanceId}", instanceId);
-                }
-                catch (Exception retryEx)
-                {
-                    _logger.LogError(retryEx, "批量执行持久化重试仍然失败: {InstanceId}, 结果可能丢失", instanceId);
-                    // 不抛出异常，因为执行本身是成功的，只是持久化失败
-                }
-            }
+            // 最终持久化和状态更新
+            await FinalizeExecutionAsync(instance, result, instanceId, cancellationToken);
+
+            _logger.LogInformation("批量执行完成: {InstanceId}, 请求: {Total}, 成功: {Success}, 失败: {Failed}, 耗时: {Duration}", 
+                instanceId, result.TotalRequested, result.SuccessfullyExecuted, result.Failed, result.TotalExecutionTime);
 
             return result;
         }
@@ -506,7 +509,7 @@ namespace ContentEngine.Core.Inference.Services
         }
 
         /// <summary>
-        /// 批量处理中的单个组合处理
+        /// 批量处理中的单个组合处理（简化版本，专注于执行）
         /// </summary>
         private async Task ProcessSingleCombinationInBatchAsync(
             ReasoningTransactionInstance instance,
@@ -546,6 +549,10 @@ namespace ContentEngine.Core.Inference.Services
                     output.IsSuccess ? CombinationStatus.Completed : CombinationStatus.Failed,
                     output.IsSuccess ? "执行成功" : output.FailureReason);
 
+                // 持久化结果到实例中
+                await PersistCombinationResultAsync(instance, output, cancellationToken);
+
+                // 更新批量结果统计
                 lock (batchResult)
                 {
                     batchResult.Results.Add(output);
@@ -562,64 +569,49 @@ namespace ContentEngine.Core.Inference.Services
                         batchResult.ErrorMessages.Add(output.FailureReason ?? "执行失败");
                     }
                 }
-
-                lock (instance)
-                {
-                    // 移除已存在的输出
-                    var existingOutput = instance.Outputs.FirstOrDefault(o => o.InputCombinationId == combinationId);
-                    if (existingOutput != null)
-                    {
-                        instance.Outputs.Remove(existingOutput);
-                        instance.Metrics.ActualCostUSD -= existingOutput.CostUSD;
-                        if (existingOutput.IsSuccess)
-                            instance.Metrics.SuccessfulOutputs--;
-                        else
-                            instance.Metrics.FailedOutputs--;
-                    }
-
-                    // 添加新输出
-                    instance.Outputs.Add(output);
-                    instance.Metrics.ActualCostUSD += output.CostUSD;
-                    instance.LastProcessedCombinationId = combinationId;
-
-                    if (output.IsSuccess)
-                    {
-                        instance.Metrics.SuccessfulOutputs++;
-                    }
-                    else
-                    {
-                        instance.Metrics.FailedOutputs++;
-                        instance.Errors.Add(new ErrorRecord
-                        {
-                            ErrorType = "BatchCombinationExecutionError",
-                            Message = output.FailureReason ?? "批量组合执行失败",
-                            CombinationId = combinationId,
-                            IsRetriable = true
-                        });
-                    }
-
-                    if (existingOutput == null)
-                    {
-                        instance.Metrics.ProcessedCombinations++;
-                    }
-                }
-
-                try
-                {
-                    await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
-                    _logger.LogDebug("批量执行定期持久化: {InstanceId}, 已处理: {ProcessedCount}", 
-                        instance.InstanceId, instance.Metrics.ProcessedCombinations);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "批量执行定期持久化失败: {InstanceId}", instance.InstanceId);
-                    // 持久化失败不影响执行继续
-                }
                 
             }
             finally
             {
                 semaphore.Release();
+            }
+        }
+
+        /// <summary>
+        /// 完成执行的最终处理
+        /// </summary>
+        private async Task FinalizeExecutionAsync(
+            ReasoningTransactionInstance instance,
+            BatchCombinationExecutionResult result,
+            string instanceId,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                // 最后一次持久化实例状态
+                await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
+                
+                // 通过进度管理器刷新状态，这会智能判断最终状态
+                await _progressManager.RefreshInstanceProgressAsync(instanceId, cancellationToken);
+                
+                _logger.LogDebug("批量执行最终状态更新完成: {InstanceId}", instanceId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "批量执行最终状态更新失败: {InstanceId}, 尝试重试", instanceId);
+                
+                // 重试一次
+                try
+                {
+                    await Task.Delay(1000, cancellationToken);
+                    await _instanceService.UpdateInstanceAsync(instance, cancellationToken);
+                    await _progressManager.RefreshInstanceProgressAsync(instanceId, cancellationToken);
+                    _logger.LogWarning("批量执行最终状态更新重试成功: {InstanceId}", instanceId);
+                }
+                catch (Exception retryEx)
+                {
+                    _logger.LogError(retryEx, "批量执行最终状态更新重试仍然失败: {InstanceId}", instanceId);
+                }
             }
         }
 

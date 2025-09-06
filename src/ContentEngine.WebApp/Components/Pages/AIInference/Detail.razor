@@ -6,14 +6,17 @@
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
 @using ContentEngine.WebApp.Components.Shared
+@using Microsoft.AspNetCore.SignalR.Client
 @inject IReasoningDefinitionService ReasoningDefinitionService
 @inject IReasoningInstanceService ReasoningInstanceService
 @inject IReasoningExecutionService ReasoningExecutionService
 @inject IReasoningCombinationService ReasoningCombinationService
+@inject IReasoningProgressManager ProgressManager
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
 
 <link href="Shared/AIInferenceStyles.css" rel="stylesheet" />
 
@@ -104,10 +107,16 @@
     private bool isLoadingCombinations = false;
     private List<ReasoningInputCombination> realTimeCombinations = new();
     private bool isCompactView = false;
+    
+    // SignalR 连接
+    private HubConnection? hubConnection;
+    private ReasoningProgress? currentProgress;
+    private DateTime lastManualRefresh = DateTime.MinValue;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadInstanceDetail();
+        await InitializeSignalRConnection();
     }
 
     private async Task LoadInstanceDetail()
@@ -150,7 +159,9 @@
         {
             await ReasoningExecutionService.ExecuteTransactionAsync(instance.InstanceId);
             Snackbar.Add("任务已开始执行", Severity.Success);
-            await LoadInstanceDetail();
+            
+            // 触发进度管理器刷新，而不是手动刷新页面数据
+            await RefreshInstanceProgress(instance.InstanceId);
         }
         catch (Exception ex)
         {
@@ -227,7 +238,10 @@
         try
         {
             realTimeCombinations = await ReasoningCombinationService.RegenerateAndResetInstanceAsync(instance.InstanceId);
-            await LoadInstanceDetail();
+            
+            // 触发进度管理器刷新，确保状态变化通过SignalR传播
+            await RefreshInstanceProgress(instance.InstanceId);
+            
             Snackbar.Add($"输入组合已重新生成，实例状态已重置: {realTimeCombinations.Count} 个组合", Severity.Success);
         }
         catch (Exception ex)
@@ -255,12 +269,16 @@
             var outputItem = await ReasoningCombinationService.ExecuteCombinationAsync(instance.InstanceId, combination.CombinationId);
             Snackbar.Add($"组合 {combination.CombinationId[..8]}... 已执行{(outputItem.IsSuccess ? "成功" : "失败")}", 
                 outputItem.IsSuccess ? Severity.Success : Severity.Error);
-            await LoadInstanceDetail();
+            
+            // 触发进度管理器刷新
+            await RefreshInstanceProgress(instance.InstanceId);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"执行组合失败: {ex.Message}", Severity.Error);
         }
+
+
     }
 
     private async Task ShowPromptPreview(string promptContent)
@@ -370,10 +388,13 @@
         
         try
         {
-            var outputItem = await ReasoningCombinationService.ExecuteCombinationAsync(instance.InstanceId, combination.CombinationId);
+            // ✅ 修复：使用专门的重试方法，会正确替换旧的失败结果
+            var outputItem = await ReasoningCombinationService.RetryFailedCombinationAsync(instance.InstanceId, combination.CombinationId);
             Snackbar.Add($"组合 {combination.CombinationId[..8]}... 重试执行{(outputItem.IsSuccess ? "成功" : "失败")}", 
                 outputItem.IsSuccess ? Severity.Success : Severity.Error);
-            await LoadInstanceDetail();
+            
+            // 触发进度管理器刷新，确保状态变化通过SignalR传播
+            await RefreshInstanceProgress(instance.InstanceId);
         }
         catch (Exception ex)
         {
@@ -412,7 +433,8 @@
             Snackbar.Add($"批量{operation}完成：成功 {batchResult.SuccessfullyExecuted}，失败 {batchResult.Failed}，总成本 ${batchResult.TotalCost:F3}", 
                 Severity.Success);
             
-            await LoadInstanceDetail();
+            // 触发进度管理器刷新
+            await RefreshInstanceProgress(instance.InstanceId);
         }
         catch (Exception ex)
         {
@@ -763,5 +785,183 @@
         /// 是否包含结构化数据
         /// </summary>
         public bool HasStructuredData { get; set; }
+    }
+
+    /// <summary>
+    /// 初始化 SignalR 连接
+    /// </summary>
+    private async Task InitializeSignalRConnection()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(TaskId))
+                return;
+
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/reasoning-progress-hub"))
+                .Build();
+
+            // 订阅进度更新事件
+            hubConnection.On<string, ReasoningProgress>("ProgressUpdated", OnProgressUpdated);
+            hubConnection.On<string, TransactionStatus, TransactionStatus>("StatusChanged", OnStatusChanged);
+
+            await hubConnection.StartAsync();
+            
+            // 订阅当前实例的进度更新
+            await hubConnection.SendAsync("SubscribeToInstance", TaskId);
+
+            Snackbar.Add("实时进度更新已启用", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"连接实时更新服务失败: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    /// <summary>
+    /// 处理进度更新事件
+    /// </summary>
+    private async Task OnProgressUpdated(string instanceId, ReasoningProgress progress)
+    {
+        if (instanceId == TaskId)
+        {
+            try
+            {
+                currentProgress = progress;
+                
+                // 如果实例状态发生变化，同步更新本地实例对象
+                if (instance != null && instance.Status != progress.Status)
+                {
+                    instance.Status = progress.Status;
+                    if (progress.CompletedAt.HasValue && !instance.CompletedAt.HasValue)
+                    {
+                        instance.CompletedAt = progress.CompletedAt;
+                    }
+                }
+                
+                // 如果距离上次手动刷新超过30秒，或者状态发生了重大变化，则刷新实例数据
+                var now = DateTime.UtcNow;
+                var timeSinceLastRefresh = now - lastManualRefresh;
+                var shouldRefreshInstance = timeSinceLastRefresh > TimeSpan.FromSeconds(30) ||
+                                          (progress.Status is TransactionStatus.Completed or TransactionStatus.Failed);
+                
+                if (shouldRefreshInstance)
+                {
+                    await LoadInstanceDetail();
+                    lastManualRefresh = now;
+                }
+                else
+                {
+                    // 只刷新UI，不重新加载数据
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"处理进度更新失败: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 处理状态变化事件
+    /// </summary>
+    private async Task OnStatusChanged(string instanceId, TransactionStatus oldStatus, TransactionStatus newStatus)
+    {
+        if (instanceId == TaskId)
+        {
+            try
+            {
+                // 更新本地实例状态
+                if (instance != null)
+                {
+                    instance.Status = newStatus;
+                    if (newStatus is TransactionStatus.Completed or TransactionStatus.Failed && !instance.CompletedAt.HasValue)
+                    {
+                        instance.CompletedAt = DateTime.UtcNow;
+                    }
+                }
+
+                // 显示状态变化通知
+                var statusText = GetStatusDisplayText(newStatus);
+                var severity = GetSeverityForStatus(newStatus);
+                Snackbar.Add($"任务状态变更: {statusText}", severity);
+
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"处理状态变化失败: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 获取状态显示文本
+    /// </summary>
+    private string GetStatusDisplayText(TransactionStatus status)
+    {
+        return status switch
+        {
+            TransactionStatus.Pending => "待处理",
+            TransactionStatus.FetchingData => "获取数据中",
+            TransactionStatus.CombiningData => "组合数据中",
+            TransactionStatus.GeneratingOutputs => "生成输出中",
+            TransactionStatus.Completed => "已完成",
+            TransactionStatus.Failed => "执行失败",
+            TransactionStatus.Paused => "已暂停",
+            _ => "未知状态"
+        };
+    }
+
+    /// <summary>
+    /// 根据状态获取通知级别
+    /// </summary>
+    private Severity GetSeverityForStatus(TransactionStatus status)
+    {
+        return status switch
+        {
+            TransactionStatus.Completed => Severity.Success,
+            TransactionStatus.Failed => Severity.Error,
+            TransactionStatus.GeneratingOutputs => Severity.Info,
+            TransactionStatus.Paused => Severity.Warning,
+            _ => Severity.Normal
+        };
+    }
+
+    /// <summary>
+    /// 清理 SignalR 连接
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            try
+            {
+                if (hubConnection.State == HubConnectionState.Connected && !string.IsNullOrEmpty(TaskId))
+                {
+                    await hubConnection.SendAsync("UnsubscribeFromInstance", TaskId);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"取消订阅失败: {ex.Message}");
+            }
+            finally
+            {
+                await hubConnection.DisposeAsync();
+            }
+        }
+    }
+    
+    private async Task RefreshInstanceProgress(string instanceId)
+    {
+        await ProgressManager.RefreshInstanceProgressAsync(instanceId);
+
+        // 只有在没有实时连接时才手动刷新
+        if (hubConnection?.State != HubConnectionState.Connected)
+        {
+            await LoadInstanceDetail();
+        }
     }
 } 

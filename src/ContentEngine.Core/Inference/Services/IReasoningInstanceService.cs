@@ -61,57 +61,31 @@ namespace ContentEngine.Core.Inference.Services
             CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// 获取实例的执行进度
+        /// 获取实例的基本统计信息（用于报表和历史数据）
         /// </summary>
         /// <param name="instanceId">实例ID</param>
         /// <param name="cancellationToken">取消令牌</param>
-        /// <returns>执行进度信息</returns>
-        Task<InstanceProgressInfo> GetInstanceProgressAsync(
-            string instanceId, 
-            CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// 获取实例的统计信息
-        /// </summary>
-        /// <param name="instanceId">实例ID</param>
-        /// <param name="cancellationToken">取消令牌</param>
-        /// <returns>统计信息</returns>
-        Task<InstanceStatistics> GetInstanceStatisticsAsync(
+        /// <returns>基本统计信息</returns>
+        Task<InstanceBasicStats> GetInstanceBasicStatsAsync(
             string instanceId, 
             CancellationToken cancellationToken = default);
     }
 
     /// <summary>
-    /// 实例进度信息
+    /// 实例基本统计信息（用于报表，不包含实时状态）
     /// </summary>
-    public class InstanceProgressInfo
+    public class InstanceBasicStats
     {
         public string InstanceId { get; set; } = string.Empty;
-        public TransactionStatus Status { get; set; }
-        public int TotalCombinations { get; set; }
-        public int ProcessedCombinations { get; set; }
-        public int SuccessfulOutputs { get; set; }
-        public int FailedOutputs { get; set; }
-        public decimal ProgressPercentage => TotalCombinations > 0 ? (decimal)ProcessedCombinations / TotalCombinations * 100 : 0;
-        public TimeSpan ElapsedTime { get; set; }
-        public TimeSpan? EstimatedRemainingTime { get; set; }
-    }
-
-    /// <summary>
-    /// 实例统计信息
-    /// </summary>
-    public class InstanceStatistics
-    {
-        public string InstanceId { get; set; } = string.Empty;
-        public int TotalCombinations { get; set; }
-        public int ProcessedCombinations { get; set; }
-        public int SuccessfulOutputs { get; set; }
-        public int FailedOutputs { get; set; }
-        public decimal EstimatedCostUSD { get; set; }
-        public decimal ActualCostUSD { get; set; }
-        public TimeSpan ElapsedTime { get; set; }
+        public string DefinitionId { get; set; } = string.Empty;
         public DateTime StartedAt { get; set; }
         public DateTime? CompletedAt { get; set; }
-        public List<ErrorRecord> Errors { get; set; } = new();
+        public TransactionStatus FinalStatus { get; set; }
+        public int TotalCombinations { get; set; }
+        public int SuccessfulOutputs { get; set; }
+        public int FailedOutputs { get; set; }
+        public decimal ActualCostUSD { get; set; }
+        public TimeSpan TotalExecutionTime { get; set; }
+        public List<ErrorRecord> CriticalErrors { get; set; } = new();
     }
 } 

@@ -125,52 +125,23 @@ public class ReasoningProgressManager : IReasoningProgressManager
             var oldProgress = _progressCache.TryGetValue(instanceId, out var cached) ? cached : null;
             var oldStatus = oldProgress?.Status ?? TransactionStatus.Pending;
 
-            // 获取组合状态统计
-            var combinationStatuses = _statusTracker.GetAllStatuses();
-            var instanceCombinations = instance.InputCombinations.Select(c => c.CombinationId).ToList();
-
-            var executingCount = instanceCombinations.Count(id => 
-                combinationStatuses.TryGetValue(id, out var status) && status.Status == CombinationStatus.Executing);
-            var queuingCount = instanceCombinations.Count(id => 
-                combinationStatuses.TryGetValue(id, out var status) && status.Status == CombinationStatus.Queuing);
-            var completedCount = instance.Outputs.Count(o => o.IsSuccess);
-            var failedCount = instance.Outputs.Count(o => !o.IsSuccess);
-            var pendingCount = instanceCombinations.Count - completedCount - failedCount - executingCount - queuingCount;
+            // 计算实时执行状态统计
+            var runtimeStats = CalculateRuntimeStats(instance);
 
             // 智能状态判断
-            var newStatus = DetermineInstanceStatus(instance, executingCount, queuingCount, pendingCount, completedCount, failedCount);
+            var newStatus = DetermineInstanceStatus(instance, runtimeStats);
 
             // 创建新的进度对象
-            var progress = new ReasoningProgress
-            {
-                InstanceId = instanceId,
-                Status = newStatus,
-                TotalCombinations = instance.InputCombinations.Count,
-                CompletedCount = completedCount,
-                FailedCount = failedCount,
-                ExecutingCount = executingCount,
-                QueueingCount = queuingCount,
-                PendingCount = Math.Max(0, pendingCount),
-                TotalCost = instance.Outputs.Where(o => o.IsSuccess).Sum(o => o.CostUSD),
-                StartedAt = instance.StartedAt,
-                UpdatedAt = DateTime.UtcNow
-            };
+            var progress = CreateProgressFromInstance(instance, runtimeStats, newStatus);
 
-            // 更新缓存
-            var hasChanges = oldProgress == null || !ProgressEquals(oldProgress, progress);
+            // 检查是否有变化
+            var hasChanges = oldProgress == null || HasSignificantChanges(oldProgress, progress);
             _progressCache[instanceId] = progress;
 
             // 如果状态发生变化，更新数据库中的实例状态
             if (newStatus != instance.Status)
             {
-                instance.Status = newStatus;
-                if (newStatus is TransactionStatus.Completed or TransactionStatus.Failed && !instance.CompletedAt.HasValue)
-                {
-                    instance.CompletedAt = DateTime.UtcNow;
-                    instance.Metrics.ElapsedTime = DateTime.UtcNow - instance.StartedAt;
-                }
-
-                await instanceService.UpdateInstanceAsync(instance, cancellationToken);
+                await UpdateInstanceStatusAsync(instanceService, instance, newStatus, cancellationToken);
                 
                 _logger.LogInformation("推理实例状态更新: {InstanceId} {OldStatus} -> {NewStatus}", 
                     instanceId, oldStatus, newStatus);
@@ -252,15 +223,96 @@ public class ReasoningProgressManager : IReasoningProgressManager
     }
 
     /// <summary>
+    /// 计算运行时统计信息
+    /// </summary>
+    private RuntimeStats CalculateRuntimeStats(ReasoningTransactionInstance instance)
+    {
+        var combinationStatuses = _statusTracker.GetAllStatuses();
+        var instanceCombinations = instance.InputCombinations.Select(c => c.CombinationId).ToList();
+
+        var executingCount = instanceCombinations.Count(id => 
+            combinationStatuses.TryGetValue(id, out var status) && status.Status == CombinationStatus.Executing);
+        var queuingCount = instanceCombinations.Count(id => 
+            combinationStatuses.TryGetValue(id, out var status) && status.Status == CombinationStatus.Queuing);
+        var completedCount = instance.Outputs.Count(o => o.IsSuccess);
+        var failedCount = instance.Outputs.Count(o => !o.IsSuccess);
+        var pendingCount = instanceCombinations.Count - completedCount - failedCount - executingCount - queuingCount;
+
+        return new RuntimeStats
+        {
+            ExecutingCount = executingCount,
+            QueueingCount = queuingCount,
+            CompletedCount = completedCount,
+            FailedCount = failedCount,
+            PendingCount = Math.Max(0, pendingCount)
+        };
+    }
+
+    /// <summary>
+    /// 从实例创建进度对象
+    /// </summary>
+    private ReasoningProgress CreateProgressFromInstance(
+        ReasoningTransactionInstance instance,
+        RuntimeStats stats,
+        TransactionStatus newStatus)
+    {
+        return new ReasoningProgress
+        {
+            InstanceId = instance.InstanceId,
+            Status = newStatus,
+            TotalCombinations = instance.InputCombinations.Count,
+            CompletedCount = stats.CompletedCount,
+            FailedCount = stats.FailedCount,
+            ExecutingCount = stats.ExecutingCount,
+            QueueingCount = stats.QueueingCount,
+            PendingCount = stats.PendingCount,
+            TotalCost = instance.Metrics.ActualCostUSD,
+            StartedAt = instance.StartedAt,
+            CompletedAt = instance.CompletedAt,
+            UpdatedAt = DateTime.UtcNow
+        };
+    }
+
+    /// <summary>
+    /// 更新实例状态到数据库
+    /// </summary>
+    private async Task UpdateInstanceStatusAsync(
+        IReasoningInstanceService instanceService,
+        ReasoningTransactionInstance instance,
+        TransactionStatus newStatus,
+        CancellationToken cancellationToken)
+    {
+        instance.Status = newStatus;
+        
+        if (newStatus is TransactionStatus.Completed or TransactionStatus.Failed && !instance.CompletedAt.HasValue)
+        {
+            instance.CompletedAt = DateTime.UtcNow;
+            instance.Metrics.ElapsedTime = DateTime.UtcNow - instance.StartedAt;
+        }
+
+        await instanceService.UpdateInstanceAsync(instance, cancellationToken);
+    }
+
+    /// <summary>
+    /// 检查进度是否有显著变化
+    /// </summary>
+    private static bool HasSignificantChanges(ReasoningProgress old, ReasoningProgress current)
+    {
+        return old.Status != current.Status ||
+               old.CompletedCount != current.CompletedCount ||
+               old.FailedCount != current.FailedCount ||
+               old.ExecutingCount != current.ExecutingCount ||
+               old.QueueingCount != current.QueueingCount ||
+               old.PendingCount != current.PendingCount ||
+               Math.Abs(old.TotalCost - current.TotalCost) > 0.001m;
+    }
+
+    /// <summary>
     /// 智能判断推理实例状态
     /// </summary>
     private static TransactionStatus DetermineInstanceStatus(
         ReasoningTransactionInstance instance, 
-        int executingCount, 
-        int queuingCount, 
-        int pendingCount, 
-        int completedCount, 
-        int failedCount)
+        RuntimeStats stats)
     {
         var totalCombinations = instance.InputCombinations.Count;
         
@@ -269,25 +321,25 @@ public class ReasoningProgressManager : IReasoningProgressManager
             return instance.Status;
 
         // 如果所有组合都已完成（成功或失败）
-        if (completedCount + failedCount == totalCombinations)
+        if (stats.CompletedCount + stats.FailedCount == totalCombinations)
         {
             // 如果有任何成功的，认为是完成状态
-            return completedCount > 0 ? TransactionStatus.Completed : TransactionStatus.Failed;
+            return stats.CompletedCount > 0 ? TransactionStatus.Completed : TransactionStatus.Failed;
         }
 
         // 如果有任务正在执行或排队，状态为生成输出中
-        if (executingCount > 0 || queuingCount > 0)
+        if (stats.ExecutingCount > 0 || stats.QueueingCount > 0)
             return TransactionStatus.GeneratingOutputs;
 
         // 如果有已完成的任务，但还有待处理或失败的，且当前没有执行中的任务
         // 这种情况下应该保持为Pending状态，表示可以继续执行但当前暂停
-        if (completedCount > 0 && (pendingCount > 0 || failedCount > 0))
+        if (stats.CompletedCount > 0 && (stats.PendingCount > 0 || stats.FailedCount > 0))
         {
             return TransactionStatus.Pending; // 表示暂停状态，可以继续
         }
 
         // 如果只有待处理任务，还没开始执行
-        if (pendingCount > 0 && completedCount == 0 && failedCount == 0)
+        if (stats.PendingCount > 0 && stats.CompletedCount == 0 && stats.FailedCount == 0)
         {
             return TransactionStatus.Pending; // 等待开始执行
         }
@@ -295,18 +347,16 @@ public class ReasoningProgressManager : IReasoningProgressManager
         // 其他情况保持原状态
         return instance.Status;
     }
+}
 
-    /// <summary>
-    /// 比较两个进度对象是否相等
-    /// </summary>
-    private static bool ProgressEquals(ReasoningProgress old, ReasoningProgress current)
-    {
-        return old.Status == current.Status &&
-               old.CompletedCount == current.CompletedCount &&
-               old.FailedCount == current.FailedCount &&
-               old.ExecutingCount == current.ExecutingCount &&
-               old.QueueingCount == current.QueueingCount &&
-               old.PendingCount == current.PendingCount &&
-               Math.Abs(old.TotalCost - current.TotalCost) < 0.001m;
-    }
+/// <summary>
+/// 运行时统计信息
+/// </summary>
+internal class RuntimeStats
+{
+    public int ExecutingCount { get; set; }
+    public int QueueingCount { get; set; }
+    public int CompletedCount { get; set; }
+    public int FailedCount { get; set; }
+    public int PendingCount { get; set; }
 }
