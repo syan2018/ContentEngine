@@ -1,65 +1,67 @@
-/* 表格基本样式 */
-.combination-table {
-    border-radius: 8px;
-    overflow-x: auto;
-    width: 100%;
+/* 组合状态动画样式 */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
 }
 
+@keyframes rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.status-animated {
+    animation: pulse 2s infinite;
+}
+
+.status-animated .mud-chip-icon {
+    animation: rotate 2s linear infinite;
+}
+
+/* 状态容器样式 */
+.status-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* 组合ID样式 */
 .combination-id {
     font-family: 'Courier New', monospace;
-    background-color: #f5f5f5;
-    padding: 4px 8px;
-    border-radius: 4px;
     font-size: 0.75rem;
-    font-weight: 500;
+    background: rgba(0,0,0,0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.1);
 }
 
-/* 视图内容样式 */
+/* 视图内容容器 */
 .view-content-container {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    position: relative;
-    height: auto;
+    min-width: 0; /* 允许收缩 */
 }
 
 .field-chips-row {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 4px;
-    overflow: hidden;
-    align-items: flex-start;
+    align-items: center;
 }
 
 .field-chip {
-    display: flex;
+    display: inline-flex;
     flex-direction: column;
-    background-color: #fafafa;
+    background: rgba(0,0,0,0.05);
     border-radius: 4px;
-    padding: 3px 6px;
-    border: 1px solid #e0e0e0;
-    transition: all 0.2s ease;
-    min-width: 60px;
-    width: fit-content;
-    flex-shrink: 0;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-.field-chip:hover {
-    background-color: #f0f0f0;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    z-index: 10;
+    padding: 4px 8px;
+    border: 1px solid rgba(0,0,0,0.1);
+    min-width: 0;
+    max-width: 150px;
 }
 
 .field-label {
-    font-size: 0.6rem;
-    font-weight: 600;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    margin-bottom: 1px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: rgba(0,0,0,0.6);
     line-height: 1;
     white-space: nowrap;
     overflow: hidden;
@@ -68,91 +70,77 @@
 
 .field-content {
     font-size: 0.75rem;
-    color: #333;
-    font-weight: 500;
     line-height: 1.2;
+    color: rgba(0,0,0,0.87);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 100%;
 }
 
 .more-fields-indicator {
     display: flex;
     align-items: center;
     gap: 2px;
-    color: #666;
+    color: rgba(0,0,0,0.5);
     font-size: 0.7rem;
-    padding: 2px 4px;
-    background-color: #f8f8f8;
-    border-radius: 8px;
-    justify-content: center;
-    border: 1px dashed #ddd;
-    min-width: 30px;
-    max-width: 50px;
-    height: 20px;
-    flex-shrink: 0;
-    white-space: nowrap;
-}
-
-/* 状态和成本显示 */
-.status-container {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.cost-display {
-    font-family: 'Courier New', monospace;
-    font-weight: 600;
-    color: #2e7d32;
-}
-
-.no-cost, .no-data {
-    color: #999;
-    font-style: italic;
 }
 
 /* 结果预览样式 */
 .result-preview {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
+    max-width: 300px;
     min-width: 0;
 }
 
 .result-preview.compact {
-    gap: 4px;
+    max-width: 200px;
 }
 
-.result-preview .result-text {
-    flex: 1;
-    min-width: 0;
+.result-text {
+    font-size: 0.75rem;
+    line-height: 1.3;
+    color: rgba(0,0,0,0.87);
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.75rem;
-    line-height: 1.4;
-    color: #333;
+    background: rgba(76, 175, 80, 0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(76, 175, 80, 0.3);
 }
 
-.result-preview.compact .result-text {
-    font-size: 0.7rem;
-    line-height: 1.3;
+.result-text.error-text {
+    background: rgba(244, 67, 54, 0.1);
+    border-color: rgba(244, 67, 54, 0.3);
+    color: rgba(244, 67, 54, 0.87);
 }
 
-.result-preview .result-text.error-text {
-    color: #d32f2f;
+/* 无数据样式 */
+.no-data {
+    color: rgba(0,0,0,0.5);
     font-style: italic;
+    font-size: 0.75rem;
 }
 
-/* 操作按钮 */
+.no-cost {
+    color: rgba(0,0,0,0.5);
+    font-size: 0.75rem;
+}
+
+/* 成本显示 */
+.cost-display {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: rgba(0,0,0,0.7);
+    background: rgba(33, 150, 243, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(33, 150, 243, 0.2);
+}
+
+/* 操作按钮组 */
 .action-buttons {
     display: flex;
-    align-items: center;
-    gap: 4px;
-    justify-content: flex-start;
+    gap: 2px;
 }
 
 /* 批量操作工具栏 */
@@ -160,11 +148,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px;
-    background-color: #fafafa;
-    border-radius: 8px;
-    margin-top: 16px;
-    border: 1px solid #e0e0e0;
+    padding: 12px 16px;
+    background: rgba(0,0,0,0.02);
+    border-top: 1px solid rgba(0,0,0,0.1);
+    margin-top: 8px;
+    border-radius: 4px;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .batch-stats {
@@ -179,7 +169,7 @@
     flex-wrap: wrap;
 }
 
-/* 空状态 */
+/* 空状态样式 */
 .empty-state {
     display: flex;
     flex-direction: column;
@@ -193,143 +183,27 @@
     opacity: 0.6;
 }
 
-/* 紧凑模式 */
-.combination-table.dense .field-chip {
-    padding: 2px 4px;
-    min-width: 50px;
-}
-
-.combination-table.dense .field-label {
-    font-size: 0.55rem;
-}
-
-.combination-table.dense .field-content {
-    font-size: 0.7rem;
-}
-
-.combination-table.dense .more-fields-indicator {
-    font-size: 0.65rem;
-    padding: 1px 3px;
-    min-width: 25px;
-    max-width: 40px;
-    height: 16px;
-}
-
-/* 表格优化 */
-.mud-table tbody tr:hover {
-    background-color: #f5f5f5 !important;
-}
-
-.mud-chip.mud-chip-filled {
-    font-weight: 500;
-}
-
-.mud-table-head .mud-table-cell {
-    font-weight: 600;
-    background-color: #fafafa;
-}
-
 /* 响应式设计 */
 @media (max-width: 768px) {
-    .field-chip {
-        padding: 2px 4px;
-        min-width: 50px;
-    }
-    
-    .field-label {
-        font-size: 0.5rem;
-    }
-    
-    .field-content {
-        font-size: 0.65rem;
-    }
-    
-    .more-fields-indicator {
-        font-size: 0.6rem;
-        padding: 1px 3px;
-        min-width: 20px;
-        max-width: 45px;
-        height: 16px;
-    }
-    
-    .action-buttons {
-        flex-direction: column;
-        gap: 1px;
-    }
-    
     .batch-actions-toolbar {
         flex-direction: column;
-        gap: 12px;
         align-items: stretch;
     }
     
-    .batch-stats {
-        justify-content: center;
-    }
-    
+    .batch-stats,
     .batch-buttons {
         justify-content: center;
     }
-}
-
-/* 深色模式支持 */
-@media (prefers-color-scheme: dark) {
-    .combination-id {
-        background-color: #2d2d30;
-        color: #fff;
-    }
     
     .field-chip {
-        background-color: #2d2d30;
-        border-color: #464649;
-        color: #fff;
+        max-width: 100px;
     }
     
-    .field-chip:hover {
-        background-color: #3e3e42;
+    .result-preview {
+        max-width: 150px;
     }
     
-    .field-label {
-        color: #cccccc;
+    .combination-id {
+        font-size: 0.7rem;
     }
-    
-    .field-content {
-        color: #ffffff;
-    }
-    
-    .more-fields-indicator {
-        background-color: #252526;
-        color: #cccccc;
-        border-color: #464649;
-    }
-    
-    .no-data {
-        color: #666;
-    }
-    
-    .mud-table tbody tr:hover {
-        background-color: #2d2d30 !important;
-    }
-    
-    .mud-table-head .mud-table-cell {
-        background-color: #2d2d30;
-        color: #fff;
-    }
-    
-    .batch-actions-toolbar {
-        background-color: #2d2d30;
-        border-color: #464649;
-    }
-    
-    .cost-display {
-        color: #4caf50;
-    }
-    
-    .result-preview .result-text {
-        color: #fff;
-    }
-    
-    .result-preview .result-text.error-text {
-        color: #f44336;
-    }
-} 
+}

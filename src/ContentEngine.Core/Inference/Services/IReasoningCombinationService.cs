@@ -144,15 +144,5 @@ namespace ContentEngine.Core.Inference.Services
         public DateTime? ExecutedAt { get; set; }
     }
 
-    /// <summary>
-    /// 组合状态
-    /// </summary>
-    public enum CombinationStatus
-    {
-        Pending,
-        Executing,
-        Completed,
-        Failed,
-        Retrying
-    }
+    // 移除重复的枚举定义，使用 ContentEngine.Core.Inference.Models 中的版本
 } 

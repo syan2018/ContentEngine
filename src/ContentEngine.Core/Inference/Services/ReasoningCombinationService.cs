@@ -15,6 +15,7 @@ namespace ContentEngine.Core.Inference.Services
         private readonly IReasoningInstanceService _instanceService;
         private readonly IQueryProcessingService _queryProcessingService;
         private readonly IPromptExecutionService _promptExecutionService;
+        private readonly ICombinationStatusTracker _statusTracker;
         private readonly ILogger<ReasoningCombinationService> _logger;
 
         public ReasoningCombinationService(
@@ -22,12 +23,14 @@ namespace ContentEngine.Core.Inference.Services
             IReasoningInstanceService instanceService,
             IQueryProcessingService queryProcessingService,
             IPromptExecutionService promptExecutionService,
+            ICombinationStatusTracker statusTracker,
             ILogger<ReasoningCombinationService> logger)
         {
             _definitionService = definitionService;
             _instanceService = instanceService;
             _queryProcessingService = queryProcessingService;
             _promptExecutionService = promptExecutionService;
+            _statusTracker = statusTracker;
             _logger = logger;
         }
 
@@ -263,8 +266,16 @@ namespace ContentEngine.Core.Inference.Services
                 return existingOutput;
             }
 
+            // 更新状态：重试中
+            _statusTracker.UpdateStatus(combinationId, CombinationStatus.Retrying, "正在重新执行");
+
             // 重新执行
             var newOutput = await ExecuteSingleCombinationAsync(definition, combination, cancellationToken);
+            
+            // 更新状态：重试完成
+            _statusTracker.UpdateStatus(combinationId, 
+                newOutput.IsSuccess ? CombinationStatus.Completed : CombinationStatus.Failed,
+                newOutput.IsSuccess ? "重试成功" : $"重试失败: {newOutput.FailureReason}");
 
             // 更新或添加结果
             if (existingOutput != null)
@@ -501,12 +512,20 @@ namespace ContentEngine.Core.Inference.Services
             SemaphoreSlim semaphore,
             CancellationToken cancellationToken)
         {
+            // 更新状态：排队中
+            _statusTracker.UpdateStatus(combinationId, CombinationStatus.Queuing, "等待执行许可");
+            
             await semaphore.WaitAsync(cancellationToken);
             try
             {
+                // 更新状态：开始执行
+                _statusTracker.UpdateStatus(combinationId, CombinationStatus.Executing, "正在执行AI推理");
+                
                 var combination = instance.InputCombinations.FirstOrDefault(c => c.CombinationId == combinationId);
                 if (combination == null)
                 {
+                    _statusTracker.UpdateStatus(combinationId, CombinationStatus.Failed, "组合不存在");
+                    
                     lock (batchResult)
                     {
                         batchResult.Failed++;
@@ -517,6 +536,11 @@ namespace ContentEngine.Core.Inference.Services
                 }
 
                 var output = await ExecuteSingleCombinationAsync(definition, combination, cancellationToken);
+                
+                // 更新状态：执行完成
+                _statusTracker.UpdateStatus(combinationId, 
+                    output.IsSuccess ? CombinationStatus.Completed : CombinationStatus.Failed,
+                    output.IsSuccess ? "执行成功" : output.FailureReason);
 
                 lock (batchResult)
                 {

@@ -1,6 +1,10 @@
 @using ContentEngine.Core.Inference.Models
 @using ContentEngine.Core.Inference.Utils
+@using ContentEngine.Core.Inference.Services
 @using LiteDB
+@implements IDisposable
+@inject ICombinationStatusTracker StatusTracker
+@using CombinationStatus = ContentEngine.Core.Inference.Models.CombinationStatus
 
 <link href="/Shared/CombinationStyles.css" rel="stylesheet" />
 
@@ -128,6 +132,19 @@
     [Parameter] public EventCallback OnExportResults { get; set; }
 
     private List<string> ViewNames = new();
+    private System.Timers.Timer? _refreshTimer;
+    private readonly Dictionary<string, CombinationExecutionStatus> _executionStatuses = new();
+
+    protected override void OnInitialized()
+    {
+        // 订阅状态更新事件
+        StatusTracker.StatusUpdated += OnStatusUpdated;
+        
+        // 设置定时刷新（每2秒）
+        _refreshTimer = new System.Timers.Timer(2000);
+        _refreshTimer.Elapsed += async (_, _) => await RefreshStatuses();
+        _refreshTimer.Start();
+    }
 
     protected override void OnParametersSet()
     {
@@ -136,6 +153,54 @@
             .Distinct()
             .OrderBy(name => name)
             .ToList();
+            
+        // 刷新状态信息
+        RefreshStatuses().ConfigureAwait(false);
+    }
+
+    private async Task RefreshStatuses()
+    {
+        try
+        {
+            var allStatuses = StatusTracker.GetAllStatuses();
+            
+            bool hasChanges = false;
+            foreach (var combo in Combinations)
+            {
+                if (allStatuses.TryGetValue(combo.CombinationId, out var status))
+                {
+                    if (!_executionStatuses.ContainsKey(combo.CombinationId) || 
+                        !_executionStatuses[combo.CombinationId].Equals(status))
+                    {
+                        _executionStatuses[combo.CombinationId] = status;
+                        hasChanges = true;
+                    }
+                }
+            }
+            
+            if (hasChanges)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            // 静默处理错误，避免影响UI
+            Console.WriteLine($"刷新状态时出错: {ex.Message}");
+        }
+    }
+
+    private async void OnStatusUpdated(string combinationId, CombinationExecutionStatus status)
+    {
+        _executionStatuses[combinationId] = status;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        StatusTracker.StatusUpdated -= OnStatusUpdated;
+        _refreshTimer?.Stop();
+        _refreshTimer?.Dispose();
     }
 
     private string GetShortId(string combinationId) => 
@@ -181,18 +246,26 @@
     private RenderFragment GetStatusChip(ReasoningInputCombination combination)
     {
         var output = GetOutput(combination);
-        var (text, color, icon) = output switch
-        {
-            null => ("待处理", Color.Warning, Icons.Material.Filled.Schedule),
-            { IsSuccess: true } => ("已完成", Color.Success, Icons.Material.Filled.CheckCircle),
-            _ => ("失败", Color.Error, Icons.Material.Filled.Error)
-        };
+        var executionStatus = GetExecutionStatus(combination.CombinationId);
+        
+        // 优先使用实时状态，其次使用输出结果状态
+        var (text, color, icon, isAnimated) = GetStatusInfo(output, executionStatus);
         
         return @<div class="status-container">
-            <MudChip T="string" Size="Size.Small" Color="@color" Icon="@icon" Variant="Variant.Filled">
+            <MudChip T="string" Size="Size.Small" Color="@color" Icon="@icon" 
+                    Variant="Variant.Filled" Class="@(isAnimated ? "status-animated" : "")">
                 @text
             </MudChip>
-            @if (output != null && !output.IsSuccess)
+            @if (executionStatus != null && executionStatus.Status != CombinationStatus.Completed)
+            {
+                <MudTooltip Text="@executionStatus.GetDetailedStatus()">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" 
+                            Size="Size.Small" 
+                            Color="Color.Info" 
+                            Class="ml-1" />
+                </MudTooltip>
+            }
+            else if (output != null && !output.IsSuccess)
             {
                 <MudTooltip Text="@output.FailureReason">
                     <MudIcon Icon="@Icons.Material.Filled.Error" 
@@ -202,6 +275,37 @@
                 </MudTooltip>
             }
         </div>;
+    }
+
+    private (string text, Color color, string icon, bool isAnimated) GetStatusInfo(
+        ReasoningOutputItem? output, CombinationExecutionStatus? executionStatus)
+    {
+        // 如果有实时执行状态，优先使用
+        if (executionStatus != null && executionStatus.Status != CombinationStatus.Pending)
+        {
+            return executionStatus.Status switch
+            {
+                CombinationStatus.Queuing => ("排队中", Color.Info, Icons.Material.Filled.Queue, true),
+                CombinationStatus.Executing => ("执行中", Color.Primary, Icons.Material.Filled.PlayArrow, true),
+                CombinationStatus.Retrying => ("重试中", Color.Warning, Icons.Material.Filled.Refresh, true),
+                CombinationStatus.Completed => ("已完成", Color.Success, Icons.Material.Filled.CheckCircle, false),
+                CombinationStatus.Failed => ("失败", Color.Error, Icons.Material.Filled.Error, false),
+                _ => ("待处理", Color.Default, Icons.Material.Filled.Schedule, false)
+            };
+        }
+        
+        // 回退到基于输出结果的状态
+        return output switch
+        {
+            null => ("待处理", Color.Default, Icons.Material.Filled.Schedule, false),
+            { IsSuccess: true } => ("已完成", Color.Success, Icons.Material.Filled.CheckCircle, false),
+            _ => ("失败", Color.Error, Icons.Material.Filled.Error, false)
+        };
+    }
+
+    private CombinationExecutionStatus? GetExecutionStatus(string combinationId)
+    {
+        return _executionStatuses.TryGetValue(combinationId, out var status) ? status : null;
     }
 
     private RenderFragment GetCostDisplay(ReasoningInputCombination combination)
@@ -307,8 +411,10 @@
     {
         yield return new("已完成", GetCompletedCount().ToString(), Color.Success, Icons.Material.Filled.CheckCircle);
         yield return new("失败", GetFailedCount().ToString(), Color.Error, Icons.Material.Filled.Error);
-        yield return new("待处理", GetPendingCount().ToString(), Color.Warning, Icons.Material.Filled.Schedule);
-        yield return new("总成本", $"${GetTotalCost():F3}", Color.Info, Icons.Material.Filled.AttachMoney);
+        yield return new("执行中", GetExecutingCount().ToString(), Color.Primary, Icons.Material.Filled.PlayArrow);
+        yield return new("排队中", GetQueuingCount().ToString(), Color.Info, Icons.Material.Filled.Queue);
+        yield return new("待处理", GetPendingCount().ToString(), Color.Default, Icons.Material.Filled.Schedule);
+        yield return new("总成本", $"${GetTotalCost():F3}", Color.Secondary, Icons.Material.Filled.AttachMoney);
     }
 
     private IEnumerable<BatchAction> GetBatchActions()
@@ -327,8 +433,10 @@
     }
 
     private int GetCompletedCount() => Combinations.Count(c => GetOutput(c)?.IsSuccess == true);
-    private int GetFailedCount() => Combinations.Count(c => GetOutput(c) != null && !GetOutput(c).IsSuccess);
-    private int GetPendingCount() => Combinations.Count(c => GetOutput(c) == null);
+    private int GetFailedCount() => Combinations.Count(c => GetOutput(c) != null && !GetOutput(c)!.IsSuccess);
+    private int GetExecutingCount() => Combinations.Count(c => GetExecutionStatus(c.CombinationId)?.Status == CombinationStatus.Executing);
+    private int GetQueuingCount() => Combinations.Count(c => GetExecutionStatus(c.CombinationId)?.Status == CombinationStatus.Queuing);
+    private int GetPendingCount() => Combinations.Count(c => GetOutput(c) == null && GetExecutionStatus(c.CombinationId)?.Status is null or CombinationStatus.Pending);
     private decimal GetTotalCost() => Outputs?.Where(o => o.IsSuccess).Sum(o => o.CostUSD) ?? 0;
 
     private async Task ExecutePendingCombinations()

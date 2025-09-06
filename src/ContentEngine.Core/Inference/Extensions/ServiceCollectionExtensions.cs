@@ -24,6 +24,9 @@ namespace ContentEngine.Core.Inference.Extensions
             services.AddScoped<IReasoningExecutionService, ReasoningExecutionService>();
             services.AddScoped<IReasoningEstimationService, ReasoningEstimationService>();
             services.AddScoped<IReasoningCombinationService, ReasoningCombinationService>();
+            
+            // 注册状态跟踪服务（单例，用于跨请求共享状态）
+            services.AddSingleton<ICombinationStatusTracker, CombinationStatusTracker>();
 
             return services;
         }
