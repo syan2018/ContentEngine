@@ -26,6 +26,11 @@ public class ConnectionProvider : IConnectionProvider
     private static readonly Regex PlaceholderRegex = new Regex(@"\{\{(.+?)\}\}", RegexOptions.Compiled);
     private readonly SemaphoreSlim _initSemaphore = new SemaphoreSlim(1, 1);
 
+    /// <summary>
+    /// 初始化连接提供程序
+    /// </summary>
+    /// <param name="options">配置选项</param>
+    /// <param name="logger">日志记录器</param>
     public ConnectionProvider(IOptions<ConfigurableAIOptions> options, ILogger<ConnectionProvider> logger)
     {
         _options = options.Value;
@@ -113,11 +118,12 @@ public class ConnectionProvider : IConnectionProvider
                     // Key exists in both: Update existing base connection with non-null values from override
                     // Note: This is a shallow merge of properties within ConnectionConfig.
                     // You might want a deeper merge if ConnectionConfig becomes more complex.
-                     baseConnection.ServiceType = overrideConnection.ServiceType; // Override ServiceType 
-                     if (overrideConnection.Endpoint != null) baseConnection.Endpoint = overrideConnection.Endpoint;
-                     if (overrideConnection.BaseUrl != null) baseConnection.BaseUrl = overrideConnection.BaseUrl;
-                     if (overrideConnection.ApiKey != null) baseConnection.ApiKey = overrideConnection.ApiKey;
-                     if (overrideConnection.OrgId != null) baseConnection.OrgId = overrideConnection.OrgId;
+                    baseConnection.ServiceType = overrideConnection.ServiceType; // Override ServiceType 
+                    if (overrideConnection.Endpoint != null) baseConnection.Endpoint = overrideConnection.Endpoint;
+                    if (overrideConnection.BaseUrl != null) baseConnection.BaseUrl = overrideConnection.BaseUrl;
+                    if (overrideConnection.ApiKey != null) baseConnection.ApiKey = overrideConnection.ApiKey;
+                    if (overrideConnection.OrgId != null) baseConnection.OrgId = overrideConnection.OrgId;
+                    if (overrideConnection.ServiceId != null) baseConnection.ServiceId = overrideConnection.ServiceId;
                     // Add other properties here if needed
                     _logger.LogDebug("Merging connection '{ConnectionName}': Overriding properties from environment config.", key);
                 }
@@ -133,6 +139,7 @@ public class ConnectionProvider : IConnectionProvider
         return new ConnectionsConfig { Connections = mergedConnections };
     }
 
+    /// <inheritdoc/>
     public async Task<ConnectionConfig> GetResolvedConnectionAsync(string connectionName)
     {
         await EnsureInitializedAsync();
@@ -248,7 +255,7 @@ public class ConnectionProvider : IConnectionProvider
                 _logger.LogDebug("Resolved placeholder '{{{{{PlaceholderName}}}}}' to '{ResolvedValue}' for connection '{ConnectionName}' from environment variable.", envVarName, envVarValue ?? "[null]", connectionName); // Handle null envVarValue in log
 
 
-            return envVarValue;
+            return envVarValue ?? string.Empty;
         });
     }
 } 

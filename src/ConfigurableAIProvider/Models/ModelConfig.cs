@@ -23,4 +23,11 @@ public class ModelConfig
     /// </summary>
     [YamlMember(Alias = "parameters")]
     public Dictionary<string, object>? Parameters { get; set; }
+
+    /// <summary>
+    /// 每分钟最大请求数限制 (可选)
+    /// 默认为0表示无限制
+    /// </summary>
+    [YamlMember(Alias = "requestsPerMinute")]
+    public int RequestsPerMinute { get; set; } = 0;
 } 

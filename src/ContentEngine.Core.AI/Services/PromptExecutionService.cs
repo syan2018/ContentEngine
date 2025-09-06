@@ -1,4 +1,7 @@
 using ConfigurableAIProvider.Services.Factories;
+using ConfigurableAIProvider.Services;
+using ConfigurableAIProvider.Services.Loaders;
+using ConfigurableAIProvider.Services.Providers;
 using ContentEngine.Core.Inference.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
@@ -21,13 +24,22 @@ namespace ContentEngine.Core.AI.Services
     public class PromptExecutionService : IPromptExecutionService
     {
         private readonly IAIKernelFactory _kernelFactory;
+        private readonly ISimpleRateLimiter _rateLimiter;
+        private readonly IAgentConfigLoader _agentConfigLoader;
+        private readonly IModelProvider _modelProvider;
         private readonly ILogger<PromptExecutionService> _logger;
 
         public PromptExecutionService(
             IAIKernelFactory kernelFactory,
+            ISimpleRateLimiter rateLimiter,
+            IAgentConfigLoader agentConfigLoader,
+            IModelProvider modelProvider,
             ILogger<PromptExecutionService> logger)
         {
             _kernelFactory = kernelFactory;
+            _rateLimiter = rateLimiter;
+            _agentConfigLoader = agentConfigLoader;
+            _modelProvider = modelProvider;
             _logger = logger;
         }
 
@@ -44,6 +56,16 @@ namespace ContentEngine.Core.AI.Services
 
             try
             {
+                // 获取模型定义ID（用于RPM检查）
+                var modelDefinitionId = await GetPrimaryModelDefinitionIdAsync(agentName);
+                
+                // 等待RPM许可（会自动排队）
+                if (!string.IsNullOrEmpty(modelDefinitionId))
+                {
+                    await _rateLimiter.WaitForPermissionAsync(modelDefinitionId, cancellationToken);
+                    _logger.LogDebug("获得RPM许可: {AgentName}, 模型: {ModelId}", agentName, modelDefinitionId);
+                }
+
                 // 获取Kernel实例
                 var kernel = await _kernelFactory.BuildKernelAsync(agentName);
                 
@@ -99,6 +121,16 @@ namespace ContentEngine.Core.AI.Services
 
             try
             {
+                // 获取模型定义ID（用于RPM检查）
+                var modelDefinitionId = await GetPrimaryModelDefinitionIdAsync(agentName);
+                
+                // 等待RPM许可（会自动排队）
+                if (!string.IsNullOrEmpty(modelDefinitionId))
+                {
+                    await _rateLimiter.WaitForPermissionAsync(modelDefinitionId, cancellationToken);
+                    _logger.LogDebug("获得RPM许可(带选项): {AgentName}, 模型: {ModelId}", agentName, modelDefinitionId);
+                }
+
                 var kernel = await _kernelFactory.BuildKernelAsync(agentName);
 
                 if (options.ForceJsonOutput)
@@ -119,7 +151,6 @@ namespace ContentEngine.Core.AI.Services
                     };
 
                     var response = await kernel.InvokePromptAsync(enhancedPrompt, new KernelArguments(exec), cancellationToken: cancellationToken);
-                    
                     
                     stopwatch.Stop();
                     var text = response.ToString();
@@ -281,6 +312,39 @@ namespace ContentEngine.Core.AI.Services
             var outputCost = (outputTokens / 1000m) * outputCostPer1K;
             
             return inputCost + outputCost;
+        }
+
+        /// <summary>
+        /// 获取Agent的主要模型定义ID（用于RPM检查）
+        /// </summary>
+        /// <param name="agentName">Agent名称</param>
+        /// <returns>模型定义ID，如果获取失败返回null</returns>
+        private async Task<string?> GetPrimaryModelDefinitionIdAsync(string agentName)
+        {
+            try
+            {
+                var agentConfig = await _agentConfigLoader.LoadConfigAsync(agentName);
+                
+                // 获取第一个模型配置
+                if (agentConfig.Models?.Any() == true)
+                {
+                    var firstModelEntry = agentConfig.Models.First();
+                    var modelDefinitionId = firstModelEntry.Value;
+                    
+                    if (!string.IsNullOrWhiteSpace(modelDefinitionId))
+                    {
+                        return modelDefinitionId;
+                    }
+                }
+                
+                _logger.LogDebug("无法从Agent {AgentName} 获取模型定义ID: 没有配置模型", agentName);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "获取Agent {AgentName} 模型定义ID时发生错误", agentName);
+                return null;
+            }
         }
     }
 } 

@@ -1,4 +1,5 @@
 using ConfigurableAIProvider.Configuration;
+using ConfigurableAIProvider.Services;
 using ConfigurableAIProvider.Services.Loaders;
 using ConfigurableAIProvider.Services.Providers;
 using ConfigurableAIProvider.Services.Configurators;
@@ -35,6 +36,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAgentConfigLoader, AgentConfigLoader>();
         services.TryAddSingleton<IModelsConfigLoader, ModelsConfigLoader>();
         services.TryAddSingleton<IModelProvider, ModelProvider>();
+        services.TryAddSingleton<ISimpleRateLimiter, SimpleRateLimiter>();
         services.TryAddScoped<IAIKernelFactory, DefaultAIKernelFactory>();
 
         // --- Register AI Service Configurators (Use TryAddEnumerable) ---

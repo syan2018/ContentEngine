@@ -6,12 +6,14 @@ models:
     modelId: "gpt-4o-mini"     
     endpointType: ChatCompletion
     parameters: { temperature: 0.7, maxTokens: 2000 } # Compact syntax
+    requestsPerMinute: 120      # Azure RPM限制
 
   azure-gpt35-dev:
     connection: primaryAzure
     modelId: "gpt-35-turbo-dev"
     endpointType: ChatCompletion
     parameters: { temperature: 0.8 }
+    requestsPerMinute: 60       # 保守的RPM限制
 
   azure-embedding-ada:
     connection: primaryAzure
@@ -24,6 +26,7 @@ models:
     modelId: "gpt-4"
     endpointType: ChatCompletion
     parameters: { temperature: 0.2 }
+    requestsPerMinute: 500      # OpenAI Plus用户RPM限制
 
   openai-embedding-ada:
      connection: personalOpenAI
@@ -35,6 +38,7 @@ models:
     connection: Ollama # References the connection with baseUrl
     modelId: "qwen3:8b"        # The actual model name served by Ollama
     endpointType: ChatCompletion
+    requestsPerMinute: 0        # 0 = 无RPM限制 (本地模型)
     # Parameters might be ignored by local endpoint or need specific format
 
   # --- OpenRouter Model --- 
