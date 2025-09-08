@@ -119,7 +119,7 @@ ContentEngine.WebApp (Blazor Server UI)
 
 4. **访问应用**
    
-   访问 http://localhost:5264/
+   访问 http://localhost:8264/
 
 
 ---
