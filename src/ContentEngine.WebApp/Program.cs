@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Localization;
 using System.Globalization;
 using MudBlazor.Services;
 using ContentEngine.Core.Inference.Extensions;
-using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -88,28 +87,7 @@ if (!app.Environment.IsDevelopment())
 // 3. 使用本地化中间件 (重要：放在请求处理管道的早期，但在路由之后通常是好的)
 app.UseRequestLocalization();
 
-// 仅当配置要求时启用 HTTPS 重定向（生产通常由反向代理处理 TLS）
-var enforceHttps = builder.Configuration.GetValue<bool?>("EnforceHttps") ?? app.Environment.IsDevelopment();
-if (enforceHttps)
-{
-    app.UseHttpsRedirection();
-}
-
-// 反向代理转发头（X-Forwarded-For/Proto/Host）
-var forwardedHeadersOptions = new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
-};
-// 可选：从配置读取已知代理
-var knownProxies = builder.Configuration.GetSection("ReverseProxy:KnownProxies").Get<string[]>() ?? Array.Empty<string>();
-foreach (var proxy in knownProxies)
-{
-    if (System.Net.IPAddress.TryParse(proxy, out var ip))
-    {
-        forwardedHeadersOptions.KnownProxies.Add(ip);
-    }
-}
-app.UseForwardedHeaders(forwardedHeadersOptions);
+app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseAntiforgery();
