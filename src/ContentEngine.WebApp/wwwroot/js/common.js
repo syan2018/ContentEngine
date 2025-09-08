@@ -13,6 +13,21 @@ window.downloadFile = function (filename, contentType, data) {
     window.URL.revokeObjectURL(url);
 };
 
+// 下载字节数组文件功能
+window.downloadFileBytes = function (filename, contentType, byteArray) {
+    const blob = new Blob([new Uint8Array(byteArray)], { type: contentType });
+    const url = window.URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+};
+
 // 复制文本到剪贴板
 window.copyToClipboard = function (text) {
     if (navigator.clipboard && window.isSecureContext) {

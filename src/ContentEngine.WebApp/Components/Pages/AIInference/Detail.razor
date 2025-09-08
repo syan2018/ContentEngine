@@ -7,6 +7,8 @@
 @using ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs
 @using ContentEngine.WebApp.Components.Shared
 @using Microsoft.AspNetCore.SignalR.Client
+@using OfficeOpenXml
+@using OfficeOpenXml.Style
 @inject IReasoningDefinitionService ReasoningDefinitionService
 @inject IReasoningInstanceService ReasoningInstanceService
 @inject IReasoningExecutionService ReasoningExecutionService
@@ -540,16 +542,34 @@
                     contentType = "text/csv";
                     fileExt = ".csv";
                     content = BuildCsv(records, includeBaseColumns: includeBaseColumns);
+                    var finalFileNameCsv = string.IsNullOrWhiteSpace(selectedFileName) ? defaultName : selectedFileName;
+                    await JSRuntime.InvokeVoidAsync("downloadFile", $"{finalFileNameCsv}{fileExt}", contentType, content);
                     break;
                 case "excel":
-                    contentType = "application/vnd.ms-excel";
-                    fileExt = ".xls";
-                    content = BuildExcelHtml(records, includeBaseColumns: includeBaseColumns);
+                    contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    fileExt = ".xlsx";
+                    var excelBytes = BuildExcelXlsx(records, includeBaseColumns: includeBaseColumns);
+                    var finalFileNameExcel = string.IsNullOrWhiteSpace(selectedFileName) ? defaultName : selectedFileName;
+                    
+                    // 使用Base64编码和data URI的方式下载Excel文件
+                    var base64String = Convert.ToBase64String(excelBytes);
+                    var dataUri = $"data:{contentType};base64,{base64String}";
+                    
+                    await JSRuntime.InvokeVoidAsync("eval", $@"
+                        const link = document.createElement('a');
+                        link.href = '{dataUri}';
+                        link.download = '{finalFileNameExcel}{fileExt}';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    ");
                     break;
                 case "md":
                     contentType = "text/markdown";
                     fileExt = ".md";
                     content = BuildMarkdown(records, instance.InstanceId);
+                    var finalFileNameMd = string.IsNullOrWhiteSpace(selectedFileName) ? defaultName : selectedFileName;
+                    await JSRuntime.InvokeVoidAsync("downloadFile", $"{finalFileNameMd}{fileExt}", contentType, content);
                     break;
                 default:
                     contentType = "application/json";
@@ -570,11 +590,10 @@
                         WriteIndented = true,
                         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                     });
+                    var finalFileNameJson = string.IsNullOrWhiteSpace(selectedFileName) ? defaultName : selectedFileName;
+                    await JSRuntime.InvokeVoidAsync("downloadFile", $"{finalFileNameJson}{fileExt}", contentType, content);
                     break;
             }
-
-            var finalFileName = string.IsNullOrWhiteSpace(selectedFileName) ? defaultName : selectedFileName;
-            await JSRuntime.InvokeVoidAsync("downloadFile", $"{finalFileName}{fileExt}", contentType, content);
             
             Snackbar.Add($"结果已导出：{records.Count} 条记录", Severity.Success);
         }
@@ -584,7 +603,65 @@
         }
     }
 
-    private string BuildCsv(List<ExportRecord> records, bool includeBaseColumns = true)
+    /// <summary>
+    /// 清理字段内容，移除换行符、制表符等特殊字符
+    /// </summary>
+    private static string CleanFieldContent(object? value)
+    {
+        var s = value?.ToString() ?? string.Empty;
+        
+        if (string.IsNullOrWhiteSpace(s))
+            return string.Empty;
+        
+        // 处理字面转义序列（如 \n、\t）为普通空格
+        s = s.Replace("\\r\\n", " ").Replace("\\n", " ").Replace("\\r", " ").Replace("\\t", " ");
+        
+        // 去除首尾可能存在的包裹引号（包含中英文引号和单引号）
+        while (s.Length > 0 && (s.StartsWith("\"") || s.StartsWith("“") || s.StartsWith("”") || s.StartsWith("'")))
+        {
+            s = s.Substring(1);
+        }
+        while (s.Length > 0 && (s.EndsWith("\"") || s.EndsWith("“") || s.EndsWith("”") || s.EndsWith("'")))
+        {
+            s = s.Substring(0, s.Length - 1);
+        }
+        
+        // 替换实际换行和制表符为空格
+        s = s.Replace("\r\n", " ").Replace("\r", " ").Replace("\n", " ").Replace("\t", " ");
+        
+        // 收敛多空白
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ").Trim();
+        
+        return s;
+    }
+
+    /// <summary>
+    /// CSV转义函数
+    /// </summary>
+    private static string EscapeForCsv(object? value)
+    {
+        var s = CleanFieldContent(value);
+        
+        if (string.IsNullOrEmpty(s))
+            return string.Empty;
+        
+        // 只有在包含逗号、双引号时才需要加引号
+        bool needsQuotes = s.Contains(",") || s.Contains("\"");
+        
+        if (needsQuotes)
+        {
+            // 转义内部的双引号
+            s = s.Replace("\"", "\"\"");
+            return $"\"{s}\"";
+        }
+        
+        return s;
+    }
+
+    /// <summary>
+    /// 构建导出表头
+    /// </summary>
+    private static List<string> BuildExportHeaders(List<ExportRecord> records, bool includeBaseColumns)
     {
         // 收集所有可能的结构化字段名称
         var allStructuredFields = records
@@ -594,7 +671,7 @@
             .OrderBy(k => k)
             .ToList();
 
-        // 收集所有可能的输入字段：按“视图.字段”展开
+        // 收集所有可能的输入字段：按"视图.字段"展开
         var allInputFields = records
             .Where(r => r.InputData.Count > 0)
             .SelectMany(r => r.InputData.Keys)
@@ -625,144 +702,154 @@
             header.Add("GeneratedText");
         }
 
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine(string.Join(",", header));
-
-        foreach (var r in records)
-        {
-            string Escape(object? v)
-            {
-                var s = v?.ToString() ?? string.Empty;
-                s = s.Replace("\r", string.Empty).Replace("\n", "\\n");
-                s = s.Replace("\"", "\"\"");
-                return $"\"{s}\"";
-            }
-
-            var row = new List<object?>();
-            if (includeBaseColumns)
-            {
-                row.AddRange(new object?[]
-                {
-                    r.CombinationId,
-                    r.IsSuccess,
-                    r.Cost,
-                    r.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"),
-                    r.FailureReason ?? string.Empty
-                });
-            }
-
-            // 统一按 header 中的 allInputFields 顺序出值
-            foreach (var fieldName in allInputFields)
-            {
-                r.InputData.TryGetValue(fieldName, out var v);
-                row.Add(v);
-            }
-
-            // 添加结构化数据字段值
-            if (allStructuredFields.Any())
-            {
-                foreach (var fieldName in allStructuredFields)
-                {
-                    var value = r.HasStructuredData && r.StructuredFields.TryGetValue(fieldName, out var fieldValue) 
-                        ? fieldValue 
-                        : null;
-                    row.Add(value);
-                }
-            }
-            else
-            {
-                // 如果没有结构化数据，添加原始文本
-                row.Add(r.GeneratedText);
-            }
-
-            sb.AppendLine(string.Join(",", row.Select(v => Escape(v))));
-        }
-
-        return sb.ToString();
+        return header;
     }
 
-    // 简易Excel导出：使用HTML表格并以Excel MIME类型下载，或返回Base64字符串内容
-    // 为简化依赖，这里返回HTML表格字符串，浏览器保存为.xlsx 仍能被Excel打开（大多数环境兼容）。
-    private string BuildExcelHtml(List<ExportRecord> records, bool includeBaseColumns = true)
+    /// <summary>
+    /// 构建单行导出数据
+    /// </summary>
+    private static List<object?> BuildExportRowData(ExportRecord record, List<ExportRecord> allRecords, bool includeBaseColumns)
     {
-        // 准备列
-        var allStructuredFields = records
+        // 收集所有可能的结构化字段名称
+        var allStructuredFields = allRecords
             .Where(r => r.HasStructuredData)
             .SelectMany(r => r.StructuredFields.Keys)
             .Distinct()
             .OrderBy(k => k)
             .ToList();
 
-        var allInputFields = records
+        // 收集所有可能的输入字段：按"视图.字段"展开
+        var allInputFields = allRecords
             .Where(r => r.InputData.Count > 0)
             .SelectMany(r => r.InputData.Keys)
             .Distinct()
             .OrderBy(k => k)
             .ToList();
 
-        var header = new List<string>();
+        var row = new List<object?>();
+        
+        // 基础列
         if (includeBaseColumns)
         {
-            header.AddRange(new []{ "CombinationId", "IsSuccess", "Cost", "GeneratedAt", "FailureReason" });
+            row.AddRange(new object?[]
+            {
+                CleanFieldContent(record.CombinationId),
+                record.IsSuccess ? "成功" : "失败",
+                CleanFieldContent(record.Cost),
+                record.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"),
+                CleanFieldContent(record.FailureReason)
+            });
         }
-        if (allInputFields.Any()) header.AddRange(allInputFields);
-        if (allStructuredFields.Any()) header.AddRange(allStructuredFields); else header.Add("GeneratedText");
 
-        // 生成HTML表格
+        // 输入字段列
+        foreach (var fieldName in allInputFields)
+        {
+            record.InputData.TryGetValue(fieldName, out var value);
+            row.Add(CleanFieldContent(value));
+        }
+
+        // 结构化数据字段列或原始文本列
+        if (allStructuredFields.Any())
+        {
+            foreach (var fieldName in allStructuredFields)
+            {
+                var value = record.HasStructuredData && record.StructuredFields.TryGetValue(fieldName, out var fieldValue) 
+                    ? fieldValue 
+                    : null;
+                row.Add(CleanFieldContent(value));
+            }
+        }
+        else
+        {
+            // 如果没有结构化数据，添加原始文本
+            row.Add(CleanFieldContent(record.GeneratedText));
+        }
+
+        return row;
+    }
+
+    private string BuildCsv(List<ExportRecord> records, bool includeBaseColumns = true)
+    {
+        var header = BuildExportHeaders(records, includeBaseColumns);
         var sb = new System.Text.StringBuilder();
-        sb.Append("<html><head><meta charset=\"UTF-8\" /></head><body><table border=\"1\" cellspacing=\"0\" cellpadding=\"3\">\n");
-        sb.Append("<tr>");
-        foreach (var h in header)
+        sb.AppendLine(string.Join(",", header));
+
+        foreach (var record in records)
         {
-            sb.Append("<th>").Append(System.Net.WebUtility.HtmlEncode(h)).Append("</th>");
+            var row = BuildExportRowData(record, records, includeBaseColumns);
+            sb.AppendLine(string.Join(",", row.Select(v => EscapeForCsv(v))));
         }
-        sb.Append("</tr>\n");
 
-        foreach (var r in records)
+        return sb.ToString();
+    }
+
+    // 使用EPPlus生成真正的XLSX格式文件
+    private byte[] BuildExcelXlsx(List<ExportRecord> records, bool includeBaseColumns = true)
+    {
+        // 设置EPPlus许可证上下文（非商业用途）
+        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+        
+        var header = BuildExportHeaders(records, includeBaseColumns);
+
+        using var package = new ExcelPackage();
+        var worksheet = package.Workbook.Worksheets.Add("推理结果");
+
+        // 写入表头
+        for (int i = 0; i < header.Count; i++)
         {
-            sb.Append("<tr>");
-            void Cell(object? v)
-            {
-                var s = v?.ToString() ?? string.Empty;
-                sb.Append("<td>").Append(System.Net.WebUtility.HtmlEncode(s)).Append("</td>");
-            }
+            var cell = worksheet.Cells[1, i + 1];
+            cell.Value = header[i];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.PatternType = ExcelFillStyle.Solid;
+            cell.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+            cell.Style.Border.BorderAround(ExcelBorderStyle.Thin);
+        }
 
-            if (includeBaseColumns)
-            {
-                Cell(r.CombinationId);
-                Cell(r.IsSuccess);
-                Cell(r.Cost);
-                Cell(r.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"));
-                Cell(r.FailureReason ?? string.Empty);
-            }
+        // 写入数据行
+        for (int rowIndex = 0; rowIndex < records.Count; rowIndex++)
+        {
+            var record = records[rowIndex];
+            var excelRow = rowIndex + 2; // Excel行从1开始，第1行是表头
+            var rowData = BuildExportRowData(record, records, includeBaseColumns);
 
-            foreach (var fieldName in allInputFields)
+            // 写入行数据，特殊处理IsSuccess字段显示为中文
+            for (int colIndex = 0; colIndex < rowData.Count; colIndex++)
             {
-                r.InputData.TryGetValue(fieldName, out var v);
-                Cell(v);
-            }
-
-            if (allStructuredFields.Any())
-            {
-                foreach (var fieldName in allStructuredFields)
+                var value = rowData[colIndex];
+                
+                // 特殊处理IsSuccess字段，显示为中文
+                if (includeBaseColumns && colIndex == 1 && value is bool isSuccess)
                 {
-                    var value = r.HasStructuredData && r.StructuredFields.TryGetValue(fieldName, out var fieldValue)
-                        ? fieldValue : null;
-                    Cell(value);
+                    worksheet.Cells[excelRow, colIndex + 1].Value = isSuccess ? "成功" : "失败";
+                }
+                else
+                {
+                    worksheet.Cells[excelRow, colIndex + 1].Value = CleanFieldContent(value);
                 }
             }
-            else
-            {
-                Cell(r.GeneratedText);
-            }
 
-            sb.Append("</tr>\n");
+            // 为数据行添加边框
+            for (int col = 1; col <= header.Count; col++)
+            {
+                worksheet.Cells[excelRow, col].Style.Border.BorderAround(ExcelBorderStyle.Thin);
+            }
         }
 
-        sb.Append("</table></body></html>");
+        // 自动调整列宽
+        for (int col = 1; col <= header.Count; col++)
+        {
+            worksheet.Column(col).AutoFit();
+            // 限制最大列宽，避免过宽
+            if (worksheet.Column(col).Width > 50)
+            {
+                worksheet.Column(col).Width = 50;
+            }
+        }
 
-        // 直接返回HTML文本，前面已将 contentType 设为xlsx，部分浏览器会以xlsx下载；如需100%兼容需引入EPPlus/ClosedXML。
-        return sb.ToString();
+        // 冻结表头行
+        worksheet.View.FreezePanes(2, 1);
+
+        return package.GetAsByteArray();
     }
 
     // 将组合的 DataMap 展平为 视图.字段 => 值 的字典
