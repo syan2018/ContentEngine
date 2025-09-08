@@ -25,7 +25,7 @@
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4">
     <!-- 统一的面包屑导航 -->
     <PageBreadcrumb Page="PageBreadcrumb.PageType.AIInferenceDetail" 
-                   TaskName="@(definition?.Name ?? $"实例 {instance?.InstanceId?[..8]}...")" 
+                   TaskName="@(definition?.Name ?? $"实例 {SafeShortId(instance?.InstanceId)}...")" 
                    TaskId="@TaskId" />
 
     @if (isLoading)
@@ -66,6 +66,7 @@
                 <CombinationTableView 
                     Combinations="@realTimeCombinations"
                     Outputs="@(instance.Outputs)"
+                    InstanceId="@instance.InstanceId"
                     IsLoadingCombinations="@isLoadingCombinations"
                     IsCompactView="@isCompactView"
                     HasCachedCombinations="@(instance.InputCombinations?.Any() == true && instance.InputCombinations.Count == realTimeCombinations.Count)"
@@ -267,7 +268,7 @@
         try
         {
             var outputItem = await ReasoningCombinationService.ExecuteCombinationAsync(instance.InstanceId, combination.CombinationId);
-            Snackbar.Add($"组合 {combination.CombinationId[..8]}... 已执行{(outputItem.IsSuccess ? "成功" : "失败")}", 
+            Snackbar.Add($"组合 {SafeShortId(combination.CombinationId)}... 已执行{(outputItem.IsSuccess ? "成功" : "失败")}", 
                 outputItem.IsSuccess ? Severity.Success : Severity.Error);
             
             // 触发进度管理器刷新
@@ -390,7 +391,7 @@
         {
             // ✅ 修复：使用专门的重试方法，会正确替换旧的失败结果
             var outputItem = await ReasoningCombinationService.RetryFailedCombinationAsync(instance.InstanceId, combination.CombinationId);
-            Snackbar.Add($"组合 {combination.CombinationId[..8]}... 重试执行{(outputItem.IsSuccess ? "成功" : "失败")}", 
+            Snackbar.Add($"组合 {SafeShortId(combination.CombinationId)}... 重试执行{(outputItem.IsSuccess ? "成功" : "失败")}", 
                 outputItem.IsSuccess ? Severity.Success : Severity.Error);
             
             // 触发进度管理器刷新，确保状态变化通过SignalR传播
@@ -456,7 +457,7 @@
         
         try
         {
-            var defaultName = $"ai_inference_results_{instance.InstanceId[..8]}_{DateTime.Now:yyyyMMdd_HHmmss}";
+            var defaultName = $"ai_inference_results_{SafeShortId(instance.InstanceId)}_{DateTime.Now:yyyyMMdd_HHmmss}";
             var dialog = await DialogService.ShowAsync<ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs.ExportOptionsDialog>("导出选项", new DialogParameters
             {
                 ["DefaultFileName"] = defaultName
@@ -472,13 +473,21 @@
                 return;
             }
 
-            if (dialogResult.Data is not ContentEngine.WebApp.Components.Pages.AIInference.Shared.Dialogs.ExportOptionsDialog.ExportOptions options)
+            if (dialogResult.Data == null)
             {
                 Snackbar.Add("未获取到导出选项", Severity.Warning);
                 return;
             }
 
-            var filtered = options.Scope switch
+            // 动态读取选项，避免编译期类型不一致
+            dynamic options = dialogResult.Data;
+            string format = options.Format;
+            string scope = options.Scope;
+            string selectedFileName = options.FileName;
+            bool includeBaseColumns = false;
+            try { includeBaseColumns = options.IncludeBaseColumns; } catch { }
+
+            var filtered = ((string)scope) switch
             {
                 "success" => instance.Outputs.Where(o => o.IsSuccess),
                 "failed" => instance.Outputs.Where(o => !o.IsSuccess),
@@ -496,9 +505,7 @@
                         FailureReason = output.FailureReason,
                         Cost = output.CostUSD,
                         GeneratedAt = output.GeneratedAt,
-                        InputData = instance.InputCombinations
-                            ?.FirstOrDefault(c => c.CombinationId == output.InputCombinationId)
-                            ?.DataMap?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString()) ?? new Dictionary<string, string>(),
+                        InputData = BuildFlattenedInputData(instance, output.InputCombinationId),
                         HasStructuredData = output.HasStructuredData
                     };
 
@@ -527,12 +534,17 @@
             string fileExt;
             string content;
 
-            switch (options.Format)
+            switch ((string)format)
             {
                 case "csv":
                     contentType = "text/csv";
                     fileExt = ".csv";
-                    content = BuildCsv(records);
+                    content = BuildCsv(records, includeBaseColumns: includeBaseColumns);
+                    break;
+                case "excel":
+                    contentType = "application/vnd.ms-excel";
+                    fileExt = ".xls";
+                    content = BuildExcelHtml(records, includeBaseColumns: includeBaseColumns);
                     break;
                 case "md":
                     contentType = "text/markdown";
@@ -561,7 +573,7 @@
                     break;
             }
 
-            var finalFileName = string.IsNullOrWhiteSpace(options.FileName) ? defaultName : options.FileName;
+            var finalFileName = string.IsNullOrWhiteSpace(selectedFileName) ? defaultName : selectedFileName;
             await JSRuntime.InvokeVoidAsync("downloadFile", $"{finalFileName}{fileExt}", contentType, content);
             
             Snackbar.Add($"结果已导出：{records.Count} 条记录", Severity.Success);
@@ -572,7 +584,7 @@
         }
     }
 
-    private string BuildCsv(List<ExportRecord> records)
+    private string BuildCsv(List<ExportRecord> records, bool includeBaseColumns = true)
     {
         // 收集所有可能的结构化字段名称
         var allStructuredFields = records
@@ -582,15 +594,24 @@
             .OrderBy(k => k)
             .ToList();
 
-        // 构建表头
-        var header = new List<string> 
-        { 
-            "CombinationId", "IsSuccess", "Cost", "GeneratedAt", "FailureReason" 
-        };
+        // 收集所有可能的输入字段：按“视图.字段”展开
+        var allInputFields = records
+            .Where(r => r.InputData.Count > 0)
+            .SelectMany(r => r.InputData.Keys)
+            .Distinct()
+            .OrderBy(k => k)
+            .ToList();
 
-        if (records.Any(r => r.InputData.Count > 0))
+        // 构建表头
+        var header = new List<string>();
+        if (includeBaseColumns)
         {
-            header.AddRange(records.SelectMany(r => r.InputData.Keys).Distinct().OrderBy(k => k));
+            header.AddRange(new []{ "CombinationId", "IsSuccess", "Cost", "GeneratedAt", "FailureReason" });
+        }
+
+        if (allInputFields.Any())
+        {
+            header.AddRange(allInputFields);
         }
         
         // 添加结构化数据字段列
@@ -617,21 +638,24 @@
                 return $"\"{s}\"";
             }
 
-            var row = new List<object?>()
+            var row = new List<object?>();
+            if (includeBaseColumns)
             {
-                r.CombinationId,
-                r.IsSuccess,
-                r.Cost,
-                r.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"),
-                r.FailureReason ?? string.Empty,
-            };
-
-            if (r.InputData.Count > 0)
-            {
-                foreach (var kvp in r.InputData)
+                row.AddRange(new object?[]
                 {
-                    row.Add(kvp.Value);
-                }
+                    r.CombinationId,
+                    r.IsSuccess,
+                    r.Cost,
+                    r.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"),
+                    r.FailureReason ?? string.Empty
+                });
+            }
+
+            // 统一按 header 中的 allInputFields 顺序出值
+            foreach (var fieldName in allInputFields)
+            {
+                r.InputData.TryGetValue(fieldName, out var v);
+                row.Add(v);
             }
 
             // 添加结构化数据字段值
@@ -657,10 +681,118 @@
         return sb.ToString();
     }
 
+    // 简易Excel导出：使用HTML表格并以Excel MIME类型下载，或返回Base64字符串内容
+    // 为简化依赖，这里返回HTML表格字符串，浏览器保存为.xlsx 仍能被Excel打开（大多数环境兼容）。
+    private string BuildExcelHtml(List<ExportRecord> records, bool includeBaseColumns = true)
+    {
+        // 准备列
+        var allStructuredFields = records
+            .Where(r => r.HasStructuredData)
+            .SelectMany(r => r.StructuredFields.Keys)
+            .Distinct()
+            .OrderBy(k => k)
+            .ToList();
+
+        var allInputFields = records
+            .Where(r => r.InputData.Count > 0)
+            .SelectMany(r => r.InputData.Keys)
+            .Distinct()
+            .OrderBy(k => k)
+            .ToList();
+
+        var header = new List<string>();
+        if (includeBaseColumns)
+        {
+            header.AddRange(new []{ "CombinationId", "IsSuccess", "Cost", "GeneratedAt", "FailureReason" });
+        }
+        if (allInputFields.Any()) header.AddRange(allInputFields);
+        if (allStructuredFields.Any()) header.AddRange(allStructuredFields); else header.Add("GeneratedText");
+
+        // 生成HTML表格
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<html><head><meta charset=\"UTF-8\" /></head><body><table border=\"1\" cellspacing=\"0\" cellpadding=\"3\">\n");
+        sb.Append("<tr>");
+        foreach (var h in header)
+        {
+            sb.Append("<th>").Append(System.Net.WebUtility.HtmlEncode(h)).Append("</th>");
+        }
+        sb.Append("</tr>\n");
+
+        foreach (var r in records)
+        {
+            sb.Append("<tr>");
+            void Cell(object? v)
+            {
+                var s = v?.ToString() ?? string.Empty;
+                sb.Append("<td>").Append(System.Net.WebUtility.HtmlEncode(s)).Append("</td>");
+            }
+
+            if (includeBaseColumns)
+            {
+                Cell(r.CombinationId);
+                Cell(r.IsSuccess);
+                Cell(r.Cost);
+                Cell(r.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss"));
+                Cell(r.FailureReason ?? string.Empty);
+            }
+
+            foreach (var fieldName in allInputFields)
+            {
+                r.InputData.TryGetValue(fieldName, out var v);
+                Cell(v);
+            }
+
+            if (allStructuredFields.Any())
+            {
+                foreach (var fieldName in allStructuredFields)
+                {
+                    var value = r.HasStructuredData && r.StructuredFields.TryGetValue(fieldName, out var fieldValue)
+                        ? fieldValue : null;
+                    Cell(value);
+                }
+            }
+            else
+            {
+                Cell(r.GeneratedText);
+            }
+
+            sb.Append("</tr>\n");
+        }
+
+        sb.Append("</table></body></html>");
+
+        // 直接返回HTML文本，前面已将 contentType 设为xlsx，部分浏览器会以xlsx下载；如需100%兼容需引入EPPlus/ClosedXML。
+        return sb.ToString();
+    }
+
+    // 将组合的 DataMap 展平为 视图.字段 => 值 的字典
+    private static Dictionary<string, string> BuildFlattenedInputData(ReasoningTransactionInstance instance, string combinationId)
+    {
+        var dict = new Dictionary<string, string>();
+        var combo = instance.InputCombinations?.FirstOrDefault(c => c.CombinationId == combinationId);
+        if (combo?.DataMap == null) return dict;
+
+        foreach (var kvp in combo.DataMap)
+        {
+            var viewName = kvp.Key;
+            var doc = kvp.Value;
+            if (doc == null) continue;
+
+            foreach (var field in doc)
+            {
+                if (field.Key == "_id") continue;
+                var key = $"{viewName}.{field.Key}";
+                var val = field.Value?.ToString() ?? string.Empty;
+                dict[key] = val;
+            }
+        }
+        return dict;
+    }
+
     private string BuildMarkdown(List<ExportRecord> records, string instanceId)
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"# 推理结果导出 ({instanceId[..8]})");
+        sb.AppendLine($"# 推理结果导出 ({SafeShortId(instanceId)})");
         sb.AppendLine($"> 导出时间: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine();
 
@@ -787,6 +919,12 @@
         public bool HasStructuredData { get; set; }
     }
 
+    private static string SafeShortId(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        return value.Length > 8 ? value.Substring(0, 8) : value;
+    }
+
     /// <summary>
     /// 初始化 SignalR 连接
     /// </summary>
@@ -799,16 +937,18 @@
 
             hubConnection = new HubConnectionBuilder()
                 .WithUrl(Navigation.ToAbsoluteUri("/reasoning-progress-hub"))
+                .WithAutomaticReconnect()
                 .Build();
 
             // 订阅进度更新事件
             hubConnection.On<string, ReasoningProgress>("ProgressUpdated", OnProgressUpdated);
             hubConnection.On<string, TransactionStatus, TransactionStatus>("StatusChanged", OnStatusChanged);
 
-            await hubConnection.StartAsync();
+            var conn = hubConnection; // 局部引用，避免并发置空
+            await conn.StartAsync();
             
             // 订阅当前实例的进度更新
-            await hubConnection.SendAsync("SubscribeToInstance", TaskId);
+            await conn.SendAsync("SubscribeToInstance", TaskId);
 
             Snackbar.Add("实时进度更新已启用", Severity.Info);
         }

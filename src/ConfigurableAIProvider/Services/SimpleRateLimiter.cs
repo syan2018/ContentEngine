@@ -11,10 +11,15 @@ public class SimpleRateLimiter : ISimpleRateLimiter
 {
     private readonly IModelProvider _modelProvider;
     private readonly ILogger<SimpleRateLimiter> _logger;
-    
-    // 每个模型的请求时间戳记录
-    private readonly ConcurrentDictionary<string, Queue<DateTime>> _requestTimes = new();
-    private readonly object _lock = new object();
+
+    // 按模型维护“下次可用时间”，用于平滑间隔发放许可
+    private class RateState
+    {
+        public DateTime NextAvailableUtc = DateTime.MinValue;
+        public SemaphoreSlim Mutex = new SemaphoreSlim(1, 1);
+    }
+
+    private readonly ConcurrentDictionary<string, RateState> _rateStates = new();
 
     /// <summary>
     /// 初始化简单RPM限制器
@@ -41,60 +46,38 @@ public class SimpleRateLimiter : ISimpleRateLimiter
                 return;
             }
 
-            while (!cancellationToken.IsCancellationRequested)
+            // 计算最小间隔（例如 60 RPM => 1 秒/次）
+            var rpm = modelConfig.RequestsPerMinute;
+            var minInterval = TimeSpan.FromSeconds(60.0 / rpm);
+
+            // 为该模型获取状态
+            var state = _rateStates.GetOrAdd(modelDefinitionId, _ => new RateState());
+
+            DateTime grantTimeUtc;
+
+            // 使用“预约”策略，确保并发请求被均匀分配到时间线上
+            await state.Mutex.WaitAsync(cancellationToken);
+            try
             {
-                bool canProceed = false;
-                TimeSpan waitTime = TimeSpan.Zero;
-
-                lock (_lock)
-                {
-                    var now = DateTime.UtcNow;
-                    var oneMinuteAgo = now.AddMinutes(-1);
-
-                    // 获取或创建该模型的请求记录队列
-                    var requestQueue = _requestTimes.GetOrAdd(modelDefinitionId, _ => new Queue<DateTime>());
-
-                    // 移除1分钟前的记录
-                    while (requestQueue.Count > 0 && requestQueue.Peek() < oneMinuteAgo)
-                    {
-                        requestQueue.Dequeue();
-                    }
-
-                    // 检查是否可以执行
-                    if (requestQueue.Count < modelConfig.RequestsPerMinute)
-                    {
-                        // 记录这次请求
-                        requestQueue.Enqueue(now);
-                        canProceed = true;
-                        
-                        _logger.LogDebug("模型 {ModelId} 请求许可已授予: {Current}/{Max}", 
-                            modelDefinitionId, requestQueue.Count, modelConfig.RequestsPerMinute);
-                    }
-                    else
-                    {
-                        // 计算需要等待的时间
-                        var oldestRequest = requestQueue.Peek();
-                        var waitUntil = oldestRequest.AddMinutes(1).AddSeconds(1); // 多等1秒确保安全
-                        waitTime = waitUntil - now;
-                        
-                        if (waitTime <= TimeSpan.Zero)
-                        {
-                            waitTime = TimeSpan.FromSeconds(1); // 最少等1秒
-                        }
-
-                        _logger.LogDebug("模型 {ModelId} RPM限制，需等待: {WaitTime}ms, 当前: {Current}/{Max}", 
-                            modelDefinitionId, waitTime.TotalMilliseconds, requestQueue.Count, modelConfig.RequestsPerMinute);
-                    }
-                }
-
-                if (canProceed)
-                {
-                    return; // 获得许可，退出
-                }
-
-                // 等待指定时间后重试
-                await Task.Delay(waitTime, cancellationToken);
+                var nowUtc = DateTime.UtcNow;
+                grantTimeUtc = nowUtc >= state.NextAvailableUtc ? nowUtc : state.NextAvailableUtc;
+                state.NextAvailableUtc = grantTimeUtc + minInterval; // 为下一个请求预留时间片
             }
+            finally
+            {
+                state.Mutex.Release();
+            }
+
+            var delay = grantTimeUtc - DateTime.UtcNow;
+            if (delay > TimeSpan.Zero)
+            {
+                _logger.LogDebug("模型 {ModelId} RPM平滑限速，需等待: {WaitMs}ms (间隔 {IntervalMs}ms)",
+                    modelDefinitionId, delay.TotalMilliseconds, minInterval.TotalMilliseconds);
+                await Task.Delay(delay, cancellationToken);
+            }
+
+            // 到达预约时间点，允许执行
+            _logger.LogDebug("模型 {ModelId} 请求许可已授予 (平滑)", modelDefinitionId);
         }
         catch (OperationCanceledException)
         {

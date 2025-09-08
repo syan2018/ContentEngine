@@ -345,7 +345,7 @@
 
             bool? result = await DialogService.ShowMessageBox(
                 "确认删除",
-                $"确定要删除推理实例 '{displayName}' ({instance.InstanceId[..8]}...) 吗？此操作不可撤销。",
+                $"确定要删除推理实例 '{displayName}' ({(instance?.InstanceId is string idStr && idStr.Length>8 ? idStr.Substring(0,8): instance?.InstanceId)}) 吗？此操作不可撤销。",
                 yesText: "删除", cancelText: "取消");
 
             if (result == true)

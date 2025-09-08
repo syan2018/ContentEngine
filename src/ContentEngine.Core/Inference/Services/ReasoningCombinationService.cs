@@ -81,13 +81,13 @@ namespace ContentEngine.Core.Inference.Services
                 // 执行单个组合
                 var output = await ExecuteSingleCombinationAsync(definition, targetCombination, cancellationToken);
 
-                // 更新状态：执行完成
+                // 先持久化结果，确保前端拿到状态时数据已可用
+                await PersistCombinationResultAsync(instance, output, cancellationToken);
+
+                // 再更新状态：执行完成
                 _statusTracker.UpdateStatus(combinationId, 
                     output.IsSuccess ? CombinationStatus.Completed : CombinationStatus.Failed,
                     output.IsSuccess ? "执行成功" : output.FailureReason);
-
-                // 持久化结果到实例中
-                await PersistCombinationResultAsync(instance, output, cancellationToken);
 
                 _logger.LogInformation("实例 {InstanceId} 中的组合 {CombinationId} 执行完成，成功: {IsSuccess}", 
                     instanceId, combinationId, output.IsSuccess);
@@ -544,13 +544,13 @@ namespace ContentEngine.Core.Inference.Services
 
                 var output = await ExecuteSingleCombinationAsync(definition, combination, cancellationToken);
                 
-                // 更新状态：执行完成
+                // 先持久化结果
+                await PersistCombinationResultAsync(instance, output, cancellationToken);
+
+                // 再更新状态：执行完成
                 _statusTracker.UpdateStatus(combinationId, 
                     output.IsSuccess ? CombinationStatus.Completed : CombinationStatus.Failed,
                     output.IsSuccess ? "执行成功" : output.FailureReason);
-
-                // 持久化结果到实例中
-                await PersistCombinationResultAsync(instance, output, cancellationToken);
 
                 // 更新批量结果统计
                 lock (batchResult)

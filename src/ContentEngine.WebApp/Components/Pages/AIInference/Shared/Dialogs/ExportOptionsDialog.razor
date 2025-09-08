@@ -10,6 +10,7 @@
                 <MudRadio T="string" Value='@("json")' Color="Color.Primary">JSON</MudRadio>
                 <MudRadio T="string" Value='@("csv")' Color="Color.Primary">CSV</MudRadio>
                 <MudRadio T="string" Value='@("md")' Color="Color.Primary">Markdown</MudRadio>
+                <MudRadio T="string" Value='@("excel")' Color="Color.Primary">Excel</MudRadio>
             </MudRadioGroup>
 
             <MudSelect T="string" Label="导出范围" @bind-Value="SelectedScope">
@@ -19,6 +20,7 @@
             </MudSelect>
 
             <MudTextField @bind-Value="FileName" Label="文件名(无需扩展名)" Placeholder="ai_inference_results" />
+            <MudCheckBox @bind-Value="IncludeBaseColumns" Color="Color.Primary">包含基础列 (CombinationId/IsSuccess/Cost/GeneratedAt/FailureReason)</MudCheckBox>
         </MudStack>
     </DialogContent>
     <DialogActions>
@@ -35,6 +37,7 @@
     public string SelectedFormat { get; set; } = "json";
     public string SelectedScope { get; set; } = "success";
     public string FileName { get; set; } = string.Empty;
+    public bool IncludeBaseColumns { get; set; } = false;
 
     protected override void OnInitialized()
     {
@@ -49,10 +52,10 @@
 
     private void Confirm()
     {
-        MudDialog.Close(DialogResult.Ok(new ExportOptions(SelectedFormat, SelectedScope, FileName)));
+        MudDialog.Close(DialogResult.Ok(new ExportOptions(SelectedFormat, SelectedScope, FileName, IncludeBaseColumns)));
     }
 
-    public record ExportOptions(string Format, string Scope, string FileName);
+    public record ExportOptions(string Format, string Scope, string FileName, bool IncludeBaseColumns);
 }
 
 

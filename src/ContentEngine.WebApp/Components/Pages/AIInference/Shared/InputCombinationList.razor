@@ -5,6 +5,7 @@
 @using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
 @inject NavigationManager Navigation
+@inject IReasoningCombinationService ReasoningCombinationService
 @using CombinationStatus = ContentEngine.Core.Inference.Models.CombinationStatus
 
 <link href="/Shared/CombinationStyles.css" rel="stylesheet" />
@@ -47,7 +48,8 @@
           HorizontalScrollbar="true"
           Breakpoint="Breakpoint.None"
           Style="overflow-x: auto;"
-          Class="combination-table">
+          Class="combination-table"
+          @ref="table">
     <HeaderContent>
         <MudTh Style="width: 100px; white-space: nowrap;">ID</MudTh>
         @foreach (var viewName in ViewNames)
@@ -145,6 +147,7 @@
 @code {
     [Parameter] public List<ReasoningInputCombination> Combinations { get; set; } = new();
     [Parameter] public List<ReasoningOutputItem> Outputs { get; set; } = new();
+    [Parameter] public string InstanceId { get; set; } = string.Empty;
     [Parameter] public bool ShowActions { get; set; } = true;
     [Parameter] public bool ShowPagination { get; set; } = true;
     [Parameter] public bool Dense { get; set; } = false;
@@ -163,13 +166,17 @@
     [Parameter] public EventCallback OnExportResults { get; set; }
 
     private List<string> ViewNames = new();
+    private MudTable<ReasoningInputCombination>? table;
     private HubConnection? hubConnection;
     private readonly Dictionary<string, CombinationExecutionStatus> _executionStatuses = new();
     private readonly HashSet<string> _subscribedCombinations = new();
+    private bool _disposed = false;
+    private int _lastCombinationCount = -1;
     
     // 同步状态追踪 - 防止永远卡在"同步中"
     private readonly Dictionary<string, DateTime> _syncStartTimes = new();
     private const int MaxSyncTimeSeconds = 5; // 最大同步等待时间
+    private readonly Dictionary<string, ReasoningOutputItem> _outputCache = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -184,6 +191,14 @@
             .OrderBy(name => name)
             .ToList();
             
+        // 组合数量变化时，重置表格页码，避免页码越界导致索引异常
+        var currentCount = Combinations?.Count ?? 0;
+        if (_lastCombinationCount != currentCount)
+        {
+            _lastCombinationCount = currentCount;
+            try { table?.NavigateTo(0); } catch { }
+        }
+
         // 订阅当前组合的状态变化
         await SubscribeToCurrentCombinations();
     }
@@ -195,15 +210,24 @@
     {
         try
         {
-            hubConnection = new HubConnectionBuilder()
+            // 如已有连接先安全释放
+            if (hubConnection != null)
+            {
+                try { await hubConnection.DisposeAsync(); } catch { }
+                hubConnection = null;
+            }
+
+            var connection = new HubConnectionBuilder()
                 .WithUrl(Navigation.ToAbsoluteUri("/reasoning-progress-hub"))
+                .WithAutomaticReconnect()
                 .Build();
 
             // 订阅组合状态更新事件
-            hubConnection.On<string, CombinationExecutionStatus>("CombinationStatusUpdated", OnCombinationStatusUpdated);
+            connection.On<string, CombinationExecutionStatus>("CombinationStatusUpdated", OnCombinationStatusUpdated);
             
             // 启动连接
-            await hubConnection.StartAsync();
+            await connection.StartAsync();
+            hubConnection = connection;
         }
         catch (Exception ex)
         {
@@ -221,13 +245,16 @@
 
         try
         {
+            var conn = hubConnection;
+            if (conn == null || conn.State != HubConnectionState.Connected) return;
+
             var currentCombinationIds = Combinations.Select(c => c.CombinationId).ToHashSet();
             
             // 取消不再需要的订阅
             var obsoleteSubscriptions = _subscribedCombinations.Except(currentCombinationIds).ToList();
             foreach (var combinationId in obsoleteSubscriptions)
             {
-                await hubConnection.SendAsync("UnsubscribeFromCombination", combinationId);
+                try { await conn.SendAsync("UnsubscribeFromCombination", combinationId); } catch { }
                 _subscribedCombinations.Remove(combinationId);
             }
             
@@ -235,7 +262,7 @@
             var newSubscriptions = currentCombinationIds.Except(_subscribedCombinations).ToList();
             foreach (var combinationId in newSubscriptions)
             {
-                await hubConnection.SendAsync("SubscribeToCombination", combinationId);
+                try { await conn.SendAsync("SubscribeToCombination", combinationId); } catch { }
                 _subscribedCombinations.Add(combinationId);
             }
             
@@ -251,6 +278,10 @@
                 await InvokeAsync(StateHasChanged);
             }
         }
+        catch (ObjectDisposedException)
+        {
+            // 连接已释放，忽略
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"订阅组合状态失败: {ex.Message}");
@@ -262,6 +293,7 @@
     /// </summary>
     private async void OnCombinationStatusUpdated(string combinationId, CombinationExecutionStatus status)
     {
+        if (_disposed) return;
         // 只处理当前组件关心的组合
         if (Combinations?.Any(c => c.CombinationId == combinationId) == true)
         {
@@ -271,21 +303,42 @@
             if (oldStatus == null || !oldStatus.Equals(status))
             {
                 _executionStatuses[combinationId] = status;
-                await InvokeAsync(StateHasChanged);
+                if ((status.Status == CombinationStatus.Completed || status.Status == CombinationStatus.Failed)
+                    && !string.IsNullOrEmpty(InstanceId)
+                    && GetOutputById(combinationId) == null)
+                {
+                    try
+                    {
+                        var output = await ReasoningCombinationService.GetOutputForCombinationAsync(InstanceId, combinationId);
+                        if (output != null)
+                        {
+                            _outputCache[combinationId] = output;
+                            _syncStartTimes.Remove(combinationId);
+                        }
+                    }
+                    catch { }
+                }
+                try { await InvokeAsync(StateHasChanged); } catch { }
             }
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (hubConnection is not null)
+        _disposed = true;
+        var conn = hubConnection;
+        hubConnection = null;
+        if (conn is not null)
         {
             try
             {
-                // 取消所有组合的订阅
-                foreach (var combinationId in _subscribedCombinations)
+                if (conn.State == HubConnectionState.Connected)
                 {
-                    await hubConnection.SendAsync("UnsubscribeFromCombination", combinationId);
+                    // 取消所有组合的订阅
+                    foreach (var combinationId in _subscribedCombinations)
+                    {
+                        try { await conn.SendAsync("UnsubscribeFromCombination", combinationId); } catch { }
+                    }
                 }
             }
             catch (Exception ex)
@@ -294,13 +347,13 @@
             }
             finally
             {
-                await hubConnection.DisposeAsync();
+                try { await conn.DisposeAsync(); } catch { }
             }
         }
     }
 
     private string GetShortId(string combinationId) => 
-        combinationId.Length > 6 ? $"{combinationId[..6]}" : combinationId;
+        string.IsNullOrEmpty(combinationId) ? string.Empty : (combinationId.Length > 6 ? combinationId.Substring(0, 6) : combinationId);
 
     private string GetViewColumnStyle(string viewName) =>
         ShowResultsPreview 
@@ -652,7 +705,13 @@
     }
 
     private ReasoningOutputItem? GetOutput(ReasoningInputCombination combination) =>
-        Outputs?.FirstOrDefault(o => o.InputCombinationId == combination.CombinationId);
+        GetOutputById(combination.CombinationId);
+
+    private ReasoningOutputItem? GetOutputById(string combinationId)
+    {
+        if (_outputCache.TryGetValue(combinationId, out var cached)) return cached;
+        return Outputs?.FirstOrDefault(o => o.InputCombinationId == combinationId);
+    }
 
     private record BatchStat(string Label, string Value, Color Color, string Icon);
     private record BatchAction(string Label, string Icon, Color Color, EventCallback OnClick);

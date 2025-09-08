@@ -20,12 +20,12 @@
                 <div class="d-flex flex-wrap gap-2">
                     @GetStatusBadge(Instance.Status)
                     <MudChip T="string" Size="Size.Small" Color="Color.Inherit">
-                        实例ID: @Instance.InstanceId[..8]...
+                        实例ID: @(Instance?.InstanceId is string idStr ? (idStr.Length > 8 ? idStr.Substring(0, 8) : idStr) : "")...
                     </MudChip>
                     @if (Definition != null)
                     {
                         <MudChip T="string" Size="Size.Small" Color="Color.Secondary">
-                            定义ID: @Definition.Id[..8]...
+                            定义ID: @(Definition?.Id is string defId ? (defId.Length > 8 ? defId.Substring(0, 8) : defId) : "")...
                         </MudChip>
                     }
                 </div>

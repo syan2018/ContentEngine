@@ -33,7 +33,7 @@
         <MudProgressLinear Color="@GetProgressColor()" 
                           Striped="@progress.IsActive" 
                           Size="@Size"
-                          Value="@progress.OverallProgress" />
+                          Value="@GetFinalizedProgress()" />
         
         @if (ShowDetails && !Compact)
         {
@@ -97,6 +97,9 @@ else
     private ReasoningProgress? progress;
     private HubConnection? hubConnection;
     private string? currentInstanceId;
+    private bool _isDisposed = false;
+    private readonly SemaphoreSlim _initLock = new SemaphoreSlim(1, 1);
+    private readonly CancellationTokenSource _cts = new CancellationTokenSource();
 
     protected override async Task OnInitializedAsync()
     {
@@ -114,6 +117,8 @@ else
 
     private async Task InitializeAsync()
     {
+        if (_isDisposed) return;
+
         // 初始加载进度
         await LoadProgressAsync();
         
@@ -147,35 +152,70 @@ else
 
     private async Task InitializeSignalRConnection()
     {
+        if (_isDisposed) return;
+
+        await _initLock.WaitAsync();
         try
         {
-            hubConnection = new HubConnectionBuilder()
+            if (_isDisposed) return;
+
+            // 若已存在并连接则跳过
+            if (IsHubConnected()) return;
+
+            // 如果有旧连接先清理
+            if (hubConnection != null)
+            {
+                try { await hubConnection.DisposeAsync(); } catch { }
+                hubConnection = null;
+            }
+
+            var connection = new HubConnectionBuilder()
                 .WithUrl(Navigation.ToAbsoluteUri("/reasoning-progress-hub"))
                 .Build();
 
             // 订阅进度更新事件
-            hubConnection.On<string, ReasoningProgress>("ProgressUpdated", OnProgressUpdated);
-            hubConnection.On<string, TransactionStatus, TransactionStatus>("StatusChanged", OnStatusChanged);
+            connection.On<string, ReasoningProgress>("ProgressUpdated", OnProgressUpdated);
+            connection.On<string, TransactionStatus, TransactionStatus>("StatusChanged", OnStatusChanged);
 
-            await hubConnection.StartAsync();
+            try
+            {
+                await connection.StartAsync(_cts.Token);
+                hubConnection = connection;
+            }
+            catch (Exception startEx)
+            {
+                // 启动失败则释放连接并回退到本地事件
+                try { await connection.DisposeAsync(); } catch { }
+                hubConnection = null;
+
+                Console.WriteLine($"SignalR连接失败，回退到事件订阅: {startEx.Message}");
+                ProgressManager.ProgressUpdated += OnLocalProgressUpdated;
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            Console.WriteLine($"SignalR连接失败，回退到事件订阅: {ex.Message}");
-            
-            // 回退到本地事件订阅
-            ProgressManager.ProgressUpdated += OnLocalProgressUpdated;
+            _initLock.Release();
         }
     }
 
     private async Task SubscribeToCurrentInstance()
     {
-        if (hubConnection?.State == HubConnectionState.Connected && !string.IsNullOrEmpty(InstanceId))
+        if (_isDisposed) return;
+
+        if (IsHubConnected() && !string.IsNullOrEmpty(InstanceId))
         {
             try
             {
-                await hubConnection.SendAsync("SubscribeToInstance", InstanceId);
-                currentInstanceId = InstanceId;
+                var conn = hubConnection; // 局部引用，避免并发置空
+                if (conn != null)
+                {
+                    await conn.SendAsync("SubscribeToInstance", InstanceId, _cts.Token);
+                    currentInstanceId = InstanceId;
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // 已经释放，忽略
             }
             catch (Exception ex)
             {
@@ -186,21 +226,31 @@ else
 
     private async Task ResubscribeToInstance()
     {
-        if (hubConnection?.State == HubConnectionState.Connected)
+        if (_isDisposed) return;
+
+        if (IsHubConnected())
         {
             try
             {
-                // 取消旧的订阅
-                if (!string.IsNullOrEmpty(currentInstanceId))
+                var conn = hubConnection; // 局部引用
+                if (conn != null)
                 {
-                    await hubConnection.SendAsync("UnsubscribeFromInstance", currentInstanceId);
-                }
+                    // 取消旧的订阅
+                    if (!string.IsNullOrEmpty(currentInstanceId))
+                    {
+                        await conn.SendAsync("UnsubscribeFromInstance", currentInstanceId, _cts.Token);
+                    }
 
-                // 订阅新的实例
-                await SubscribeToCurrentInstance();
-                
-                // 加载新实例的进度
-                await LoadProgressAsync();
+                    // 订阅新的实例
+                    await SubscribeToCurrentInstance();
+                    
+                    // 加载新实例的进度
+                    await LoadProgressAsync();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // 已释放，忽略
             }
             catch (Exception ex)
             {
@@ -257,19 +307,35 @@ else
         };
     }
 
+    // 只以“完成（成功+失败）/总数”为准返回进度
+    private double GetFinalizedProgress()
+    {
+        if (progress == null || progress.TotalCombinations <= 0) return 0;
+        var finalized = progress.CompletedCount + progress.FailedCount;
+        var pct = (double)finalized / progress.TotalCombinations * 100.0;
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+        return pct;
+    }
+
     public async ValueTask DisposeAsync()
     {
+        _isDisposed = true;
+        _cts.Cancel();
+
         // 清理本地事件订阅
         ProgressManager.ProgressUpdated -= OnLocalProgressUpdated;
         
         // 清理 SignalR 连接
-        if (hubConnection is not null)
+        var conn = hubConnection;
+        hubConnection = null;
+        if (conn is not null)
         {
             try
             {
-                if (hubConnection.State == HubConnectionState.Connected && !string.IsNullOrEmpty(currentInstanceId))
+                if (conn.State == HubConnectionState.Connected && !string.IsNullOrEmpty(currentInstanceId))
                 {
-                    await hubConnection.SendAsync("UnsubscribeFromInstance", currentInstanceId);
+                    await conn.SendAsync("UnsubscribeFromInstance", currentInstanceId);
                 }
             }
             catch (Exception ex)
@@ -278,8 +344,20 @@ else
             }
             finally
             {
-                await hubConnection.DisposeAsync();
+                try { await conn.DisposeAsync(); } catch { }
             }
+        }
+    }
+
+    private bool IsHubConnected()
+    {
+        try
+        {
+            return hubConnection != null && hubConnection.State == HubConnectionState.Connected;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
         }
     }
 }
